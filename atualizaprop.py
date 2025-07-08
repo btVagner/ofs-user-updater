@@ -5,13 +5,6 @@ import os
 
 load_dotenv()
 
-import requests
-from requests.auth import HTTPBasicAuth
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-
 class OFSClient:
     def __init__(self, username, password):
         self.auth = HTTPBasicAuth(username, password)
