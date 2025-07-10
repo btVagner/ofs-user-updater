@@ -1,0 +1,23 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+  <div class="form-wrapper">
+    <div class="form-box">
+      <h2>Log de Atualizações</h2>
+      <ul style="text-align: left;">
+        {% for linha in logs %}
+          <li>{{ linha }}</li>
+        {% endfor %}
+      </ul>
+
+      <div style="text-align: center; margin-top: 20px;">
+        <a href="{{ url_for('atualizar_varios') }}" style="color: #00aaff;">Voltar</a>
+      </div>
+    </div>
+  </div>
+</body>
+
+{% include 'includes/footer.html' %}

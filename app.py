@@ -55,14 +55,7 @@ def login():
 @login_required
 def home():
     if 'tipos_user' not in session:
-        from database.connection import get_connection
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT codigo, descricao FROM tipos_ofs ORDER BY descricao")
-        tipos = cursor.fetchall()
-        session['tipos_user'] = [{'codigo': row[0], 'descricao': row[1]} for row in tipos]
-        cursor.close()
-        conn.close()
+        session['tipos_user'] = get_tipos_user()
     
     return render_template('home.html')
 
@@ -86,29 +79,76 @@ def atualizar_user_type():
     return render_template("atualizar_user_type.html")
 
 @app.route('/atualizar-um', methods=['GET', 'POST'])
+@login_required
 def atualizar_um():
-    tipos_user = session.get('tipos_user', [])  # Pega do cache
+    tipos_user = session.get('tipos_user', [])
 
     if request.method == 'POST':
         resource_id = request.form.get('resource_id')
-        user_type = request.form.get('user_type')
-        # lógica da atualização
-        flash('UserType atualizado com sucesso!', 'success')
+        user_type_codigo = request.form.get('user_type')
+
+        session['ultimo_user_type'] = user_type_codigo  # salva na sessão
+
+        from ofs.client import OFSClient
+        username = os.getenv("OFS_USERNAME")
+        password = os.getenv("OFS_PASSWORD")
+        client = OFSClient(username, password)
+
+        try:
+            login = client.get_login_by_resource_id(resource_id)
+            status, _ = client.update_user_type(login, user_type_codigo)
+            flash(f"✅ Login {login} atualizado com sucesso! (Status: {status})", "success")
+        except Exception as e:
+            flash(f"❌ Erro ao atualizar o userType: {e}", "danger")
+
         return redirect(url_for('atualizar_um'))
 
-    return render_template('atualizar_um.html', tipos_user=tipos_user)
+    selected = session.pop('ultimo_user_type', '')  # remove da sessão após uso
+    return render_template('atualizar_um.html', tipos=tipos_user, selected=selected)
+
 
 
 @app.route('/atualizar-varios', methods=['GET', 'POST'])
+@login_required
 def atualizar_varios():
-    if request.method == 'POST':
-        lista_ids = request.form.get('resource_ids')  # exemplo: "123,456,789"
-        user_type = request.form.get('user_type')
-        # lógica de atualização em lote aqui
-        flash('UserTypes atualizados com sucesso!', 'success')
-        return redirect(url_for('atualizar_varios'))
-    return render_template('atualizar_varios.html')
+    tipos_user = session.get('tipos_user', [])
 
+    if request.method == 'POST':
+        modo = request.form.get('modo')  # "resourceId" ou "email"
+        valores_raw = request.form.get('identificadores', '')
+        user_type = request.form.get('user_type')
+
+        valores = [v.strip() for v in valores_raw.split(',') if v.strip()]
+        logs = []
+
+        from ofs.client import OFSClient
+        username = os.getenv("OFS_USERNAME")
+        password = os.getenv("OFS_PASSWORD")
+        client = OFSClient(username, password)
+
+        for item in valores:
+            try:
+                if modo == 'email':
+                    login = item
+                else:
+                    login = client.get_login_by_resource_id(item)
+
+                status, _ = client.update_user_type(login, user_type)
+                logs.append(f"✅ {item} → {login} atualizado com sucesso (Status: {status})")
+            except Exception as e:
+                logs.append(f"❌ {item} → Erro: {e}")
+
+        session['log_varios'] = logs  # Armazenar no session temporariamente
+
+        return redirect(url_for('log_varios'))
+
+    return render_template('atualizar_varios.html', tipos=tipos_user)
+
+@app.route('/log-varios')
+@login_required
+def log_varios():
+    logs = session.pop('log_varios', [])
+    return render_template('log_varios.html', logs=logs)
 
 
 def get_tipos_user():
@@ -119,7 +159,7 @@ def get_tipos_user():
     resultados = cursor.fetchall()
     cursor.close()
     conn.close()
-    return [row[0] for row in resultados]
+    return [{'codigo': row[0], 'descricao': row[1]} for row in resultados]
 
 @app.route("/logout")
 def logout():

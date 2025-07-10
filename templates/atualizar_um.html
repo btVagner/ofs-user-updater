@@ -2,7 +2,19 @@
 {% if session.usuario_logado %}
   {% include 'includes/navbar.html' %}
 {% endif %}
+
 <body>
+  <!-- Flash messages fora do formulário -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-messages-fixed" id="flash-container">
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
   <div class="form-wrapper">
     <div class="form-box">
       <h2>Atualizar userType de 1 técnico</h2>
@@ -12,19 +24,25 @@
 
         <label for="user_type">Novo userType:</label><br>
         <select name="user_type" required>
-          {% for tipo in tipos_user %}
-            <option value="{{ tipo.codigo }}">{{ tipo.descricao }}</option>
+          {% for tipo in tipos %}
+            <option value="{{ tipo.codigo }}"
+              {% if tipo.codigo == selected %}selected{% endif %}>
+              {{ tipo.descricao }}
+            </option>
           {% endfor %}
         </select>
-<br>
+
+
+        <br>
 
         <button type="submit">Atualizar</button>
       </form>
 
       <div style="text-align: center; margin-top: 20px;">
-        <a href="{{ request.referrer or url_for('home') }}" style="color: #00aaff;">Voltar</a>
+        <a href="{{url_for('atualizar_user_type') }}" style="color: #00aaff;">Voltar</a>
       </div>
     </div>
   </div>
 </body>
+
 {% include 'includes/footer.html' %}

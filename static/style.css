@@ -483,3 +483,37 @@ body.login-page {
     background-color: #008ecc;
     transform: scale(1.02);
 }
+.flash-messages {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.alert {
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin: 10px auto;
+  font-weight: 500;
+  display: inline-block;
+  width: auto;
+  max-width: 100%;
+}
+.alert-success {
+  background-color: #006633;
+  color: #ccffcc;
+}
+
+.alert-danger {
+  background-color: #660000;
+  color: #ffcccc;
+}
+.flash-messages-fixed {
+  position: fixed;
+  top: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  width: 100%;
+  max-width: 600px;
+  padding: 0 20px;
+  text-align: center;
+}

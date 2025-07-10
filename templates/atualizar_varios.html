@@ -1,0 +1,37 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+  <div class="form-wrapper">
+    <div class="form-box">
+      <h2>Atualizar userType de vários técnicos</h2>
+      <form method="post">
+        <label for="modo">Tipo de identificação:</label>
+        <select name="modo" id="modo" required>
+          <option value="resourceId">resourceId</option>
+          <option value="email">e-mail</option>
+        </select>
+
+        <label for="identificadores">IDs ou e-mails (separados por vírgula):</label>
+        <textarea name="identificadores" rows="4" required placeholder="ex: 123,456 ou email@dominio.com,email2@..."></textarea>
+
+        <label for="user_type">Novo userType:</label>
+        <select name="user_type" required>
+          {% for tipo in tipos %}
+            <option value="{{ tipo.codigo }}">{{ tipo.descricao }}</option>
+          {% endfor %}
+        </select>
+
+        <button type="submit">Atualizar Todos</button>
+      </form>
+
+      <div style="text-align: center; margin-top: 20px;">
+        <a href="{{ url_for('home') }}" style="color: #00aaff;">Voltar</a>
+      </div>
+    </div>
+  </div>
+</body>
+
+{% include 'includes/footer.html' %}
