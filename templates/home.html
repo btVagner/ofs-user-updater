@@ -1,0 +1,38 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+  <div class="menu-container">
+    <h2>Painel OFS</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="card-grid">
+      <a href="{{ url_for('atualizar_user_type') }}" class="card">
+        <h3>Tipos de usuário</h3>
+        <div class="card-description">
+            <p>
+            ➤Altere o tipo de usuário de um ou mais técnicos.<br>
+            ➤Gerencia os tipos disponíveis de usuários.
+            </p>
+        </div>
+      </a>
+
+      <div class="card disabled">
+        <h3>Pendente Criação</h3>
+        <p>Em breve.</p>
+      </div>
+
+      <div class="card disabled">
+        <h3>Pendente Criação</h3>
+        <p>Em breve.</p>
+      </div>
+    </div>
+  </div>
+{% include 'includes/footer.html' %}

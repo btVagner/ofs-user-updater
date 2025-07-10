@@ -1,0 +1,23 @@
+<nav class="navbar">
+  <div class="navbar-left">
+    <a href="{{ url_for('home') }}" class="logo">OFS Painel</a>
+  </div>
+
+  <div class="navbar-right">
+    {% if session.usuario_logado and session.nome_usuario %}
+      <div class="dropdown">
+        <button class="dropdown-toggle">
+          Login – {{ session.nome_usuario }} ▼
+        </button>
+        <div class="dropdown-menu">
+          <a href="https://docs.oracle.com/en/cloud/saas/field-service/index.html" target="_blank">Documentação Oracle</a>
+          <a href="#">Trocar senha</a>
+          {% if session.tipo_id == 1 %}
+            <a href="#">Criar novo usuário</a>
+          {% endif %}
+          <a href="{{ url_for('logout') }}">Sair</a>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</nav>

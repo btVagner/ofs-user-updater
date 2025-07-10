@@ -1,0 +1,25 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+<body>
+  <div class="update-container">
+    <h2>Atualizar userType do OFS</h2>
+
+    <div class="card-grid">
+      <a href="{{ url_for('atualizar_um') }}" class="update-card">
+        <h3>Alterar 1 técnico</h3>
+        <p>Atualize o userType de um único técnico de forma rápida.</p>
+      </a>
+      <a href="{{ url_for('atualizar_varios') }}" class="update-card">
+        <h3>Alterar vários técnicos</h3>
+        <p>Envie múltiplos técnicos e atualize todos de uma vez.</p>
+      </a>
+    </div>
+
+    <div class="logout-link">
+        <a href="{{ url_for('home') }}">Voltar</a>
+    </div>
+
+  </div>
+{% include 'includes/footer.html' %}

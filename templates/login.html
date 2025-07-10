@@ -1,0 +1,22 @@
+{% include 'includes/head.html' %}
+<body class="login-page">
+  <div class="login-form">
+    <h2>Painel OFS de Updates</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="post">
+      <label for="username">Usuário:</label>
+      <input type="text" name="username" required>
+
+      <label for="password">Senha:</label>
+      <input type="password" name="password" required>
+
+      <button type="submit">Entrar</button>
+    </form>
+  </div>
+{% include 'includes/footer.html' %}
