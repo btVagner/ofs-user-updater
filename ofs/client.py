@@ -2,6 +2,9 @@ import requests
 from requests.auth import HTTPBasicAuth
 import os
 
+
+DEFAULT_TIMEOUT = 20
+
 class OFSClient:
     def __init__(self, username=None, password=None):
         self.username = username or os.getenv("OFS_USERNAME")

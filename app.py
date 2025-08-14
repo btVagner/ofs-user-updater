@@ -183,7 +183,9 @@ def consultar_usuarios():
             'userType': u.get('userType', '-'),
             'status': u.get('status', '-'),
             'login': u.get('login', '-'),
-            'code_sap': u.get('XU_CODE_SAP', '-')
+            'code_sap': u.get('XU_CODE_SAP', '-'),
+            'lastLoginTime': u.get('lastLoginTime', '-'),
+            
         })
 
     ativos = sum(1 for u in usuarios_filtrados if u['status'] == 'active')
