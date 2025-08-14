@@ -517,3 +517,39 @@ body.login-page {
   padding: 0 20px;
   text-align: center;
 }
+.tabela-container {
+  overflow-x: auto;
+  margin-top: 30px;
+  margin-left: 5%;
+  margin-right: 5%;
+}
+
+.tabela-usuarios {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 auto;
+  background-color: #222;
+  color: white;
+  font-size: 14px;
+}
+
+.tabela-usuarios th,
+.tabela-usuarios td {
+  padding: 12px 16px;
+  border: 1px solid #444;
+  text-align: left;
+}
+
+.tabela-usuarios th {
+  background-color: #333;
+}
+
+.tabela-usuarios tr:nth-child(even) {
+  background-color: #2a2a2a;
+}
+
+.btn-voltar {
+  color: #00aaff;
+  text-decoration: none;
+  font-weight: bold;
+}

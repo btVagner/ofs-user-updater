@@ -24,10 +24,15 @@
         </div>
       </a>
 
-      <div class="card disabled">
-        <h3>Pendente Criação</h3>
-        <p>Em breve.</p>
-      </div>
+      <a href="{{ url_for('consultar_usuarios') }}" class="card">
+        <h3>Consultar usuários</h3>
+        <div class="card-description">
+            <p>
+            ➤Lista todos os usuários cadastrados no OFS.<br>
+            ➤Exibe nome, login, status e XU_CODE_SAP.
+            </p>
+        </div>
+      </a>
 
       <div class="card disabled">
         <h3>Pendente Criação</h3>

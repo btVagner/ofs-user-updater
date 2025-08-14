@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
+import requests
 from ofs.client import OFSClient
 from dotenv import load_dotenv
 from database.connection import get_connection
@@ -168,6 +169,32 @@ def logout():
     session.clear()
 
     return redirect(url_for("login"))
+
+@app.route("/consultar-usuarios")
+@login_required
+def consultar_usuarios():
+    client = OFSClient()
+    usuarios_raw = client.get_usuarios()
+
+    usuarios_filtrados = []
+    for u in usuarios_raw:
+        usuarios_filtrados.append({
+            'name': u.get('name', '-'),
+            'userType': u.get('userType', '-'),
+            'status': u.get('status', '-'),
+            'login': u.get('login', '-'),
+            'code_sap': u.get('XU_CODE_SAP', '-')
+        })
+
+    ativos = sum(1 for u in usuarios_filtrados if u['status'] == 'active')
+
+    return render_template(
+        "consultar_usuarios.html",
+        usuarios=usuarios_filtrados,
+        total_ativos=ativos
+    )
+
+
 
 
 # Iniciar servidor Flask

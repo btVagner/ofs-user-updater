@@ -23,3 +23,26 @@ class OFSClient:
         response = requests.patch(url, headers=headers, auth=self.auth, json=payload)
         response.raise_for_status()
         return response.status_code, response.text
+    def authenticated_get(self, url):
+        headers = {"Accept": "application/json"}
+        response = requests.get(url, headers=headers, auth=self.auth)
+        response.raise_for_status()
+        return response.json()
+    
+    
+    def get_usuarios(self):
+        usuarios = []
+        offset = 0
+
+        while True:
+            url = f"{self.base_url}/users?limit=100&offset={offset}"
+            response = self.authenticated_get(url)
+
+            if not response.get("items"):
+                break
+
+            usuarios.extend(response["items"])
+            offset += 100
+
+        return usuarios
+
