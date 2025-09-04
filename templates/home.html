@@ -33,11 +33,15 @@
             </p>
         </div>
       </a>
-
-      <div class="card disabled">
-        <h3>Pendente Criação</h3>
-        <p>Em breve.</p>
-      </div>
+      <a href="{{ url_for('desativar_inativos') }}" class="card">
+        <h3>Desativar inativos</h3>
+        <div class="card-description">
+            <p>
+            ➤Lista usuários sem acesso há muito tempo ou sem login.<br>
+            ➤Permite simular ou executar exclusão e inativação.
+            </p>
+        </div>
+      </a>
     </div>
   </div>
 {% include 'includes/footer.html' %}

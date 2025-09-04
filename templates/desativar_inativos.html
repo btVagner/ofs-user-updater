@@ -1,0 +1,119 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+  <div class="flash-messages-fixed">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert {{ 'alert-success' if category == 'success' else 'alert-danger' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <div class="update-container fade-in">
+    <h2>Desativar usuários inativos / sem login</h2>
+
+    {% if meta %}
+      <p>
+        <small>
+          API: <strong>{{ meta.first_code }}</strong>
+          • 1ª página itens: <strong>{{ meta.first_count }}</strong>
+          • Total varrido: <strong>{{ meta.total }}</strong>
+          {% if meta.sample_keys and meta.sample_keys|length > 0 %}
+            • Campos de exemplo: {{ meta.sample_keys|join(', ') }}
+          {% endif %}
+          {% if meta.error %} • Erro: {{ meta.error }} {% endif %}
+        </small>
+      </p>
+    {% endif %}
+
+    <form method="post" class="form-box" style="max-width: 100%; width: 100%;">
+      <label for="cutoff_days">Dias sem login (cutoff)</label>
+      <input id="cutoff_days" name="cutoff_days" type="text" inputmode="numeric" pattern="[0-9]*"
+             value="{{ cutoff_days }}"/>
+
+      <label style="display:flex; align-items:center; gap:10px; margin-top: 8px;">
+        <input id="only_active" name="only_active" type="checkbox" {% if only_active %}checked{% endif %}/>
+        Somente status = active
+      </label>
+
+      <button type="submit" name="apply_changes" value="0">Simular (sem executar)</button>
+      <button type="submit" name="apply_changes" value="1"
+              onclick="return confirm('Confirmar APLICAÇÃO? Esta ação remove usuários e inativa recursos.');">
+        Aplicar (executar)
+      </button>
+
+      <div style="margin-top:14px; text-align:center;">
+        <a class="btn-voltar"
+           href="{{ url_for('desativar_inativos', cutoff_days=cutoff_days, only_active='on' if only_active else '', export=1) }}">
+          Exportar CSV (lista prévia)
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <div class="tabela-container">
+    <h3>Prévia — usuários a afetar ({{ vencidos|length }})</h3>
+    <table class="tabela-usuarios">
+      <thead>
+        <tr>
+          <th>login</th>
+          <th>status</th>
+          <th>lastLoginTime</th>
+          <th>userType</th>
+          <th>mainResourceId</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in vencidos %}
+          <tr>
+            <td>{{ u.login }}</td>
+            <td>{{ u.status }}</td>
+            <td>{{ u.lastLoginTime or '-' }}</td>
+            <td>{{ u.userType }}</td>
+            <td>{{ u.mainResourceId or '-' }}</td>
+          </tr>
+        {% endfor %}
+        {% if vencidos|length == 0 %}
+          <tr><td colspan="5">Nenhum usuário atende ao critério.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if results and results|length > 0 %}
+    <div class="tabela-container">
+      <h3>Resultado da {{ mode }}</h3>
+      <table class="tabela-usuarios">
+        <thead>
+          <tr>
+            <th>login</th>
+            <th>userType</th>
+            <th>lastLoginTime</th>
+            <th>mainResourceId</th>
+            <th>delete_user</th>
+            <th>inactivate_resource</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in results %}
+            <tr>
+              <td>{{ r.login }}</td>
+              <td>{{ r.userType }}</td>
+              <td>{{ r.lastLoginTime or '-' }}</td>
+              <td>{{ r.mainResourceId or '-' }}</td>
+              <td>{{ r.delete_user }}</td>
+              <td>{{ r.inactivate_resource }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</body>
+
+{% include 'includes/footer.html' %}

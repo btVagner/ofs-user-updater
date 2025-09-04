@@ -1,19 +1,19 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session
 import requests
-from ofs.client import OFSClient
+from datetime import datetime
+import csv
 from dotenv import load_dotenv
 from database.connection import get_connection
 import bcrypt
 import os
 from functools import wraps
-
 load_dotenv()
+from ofs.cleanup import find_stale_users, execute_cleanup
+from ofs.client import OFSClient
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "minha_chave_secreta")
 
-
-# Decorador para proteger rotas
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -24,7 +24,7 @@ def login_required(f):
     return decorated_function
 
 
-# Rota de login
+# Login
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -197,7 +197,43 @@ def consultar_usuarios():
     )
 
 
+@app.route("/desativar_inativos", methods=["GET", "POST"])
+def desativar_inativos():
+    # robusto contra campo vazio
+    raw_days = (request.values.get("cutoff_days") or "80").strip()
+    cutoff_days = int(raw_days) if raw_days.isdigit() else 80
+    # checkbox: True só se veio marcado
+    only_active = request.values.get("only_active") is not None
 
+    vencidos, meta = find_stale_users(cutoff_days=cutoff_days, only_active=only_active)
+
+    results = []
+    mode = "SIMULACAO"
+    if request.method == "POST":
+        apply = request.form.get("apply_changes") == "1"
+        results = execute_cleanup(vencidos, apply_changes=apply)
+        mode = "APLICACAO" if apply else "SIMULACAO"
+        flash(f"{'Aplicado' if apply else 'Simulado'} para {len(vencidos)} usuários.", "success")
+
+    if request.values.get("export") == "1":
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        path = f"/tmp/users_vencidos_{stamp}.csv"
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(["login", "status", "lastLoginTime", "userType", "mainResourceId"])
+            for u in vencidos:
+                w.writerow([u.get("login"), u.get("status"), u.get("lastLoginTime"), u.get("userType"), u.get("mainResourceId")])
+        return send_file(path, as_attachment=True, download_name=os.path.basename(path), mimetype="text/csv")
+
+    return render_template(
+        "desativar_inativos.html",
+        cutoff_days=cutoff_days,
+        only_active=only_active,
+        vencidos=vencidos,
+        results=results,
+        mode=mode,
+        meta=meta,
+    )
 
 # Iniciar servidor Flask
 if __name__ == "__main__":
