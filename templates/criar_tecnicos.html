@@ -1,0 +1,74 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+  <div class="menu-container">
+    <h2>Criar técnicos</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages-fixed" id="flash-container">
+          {% for category, message in messages %}
+            <div class="alert {{ 'alert-success' if category == 'success' else 'alert-danger' }}">{{ message|safe }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="form-box" style="max-width: 720px; margin: 0 auto;">
+      <form method="post" enctype="multipart/form-data">
+        <label for="csv_file">CSV (utf-8):</label>
+        <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
+
+        <p style="margin-top:8px; font-size: 0.9rem;">
+          Cabeçalho esperado:
+            <code class="csv-head">
+              idSAP,<wbr>depositoTecnico,<wbr>tipoDeRecurso,<wbr>nomeCompleto,<wbr>areaDoTecnico,<wbr>tipoDeUsuario,<wbr>email,<wbr>Senha
+            </code>
+        </p>
+
+        <button type="submit">Processar CSV</button>
+      </form>
+
+      <div style="text-align:center; margin-top:16px;">
+        <a class="btn-voltar" href="{{ url_for('home') }}">Voltar</a>
+      </div>
+    </div>
+
+    {% if logs %}
+      <div class="tabela-container">
+        <h3>Resultado do processamento</h3>
+        <table class="tabela-usuarios">
+          <thead>
+            <tr>
+              <th>Linha</th>
+              <th>idSAP</th>
+              <th>Email</th>
+              <th>Status Recurso</th>
+              <th>Status Usuário</th>
+              <th>Status Depósito</th>
+              <th>Mensagens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in logs %}
+              <tr>
+                <td>{{ r.linha }}</td>
+                <td>{{ r.idSAP }}</td>
+                <td>{{ r.email }}</td>
+                <td>{{ r.recurso_status }}</td>
+                <td>{{ r.usuario_status }}</td>
+                <td>{{ r.deposito_status }}</td>
+                <td><pre style="white-space: pre-wrap; margin:0;">{{ r.msg }}</pre></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+</body>
+
+{% include 'includes/footer.html' %}

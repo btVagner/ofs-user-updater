@@ -1,0 +1,41 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+  <div class="menu-container">
+    <h2>Trocar senha</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages-fixed" id="flash-container">
+          {% for category, message in messages %}
+            <div class="alert {{ 'alert-success' if category == 'success' else 'alert-danger' }}">{{ message|safe }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="form-box" style="max-width: 520px; margin: 0 auto;">
+      <form method="post" autocomplete="off">
+        <label for="senha_atual">Senha atual</label>
+        <input type="password" id="senha_atual" name="senha_atual" required>
+
+        <label for="nova_senha">Nova senha</label>
+        <input type="password" id="nova_senha" name="nova_senha" minlength="8" required>
+
+        <label for="confirmar_senha">Confirmar nova senha</label>
+        <input type="password" id="confirmar_senha" name="confirmar_senha" minlength="8" required>
+
+        <button type="submit">Salvar nova senha</button>
+      </form>
+
+      <div style="text-align:center; margin-top:16px;">
+        <a class="btn-voltar" href="{{ url_for('home') }}">Voltar</a>
+      </div>
+    </div>
+  </div>
+</body>
+
+{% include 'includes/footer.html' %}

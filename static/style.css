@@ -5,7 +5,7 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    background-color: #121212;
+    background-color: #000000FF;
     color: #f1f1f1;
     background-repeat: no-repeat;
     background-position: center center;
@@ -552,4 +552,32 @@ body.login-page {
   color: #00aaff;
   text-decoration: none;
   font-weight: bold;
+}
+/* Criar técnicos – dicas e cabeçalho CSV */
+.form-box .hint {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #ccc;
+}
+
+.form-box code.csv-head {
+  display: inline-block;
+  max-width: 100%;
+  white-space: normal;         /* permite quebrar */
+  overflow-wrap: anywhere;     /* quebra em qualquer ponto se precisar */
+  word-break: break-word;      /* fallback */
+  background-color: #111; 
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+.form-box { overflow: hidden; } 
+.form-box input[type="password"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background-color: #2b2b2b;
+  color: #f1f1f1;
+  font-size: 1rem;
 }

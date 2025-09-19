@@ -10,11 +10,19 @@
           Login – {{ session.nome_usuario }} ▼
         </button>
         <div class="dropdown-menu">
-          <a href="https://docs.oracle.com/en/cloud/saas/field-service/index.html" target="_blank">Documentação Oracle</a>
-          <a href="#">Trocar senha</a>
-          {% if session.tipo_id == 1 %}
-            <a href="#">Criar novo usuário</a>
+          <a href="https://docs.oracle.com/en/cloud/saas/field-service/index.html" target="_blank">
+            Documentação Oracle
+          </a>
+
+          <!-- sempre visível; a rota já tem @perm_required('usuarios.trocar_senha') -->
+          <a href="{{ url_for('trocar_senha') }}">Trocar senha</a>
+
+          <!-- só admin (perfil 1). Pode usar has_perm OU session.tipo_id -->
+          {% if has_perm('usuarios.criar') %}
+            <a href="{{ url_for('criar_usuario') }}">Criar novo usuário</a>
           {% endif %}
+
+          <!-- nada mais aqui no dropdown -->
           <a href="{{ url_for('logout') }}">Sair</a>
         </div>
       </div>

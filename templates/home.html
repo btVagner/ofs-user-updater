@@ -14,34 +14,71 @@
     {% endwith %}
 
     <div class="card-grid">
+      {% if has_perm('ofs.atualizar_tipo') %}
       <a href="{{ url_for('atualizar_user_type') }}" class="card">
         <h3>Tipos de usuário</h3>
         <div class="card-description">
-            <p>
-            ➤Altere o tipo de usuário de um ou mais técnicos.<br>
-            ➤Gerencia os tipos disponíveis de usuários.
-            </p>
+          <p>
+            ➤ Altere o tipo de usuário de um ou mais técnicos.<br>
+            ➤ Gerencie os tipos disponíveis de usuários.
+          </p>
         </div>
       </a>
+      {% endif %}
 
+      {% if has_perm('ofs.consultar') %}
       <a href="{{ url_for('consultar_usuarios') }}" class="card">
         <h3>Consultar usuários</h3>
         <div class="card-description">
-            <p>
-            ➤Lista todos os usuários cadastrados no OFS.<br>
-            ➤Exibe nome, login, status e XU_CODE_SAP.
-            </p>
+          <p>
+            ➤ Lista todos os usuários cadastrados no OFS.<br>
+            ➤ Exibe nome, login, status e XU_CODE_SAP.
+          </p>
         </div>
       </a>
+      {% endif %}
+
+      {% if has_perm('ofs.desativar') %}
       <a href="{{ url_for('desativar_inativos') }}" class="card">
-        <h3>Desativar inativos</h3>
+        <h3>Desativar usuários e recursos</h3>
         <div class="card-description">
-            <p>
-            ➤Lista usuários sem acesso há muito tempo ou sem login.<br>
-            ➤Permite simular ou executar exclusão e inativação.
-            </p>
+          <p>
+            ➤ Lista usuários sem acesso há muito tempo ou sem login.<br>
+            ➤ Permite simular ou executar exclusão e inativação.
+          </p>
         </div>
       </a>
+      {% endif %}
+
+      {% if has_perm('ofs.criar_tecnicos') %}
+      <a href="{{ url_for('criar_tecnicos') }}" class="card">
+        <h3>Criar técnicos</h3>
+        <div class="card-description">
+          <p>
+            ➤ Envie um CSV e crie recurso + usuário no OFS (ambiente de teste).
+          </p>
+        </div>
+      </a>
+      {% endif %}
+
+
+      {# {% if has_perm('sap.reenviar') %}
+      <a href="#" class="card">
+        <h3>Reenviar integração SAP</h3>
+        <div class="card-description">
+          <p>➤ Reenvia dados de integração pendentes ou com erro para o SAP.</p>
+        </div>
+      </a>
+      {% endif %}
+
+      {% if has_perm('feature.reservado') %}
+      <a href="#" class="card">
+        <h3>Reservado</h3>
+        <div class="card-description">
+          <p>➤ Espaço reservado para funcionalidade futura.</p>
+        </div>
+      </a>
+      {% endif %} #}
     </div>
   </div>
 {% include 'includes/footer.html' %}
