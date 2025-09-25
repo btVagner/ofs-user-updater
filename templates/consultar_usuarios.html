@@ -8,46 +8,83 @@
     <h2 style="text-align:center;">Lista de Usuários OFS</h2>
     <p class="tabela-container"><strong>Total de usuários ativos:</strong> {{ total_ativos }}</p>
 
-    <div class="tabela-container">
-        <table id="usuariosTable" class="tabela-usuarios display">
-            <thead>
-                <tr>
-                <th>Nome</th>
-                <th>UserType</th>
-                <th>XU_CODE_SAP</th>
-                <th>Status</th>
-                <th>Login</th>
-                <th>Last Login</th>
-                </tr>
-                <tr>
-                <th></th>
-                <th></th>
-                <th></th>
-                <th></th>
-                <th></th>
-                <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for user in usuarios %}
-                <tr>
-                    <td>{{ user.name }}</td>
-                    <td>{{ user.userType if user.userType else '-' }}</td>
-                    <td>{{ user.code_sap }}</td>
-                    <td>{{ user.status }}</td>
-                    <td>{{ user.login }}</td>
-                    <td>{{ user.lastLoginTime }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <!-- Toolbar de filtros -->
+    <div class="tabela-container filters-bar"
+         style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+      <!-- Botões de dropdown (UserType col=1, Bucket col=2, Status col=4) -->
+      <button class="fd-btn" data-col="1" data-target="menu-ut">Perfil (UserType) ▾</button>
+      <button class="fd-btn" data-col="2" data-target="menu-bk">Bucket ▾</button>
+      <button class="fd-btn" data-col="4" data-target="menu-st">Status ▾</button>
 
+      <!-- Busca por Nome (coluna 0) -->
+      <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+        <label for="nameSearch"><strong>Nome:</strong></label>
+        <input id="nameSearch" type="text" placeholder="Pesquisar nome..."
+               style="padding:8px; border-radius:6px; border:1px solid #444; background:#2b2b2b; color:#fff;">
+      </div>
+    </div>
+
+    <div class="tabela-container">
+      <table id="usuariosTable" class="tabela-usuarios display">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>UserType</th>
+            <th>Bucket</th>
+            <th>XU_CODE_SAP</th>
+            <th>Status</th>
+            <th>Login</th>
+            <th>Last Login</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in usuarios %}
+          <tr>
+            <td>{{ user.name }}</td>
+            <td>{{ user.userType if user.userType else '-' }}</td>
+            <td>{{ user.bucket }}</td>
+            <td>{{ user.code_sap }}</td>
+            <td>{{ user.status }}</td>
+            <td>{{ user.login }}</td>
+            <td>{{ user.lastLoginTime }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
 
     <div style="text-align:center; margin-top:20px;">
       <a href="{{ url_for('home') }}" class="btn-voltar">Voltar</a>
     </div>
   </div>
+
+  <!-- Menus são injetados no <body> pelo JS; estilo global dos dropdowns -->
+  <style>
+    .fd-menu {
+      position: absolute;
+      top: 0; left: 0;
+      min-width: 260px;
+      max-height: 320px;
+      overflow: auto;
+      background: #1f1f1f;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 8px 20px rgba(0,0,0,.45);
+      z-index: 9999;
+      display: none;
+    }
+    .fd-menu.open { display: block; }
+    .fd-menu .fd-all { display:block; padding:4px 2px; border-bottom:1px solid #333; margin-bottom:6px; }
+    .fd-menu .fd-options label { display:block; padding:4px 2px; cursor:pointer; }
+    .fd-btn {
+      padding:8px 12px; border:1px solid #444; border-radius:8px;
+      background:#2b2b2b; color:#fff; cursor:pointer;
+    }
+  </style>
+
+  <!-- Seu JS de filtros -->
+  <script src="{{ url_for('static', filename='js/usuarios_table.js') }}?v=3"></script>
 </body>
 
 {% include 'includes/footer.html' %}

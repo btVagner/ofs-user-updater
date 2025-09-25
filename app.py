@@ -18,9 +18,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "minha_chave_secreta")
 
 
-# =========================
 # Helpers de sessão/acesso
-# =========================
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -131,9 +129,9 @@ def login():
     return render_template("login.html")
 
 
-# ============
+
 # Página Home
-# ============
+
 @app.route("/")
 @login_required
 def home():
@@ -143,9 +141,9 @@ def home():
     return render_template("home.html")
 
 
-# ==============================================
+
 # Atualizar userType (menu com opções de telas)
-# ==============================================
+
 @app.route("/atualizar", methods=["GET", "POST"])
 @login_required
 @perm_required("ofs.atualizar_tipo")
@@ -167,9 +165,9 @@ def atualizar_user_type():
     return render_template("atualizar_user_type.html")
 
 
-# ===================================================
+
 # Atualizar userType de 1 técnico (por resource_id)
-# ===================================================
+
 @app.route("/atualizar-um", methods=["GET", "POST"])
 @login_required
 @perm_required("ofs.atualizar_tipo")
@@ -199,9 +197,9 @@ def atualizar_um():
     return render_template("atualizar_um.html", tipos=tipos_user, selected=selected)
 
 
-# ===================================================
+
 # Atualizar userType de vários técnicos (email/id)
-# ===================================================
+
 @app.route("/atualizar-varios", methods=["GET", "POST"])
 @login_required
 @perm_required("ofs.atualizar_tipo")
@@ -246,9 +244,7 @@ def log_varios():
     return render_template("log_varios.html", logs=logs)
 
 
-# =========================================
 # Criar técnicos via CSV (recurso + usuário)
-# =========================================
 @app.route("/criar-tecnicos", methods=["GET", "POST"])
 @login_required
 @perm_required("ofs.criar_tecnicos")
@@ -387,9 +383,7 @@ def criar_tecnicos():
     return render_template("criar_tecnicos.html", logs=logs)
 
 
-# ====================
 # Trocar a própria senha
-# ====================
 @app.route("/trocar-senha", methods=["GET", "POST"])
 @login_required
 @perm_required("usuarios.trocar_senha")
@@ -439,9 +433,7 @@ def trocar_senha():
     return render_template("trocar_senha.html")
 
 
-# =========================
 # Criar usuário do painel
-# =========================
 @app.route("/criar-usuario", methods=["GET", "POST"])
 @login_required
 @perm_required("usuarios.criar")
@@ -491,39 +483,49 @@ def criar_usuario():
     return render_template("criar_usuario.html")
 
 
-# =========================
 # Consultar usuários OFS
-# =========================
+# Consultar usuários OFS
 @app.route("/consultar-usuarios")
 @login_required
-@perm_required("ofs.consultar")
 def consultar_usuarios():
     client = OFSClient()
     usuarios_raw = client.get_usuarios()
 
-    usuarios_filtrados = []
+    bucket_cache = {}
+    usuarios = []
     for u in usuarios_raw:
-        usuarios_filtrados.append({
+        main_res = u.get("mainResourceId") or u.get("main_resource_id")
+        if main_res:
+            if main_res in bucket_cache:
+                bucket = bucket_cache[main_res]
+            else:
+                try:
+                    bucket = client.get_bucket_by_resource_id(main_res)
+                except Exception:
+                    bucket = "-"
+                bucket_cache[main_res] = bucket
+        else:
+            bucket = "-"
+
+        usuarios.append({
             "name": u.get("name", "-"),
             "userType": u.get("userType", "-"),
+            "bucket": bucket,
+            "code_sap": u.get("XU_CODE_SAP", "-"),
             "status": u.get("status", "-"),
             "login": u.get("login", "-"),
-            "code_sap": u.get("XU_CODE_SAP", "-"),
             "lastLoginTime": u.get("lastLoginTime", "-"),
         })
 
-    ativos = sum(1 for u in usuarios_filtrados if u["status"] == "active")
+    ativos = sum(1 for u in usuarios if u["status"] == "active")
 
     return render_template(
         "consultar_usuarios.html",
-        usuarios=usuarios_filtrados,
+        usuarios=usuarios,
         total_ativos=ativos
     )
 
-
-# ===========================================
 # Desativar inativos / sem login (preview/run)
-# ===========================================
 @app.route("/desativar_inativos", methods=["GET", "POST"])
 @login_required
 @perm_required("ofs.desativar")
@@ -565,9 +567,7 @@ def desativar_inativos():
     )
 
 
-# =================
 # Utilidades gerais
-# =================
 def get_tipos_user():
     """Carrega lista de tipos do OFS (tabela local tipos_ofs)."""
     conn = get_connection()
@@ -587,8 +587,5 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ============
-# Flask server
-# ============
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

@@ -1,5 +1,4 @@
 # ofs/client.py
-
 import os
 import requests
 from requests.auth import HTTPBasicAuth
@@ -24,6 +23,7 @@ class OFSClient:
 
     # -------- util interno --------
     def _json_request(self, method, url, json=None, headers=None):
+        """Faz uma request JSON autenticada e retorna o Response (sem raise automático)."""
         h = {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -41,13 +41,18 @@ class OFSClient:
         return resp
 
     # ======== MÉTODOS JÁ UTILIZADOS NO PROJETO ========
-    def get_login_by_resource_id(self, resource_id: str) -> str:
-        """Retorna o login atrelado a um resource_id via /resources/{id}/users"""
-        url = f"{self.base_url}/resources/{resource_id}/users"
+    def authenticated_get(self, url: str) -> dict:
+        """GET autenticado genérico que retorna JSON (com raise em erro HTTP)."""
         headers = {"Accept": "application/json"}
         response = requests.get(url, headers=headers, auth=self.auth, timeout=DEFAULT_TIMEOUT)
         response.raise_for_status()
-        return response.json()["items"][0]["login"]
+        return response.json()
+
+    def get_login_by_resource_id(self, resource_id: str) -> str:
+        """Retorna o login atrelado a um resource_id via /resources/{id}/users"""
+        url = f"{self.base_url}/resources/{resource_id}/users"
+        data = self.authenticated_get(url)
+        return data["items"][0]["login"]
 
     def update_user_type(self, login: str, new_user_type: str):
         """PATCH /users/{login} com {'userType': '...'}"""
@@ -56,13 +61,6 @@ class OFSClient:
         resp = self._json_request("PATCH", url, json=payload)
         resp.raise_for_status()
         return resp.status_code, resp.text
-
-    def authenticated_get(self, url: str) -> dict:
-        """GET autenticado genérico que retorna JSON"""
-        headers = {"Accept": "application/json"}
-        response = requests.get(url, headers=headers, auth=self.auth, timeout=DEFAULT_TIMEOUT)
-        response.raise_for_status()
-        return response.json()
 
     def get_usuarios(self) -> list:
         """Lista todos os usuários paginando de 100 em 100"""
@@ -77,6 +75,18 @@ class OFSClient:
             usuarios.extend(items)
             offset += 100
         return usuarios
+
+    # ======== Bucket (XR_PARENT_RESOURCE) ========
+    def get_bucket_by_resource_id(self, resource_id: str) -> str:
+        """
+        GET /resources/{resourceId}
+        Retorna o valor de XR_PARENT_RESOURCE (Bucket) se existir, senão '-'.
+        """
+        if not resource_id:
+            return "-"
+        url = f"{self.base_url}/resources/{resource_id}"
+        data = self.authenticated_get(url)
+        return data.get("XR_PARENT_RESOURCE") or "-"
 
     # ======== CRIAÇÃO (RECURSO -> USUÁRIO) ========
     def create_resource(self, id_sap: str, parent_resource_id: str, name: str, email: str):
@@ -98,7 +108,7 @@ class OFSClient:
             "timeZone": "(UTC-03:00) Sao Paulo - Brasilia Time (BRT)",  # fixo
             "status": "active",  # fixo
         }
-        # Não dou raise aqui porque 409 pode significar "já existe"
+        # Não fazemos raise aqui (para permitir tratar 409 externamente)
         return self._json_request("PUT", url, json=body)
 
     def create_user(self, email: str, name: str, id_sap: str, user_type: str, password: str):
@@ -124,4 +134,5 @@ class OFSClient:
         """
         url = f"{self.base_url_create}/resources/{id_sap}"
         body = {"XR_TEC_DEP": deposito_tecnico}
+        # Não fazemos raise; quem chama decide como tratar códigos de retorno
         return self._json_request("PATCH", url, json=body)
