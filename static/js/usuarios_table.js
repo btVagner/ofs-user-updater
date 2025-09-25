@@ -1,20 +1,31 @@
 // static/js/usuarios_table.js
 $(function () {
   const table = $('#usuariosTable').DataTable({
-    dom: 'Brtip',           // Remove o "f" (search global padrão)
+    dom: 'Brtip',           // sem "f" => remove Search padrão
     buttons: ['csv'],
     paging: false
   });
 
   // ---- Helpers ----
-  function uniqSorted(colIdx) {
-    return Array.from(new Set(
-      table.column(colIdx).data().toArray()
-        .map(v => (v || '').toString().trim())
-        .filter(v => v && v !== '-')
-    )).sort();
-  }
   const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  // Retorna valores únicos da coluna; se includeDash=true, inclui "-" (ou vazio) como opção
+  function uniqValues(colIdx, includeDash = false) {
+    const raw = table.column(colIdx).data().toArray().map(v => (v ?? '').toString().trim());
+    const set = new Set();
+
+    for (const v of raw) {
+      if (v) set.add(v); // valores normais
+    }
+
+    // Se deve incluir "sem valor", verifica se existe "-" ou vazio na coluna
+    if (includeDash) {
+      const hasNoVal = raw.some(v => v === '-' || v === '');
+      if (hasNoVal) set.add('-'); // usamos "-" como marcador na tabela
+    }
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
 
   // Cria/atualiza menu para uma coluna
   function buildMenu(menuId, colIdx) {
@@ -25,17 +36,25 @@ $(function () {
       $menu.empty();
     }
 
-    const list = uniqSorted(colIdx);
-    const $all = $('<label class="fd-all"><input type="checkbox" class="fd-all-toggle" data-col="' + colIdx + '" checked> Selecionar todos</label>');
+    const includeDash = (colIdx === 2); // Bucket
+    const values = uniqValues(colIdx, includeDash);
+
+    const $all = $(`
+      <label class="fd-all">
+        <input type="checkbox" class="fd-all-toggle" data-col="${colIdx}" checked> Selecionar todos
+      </label>
+    `);
     const $opts = $('<div class="fd-options"></div>');
 
-    list.forEach(v => {
-      const safe = v.replace(/\W+/g, '_');
-      const $lbl = $('<label/>').html(
-        `<input type="checkbox" class="fd-opt" data-col="${colIdx}" value="${v}" checked> ${v}`
+    values.forEach(v => {
+      const labelText = (colIdx === 2 && v === '-') ? 'Sem bucket' : (v || '—');
+      $opts.append(
+        `<label><input type="checkbox" class="fd-opt" data-col="${colIdx}" value="${v}" checked> ${labelText}</label>`
       );
-      $opts.append($lbl);
     });
+
+    // Caso a coluna tenha SOMENTE valores vazios/“-” e nenhum outro (ex.: tudo sem bucket),
+    // ainda teremos a opção "Sem bucket" criada acima porque includeDash=true detecta e inclui "-".
 
     $menu.append($all).append($opts);
     return $menu;
@@ -44,10 +63,7 @@ $(function () {
   // Posiciona menu abaixo do botão
   function placeMenu($btn, $menu) {
     const off = $btn.offset();
-    $menu.css({
-      top: off.top + $btn.outerHeight() + 6,
-      left: off.left
-    });
+    $menu.css({ top: off.top + $btn.outerHeight() + 6, left: off.left });
   }
 
   // Abre/fecha menus
@@ -62,6 +78,7 @@ $(function () {
     placeMenu($btn, $menu);
     $menu.toggleClass('open');
   });
+
   // Fecha ao clicar fora
   $(document).on('click', function () { $('.fd-menu').removeClass('open'); });
   $(document).on('click', '.fd-menu', function (e) { e.stopPropagation(); });
@@ -98,10 +115,9 @@ $(function () {
     table.draw();
   }
 
-  // Busca por Nome (coluna 0) - contém, sem regex
+  // Busca por NOME (coluna 0) - contém, sem regex
   $('#nameSearch').on('input', function () {
-    const val = $(this).val();
-    table.column(0).search(val, false, true).draw();
+    table.column(0).search($(this).val(), false, true).draw();
   });
 
   // Estado inicial: nenhum filtro restritivo
