@@ -1,0 +1,118 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+    <div class="menu-container" style="max-width: 1100px;">
+        <h2>Gerenciar perfis e permissões</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages-fixed" id="flash-container">
+            {% for category, message in messages %}
+            <div class="alert {{ 'alert-success' if category == 'success' else 'alert-danger' }}">{{ message|safe }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div
+            style="display:flex; gap:24px; justify-content:center; align-items:flex-start; flex-wrap:wrap; margin-top:24px;">
+
+            <!-- Coluna esquerda: lista + criação -->
+            <div class="form-box" style="max-width:430px; width:100%; padding:30px 32px;">
+                <h3 style="margin-top:0; margin-bottom:18px;">Perfis existentes</h3>
+
+                <ul class="perfis-list">
+                    {% for p in perfis %}
+                    <li>
+                        <a href="{{ url_for('perfis_view', perfil_id=p.id) }}"
+                            class="perfil-item {% if perfil_atual and p.id == perfil_atual.id %}selected{% endif %}">
+                            <span>{{ p.nome }}</span>
+
+                            {% if perfil_atual and p.id == perfil_atual.id %}
+                            <span class="perfil-selected-label">(selecionado)</span>
+                            {% endif %}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+
+                <hr style="border:none; border-top:1px solid #333; margin:12px 0 18px;">
+
+                <h4 style="margin:0 0 8px;">Novo perfil</h4>
+                <form method="post" autocomplete="off">
+                    <input type="hidden" name="acao" value="criar">
+                    <input type="text" name="novo_perfil" placeholder="Nome do novo perfil" required>
+                    <button type="submit" style="margin-top:14px;">Criar perfil</button>
+                </form>
+            </div>
+
+
+
+            <!-- Coluna direita: edição do perfil selecionado -->
+            <div class="form-box" style="max-width:520px; width:100%; padding:30px 32px;">
+                <h3 style="margin-top:0; margin-bottom:18px;">Editar perfil</h3>
+
+                {% if perfil_atual %}
+                <form method="post">
+                    <input type="hidden" name="acao" value="salvar">
+                    <input type="hidden" name="perfil_id" value="{{ perfil_atual.id }}">
+
+                    <label for="nome_perfil">Nome do perfil</label>
+                    <input type="text" id="nome_perfil" name="nome_perfil" value="{{ perfil_atual.nome }}" required>
+
+                    <!-- Bloco de informações sobre usuários -->
+                    <div style="margin-top:14px; margin-bottom:18px; font-size:0.9rem;">
+                        <p style="margin:0 0 6px;">
+                            Usuários com este perfil:
+                            <strong>{{ user_count }}</strong>
+                        </p>
+                        {% if user_count > 0 %}
+                        <a href="{{ url_for('usuarios_painel', perfil_id=perfil_atual.id) }}" class="btn-voltar">
+                            Ver usuários deste perfil
+                        </a>
+                        {% endif %}
+                    </div>
+
+                    <label style="margin-top:18px;">Permissões</label>
+                    <div
+                        style="max-height:260px; overflow-y:auto; border:1px solid #333; border-radius:8px; padding:10px 12px; margin-bottom:16px;">
+                        {% for perm in permissoes %}
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:0.9rem;">
+                            <input type="checkbox" name="permissoes[]" value="{{ perm.id }}" {% if perm.id in
+                                perfil_permissoes %}checked{% endif %}>
+                            <span>
+                                <strong>{{ perm.recurso }}</strong> – {{ perm.descricao }}
+                            </span>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    <div style="display:flex; gap:10px; margin-top:10px;">
+                        <button type="submit">Salvar alterações</button>
+                    </div>
+                </form>
+
+                <form method="post" onsubmit="return confirm('Tem certeza que deseja excluir este perfil?');"
+                    style="margin-top:10px;">
+                    <input type="hidden" name="acao" value="deletar">
+                    <input type="hidden" name="perfil_id" value="{{ perfil_atual.id }}">
+                    <button type="submit" style="background-color:#ff4444;">Excluir perfil</button>
+                </form>
+                {% else %}
+                <p style="font-size:0.9rem; color:#ccc;">Selecione um perfil na coluna à esquerda para editar.</p>
+                {% endif %}
+
+                <div style="text-align:center; margin-top:18px;">
+                    <a href="{{ url_for('home') }}" class="btn-voltar">Voltar</a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</body>
+
+{% include 'includes/footer.html' %}

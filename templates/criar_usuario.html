@@ -22,14 +22,24 @@
         <label for="nome">Nome completo</label>
         <input type="text" id="nome" name="nome" required>
 
-        <label for="username">Login (username)</label>
-        <input type="text" id="username" name="username" required>
+        <label for="username_local">E-mail</label>
+        <div class="email-wrapper">
+          <input
+            type="text"
+            id="username_local"
+            name="username_local"
+            placeholder="usuario"
+            required
+            pattern="^[a-zA-Z0-9._%+-]+$"
+          >
+          <span class="email-domain">@verointernet.com.br</span>
+        </div>
 
         <label for="tipo_id">Perfil</label>
         <select id="tipo_id" name="tipo_id" required>
-          <option value="1">Administrador</option>
-          <option value="2">Ope adm</option>
-          <option value="3">Agente</option>
+          {% for p in perfis %}
+            <option value="{{ p.id }}">{{ p.nome }}</option>
+          {% endfor %}
         </select>
 
         <label for="senha">Senha</label>

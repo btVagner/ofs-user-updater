@@ -1,31 +1,73 @@
-<nav class="navbar">
-  <div class="navbar-left">
+<nav class="sidebar">
+  <div class="sidebar-logo">
     <a href="{{ url_for('home') }}" class="logo">OFS Painel</a>
   </div>
 
-  <div class="navbar-right">
-    {% if session.usuario_logado and session.nome_usuario %}
-      <div class="dropdown">
-        <button class="dropdown-toggle">
-          Login – {{ session.nome_usuario }} ▼
-        </button>
-        <div class="dropdown-menu">
-          <a href="https://docs.oracle.com/en/cloud/saas/field-service/index.html" target="_blank">
-            Documentação Oracle
-          </a>
-
-          <!-- sempre visível; a rota já tem @perm_required('usuarios.trocar_senha') -->
-          <a href="{{ url_for('trocar_senha') }}">Trocar senha</a>
-
-          <!-- só admin (perfil 1). Pode usar has_perm OU session.tipo_id -->
-          {% if has_perm('usuarios.criar') %}
-            <a href="{{ url_for('criar_usuario') }}">Criar novo usuário</a>
-          {% endif %}
-
-          <!-- nada mais aqui no dropdown -->
-          <a href="{{ url_for('logout') }}">Sair</a>
-        </div>
-      </div>
-    {% endif %}
+  <div class="sidebar-section">
+    <span class="sidebar-section-title">Status</span>
+    <div class="online-indicator">
+      <span class="online-dot"></span>
+      <span class="online-text">
+        {{ usuarios_online_count or 0 }} online
+      </span>
+    </div>
   </div>
+
+  {% if session.usuario_logado and session.nome_usuario %}
+    <div class="sidebar-section">
+      <span class="sidebar-section-title">Geral</span>
+
+      <!-- Dashboard -->
+      <a href="{{ url_for('home') }}"
+         class="sidebar-link {% if request.endpoint == 'home' %}active{% endif %}">
+        Dashboard
+      </a>
+
+      <!-- Gerenciar Perfis (somente quem tem permissão) -->
+      {% if has_perm('perfis.gerenciar') %}
+        <a href="{{ url_for('perfis_view') }}"
+           class="sidebar-link {% if request.endpoint == 'perfis_view' %}active{% endif %}">
+          Gerenciar Perfis
+        </a>
+      {% endif %}
+
+      <!-- Usuários do painel (somente quem tem permissão) -->
+      {% if has_perm('usuarios.criar') %}
+        <a href="{{ url_for('usuarios_painel') }}"
+           class="sidebar-link {% if request.endpoint == 'usuarios_painel' %}active{% endif %}">
+          Usuários do painel
+        </a>
+      {% endif %}
+
+      <!-- Link externo não tem "ativo" -->
+      <a href="https://docs.oracle.com/en/cloud/saas/field-service/index.html"
+         target="_blank"
+         class="sidebar-link">
+        Documentação Oracle
+      </a>
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-section-title">Conta</span>
+      <span class="sidebar-user-label">Login – {{ session.nome_usuario }}</span>
+
+      <!-- sempre visível; rota já tem @perm_required('usuarios.trocar_senha') -->
+      <a href="{{ url_for('trocar_senha') }}"
+         class="sidebar-link {% if request.endpoint == 'trocar_senha' %}active{% endif %}">
+        Trocar senha
+      </a>
+
+      <!-- só admin (perfil com permissão 'usuarios.criar') -->
+      {% if has_perm('usuarios.criar') %}
+        <a href="{{ url_for('criar_usuario') }}"
+           class="sidebar-link {% if request.endpoint == 'criar_usuario' %}active{% endif %}">
+          Criar novo usuário
+        </a>
+      {% endif %}
+
+      <a href="{{ url_for('logout') }}" class="sidebar-link">
+        Sair
+      </a>
+    </div>
+  {% endif %}
 </nav>

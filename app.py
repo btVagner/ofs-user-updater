@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import csv
 from dotenv import load_dotenv
 from database.connection import get_connection
@@ -8,6 +8,8 @@ import bcrypt
 import os
 from functools import wraps
 from io import StringIO
+import time
+
 
 load_dotenv()
 
@@ -17,6 +19,38 @@ from ofs.client import OFSClient
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "minha_chave_secreta")
 
+@app.before_request
+def atualizar_online():
+    # Só registra se o usuário estiver logado
+    if session.get("usuario_logado"):
+        try:
+            registrar_atividade_usuario()
+        except Exception as e:
+            # Em produção você pode logar isso
+            print(f"[WARN] Falha ao registrar atividade do usuário: {e}")
+@app.context_processor
+def inject_online_count():
+    """Disponibiliza 'usuarios_online_count' em todos os templates."""
+    count = 0
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+
+        limite = datetime.now() - timedelta(minutes=5)  # janela de 5 minutos
+        cur.execute(
+            "SELECT COUNT(*) FROM usuarios_online WHERE last_seen >= %s",
+            (limite,),
+        )
+        row = cur.fetchone()
+        if row:
+            count = row[0]
+
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"[WARN] Falha ao obter usuarios_online_count: {e}")
+
+    return dict(usuarios_online_count=count)
 
 # Helpers de sessão/acesso
 def login_required(f):
@@ -46,7 +80,10 @@ def _carregar_permissoes_por_perfil(perfil_id: int):
 
 
 def has_perm(recurso: str) -> bool:
-    perms = session.get("permissoes", [])
+    # Fallback seguro: se não carregou permissões ainda, admin (tipo_id=1) enxerga tudo
+    perms = session.get("permissoes")
+    if perms is None:
+        return session.get("tipo_id") == 1
     return recurso in perms
 
 
@@ -69,12 +106,6 @@ def perm_required(*recursos):
         return wrapper
     return deco
 
-def has_perm(recurso: str) -> bool:
-    # Fallback seguro: se não carregou permissões ainda, admin (tipo_id=1) enxerga tudo
-    perms = session.get("permissoes")
-    if perms is None:
-        return session.get("tipo_id") == 1
-    return recurso in perms
 
 def any_perm(*recursos) -> bool:
     perms = session.get("permissoes")
@@ -83,6 +114,7 @@ def any_perm(*recursos) -> bool:
     perms = set(perms)
     return any(r in perms for r in recursos)
 
+
 def all_perms(*recursos) -> bool:
     perms = session.get("permissoes")
     if perms is None:
@@ -90,17 +122,58 @@ def all_perms(*recursos) -> bool:
     perms = set(perms)
     return all(r in perms for r in recursos)
 
+
 # Disponibiliza os helpers pra TODOS os templates
 app.jinja_env.globals.update(
     has_perm=has_perm,
     any_perm=any_perm,
     all_perms=all_perms,
 )
+
+
+# ==========
+# UTILIDADES
+# ==========
+
+def get_tipos_user():
+    """Carrega lista de tipos do OFS (tabela local tipos_ofs)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT codigo, descricao FROM tipos_ofs ORDER BY descricao")
+    resultados = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return [{"codigo": row[0], "descricao": row[1]} for row in resultados]
+
+
+def get_perfis():
+    """Carrega lista de perfis do painel (tabela perfis)."""
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT id, nome FROM perfis ORDER BY nome")
+    perfis = cur.fetchall()
+    cur.close()
+    conn.close()
+    return perfis
+
+
 # =====
 # Login
 # =====
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if request.method == "POST":
+        # sempre tratar login como e-mail em minúsculas
+        username = (request.form.get("username") or "").strip().lower()
+        password = (request.form.get("password") or "").strip()
+
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM usuarios WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
@@ -113,7 +186,19 @@ def login():
         conn.close()
 
         if user and bcrypt.checkpw(password.encode(), user["password_hash"].encode()):
-            # guarda dados básicos
+            # atualiza last_login
+            conn = get_connection()
+            cur_upd = conn.cursor()
+            cur_upd.execute(
+                "UPDATE usuarios SET last_login = %s WHERE id = %s",
+                (datetime.now(), user["id"]),
+            )
+            conn.commit()
+            cur_upd.close()
+            conn.close()
+
+            # guarda dados básicos na sessão
+            session["usuario_id"] = user["id"]              # <<< NOVO
             session["usuario_logado"] = user["username"]
             session["nome_usuario"] = user["nome"]
             session["tipo_id"] = int(user["tipo_id"]) if user.get("tipo_id") is not None else 3
@@ -122,16 +207,13 @@ def login():
             session["permissoes"] = _carregar_permissoes_por_perfil(session["tipo_id"])
 
             return redirect(url_for("home"))
-        else:
-            flash("Usuário ou senha inválidos!", "danger")
-            return redirect(url_for("login"))
+
+
 
     return render_template("login.html")
 
 
-
 # Página Home
-
 @app.route("/")
 @login_required
 def home():
@@ -141,8 +223,9 @@ def home():
     return render_template("home.html")
 
 
-
-# Atualizar userType (menu com opções de telas)
+# ===========================
+# Atualizar userType no OFS
+# ===========================
 
 @app.route("/atualizar", methods=["GET", "POST"])
 @login_required
@@ -164,9 +247,6 @@ def atualizar_user_type():
 
     return render_template("atualizar_user_type.html")
 
-
-
-# Atualizar userType de 1 técnico (por resource_id)
 
 @app.route("/atualizar-um", methods=["GET", "POST"])
 @login_required
@@ -196,9 +276,6 @@ def atualizar_um():
     selected = session.pop("ultimo_user_type", "")
     return render_template("atualizar_um.html", tipos=tipos_user, selected=selected)
 
-
-
-# Atualizar userType de vários técnicos (email/id)
 
 @app.route("/atualizar-varios", methods=["GET", "POST"])
 @login_required
@@ -244,7 +321,10 @@ def log_varios():
     return render_template("log_varios.html", logs=logs)
 
 
-# Criar técnicos via CSV (recurso + usuário)
+# ===========================
+# Criar técnicos via CSV
+# ===========================
+
 @app.route("/criar-tecnicos", methods=["GET", "POST"])
 @login_required
 @perm_required("ofs.criar_tecnicos")
@@ -383,7 +463,10 @@ def criar_tecnicos():
     return render_template("criar_tecnicos.html", logs=logs)
 
 
+# ===========================
 # Trocar a própria senha
+# ===========================
+
 @app.route("/trocar-senha", methods=["GET", "POST"])
 @login_required
 @perm_required("usuarios.trocar_senha")
@@ -433,24 +516,38 @@ def trocar_senha():
     return render_template("trocar_senha.html")
 
 
+# ===========================
 # Criar usuário do painel
+# ===========================
+
 @app.route("/criar-usuario", methods=["GET", "POST"])
 @login_required
 @perm_required("usuarios.criar")
 def criar_usuario():
     if request.method == "POST":
         nome = (request.form.get("nome") or "").strip()
-        username = (request.form.get("username") or "").strip()
+
+        local = (request.form.get("username_local") or "").strip().lower()
+        dominio = "@verointernet.com.br"
+        username = local + dominio  # monta o e-mail final
+
         senha = (request.form.get("senha") or "").strip()
         confirmar = (request.form.get("confirmar") or "").strip()
         tipo_id_raw = (request.form.get("tipo_id") or "").strip()
 
-        if not nome or not username or not senha or not confirmar or not tipo_id_raw:
+        if not nome or not local or not senha or not confirmar or not tipo_id_raw:
             flash("Preencha todos os campos.", "danger")
             return redirect(url_for("criar_usuario"))
+
+        # valida apenas a parte local
+        if not local.replace(".", "").replace("_", "").replace("-", "").isalnum():
+            flash("A parte inicial do e-mail contém caracteres inválidos.", "danger")
+            return redirect(url_for("criar_usuario"))
+
         if len(senha) < 8:
             flash("A senha deve ter pelo menos 8 caracteres.", "danger")
             return redirect(url_for("criar_usuario"))
+
         if senha != confirmar:
             flash("A confirmação não confere com a senha.", "danger")
             return redirect(url_for("criar_usuario"))
@@ -463,10 +560,18 @@ def criar_usuario():
 
         conn = get_connection()
         cur = conn.cursor(dictionary=True)
+
+        # confirma se o perfil existe
+        cur.execute("SELECT id FROM perfis WHERE id = %s", (tipo_id,))
+        if not cur.fetchone():
+            cur.close(); conn.close()
+            flash("Perfil informado não existe.", "danger")
+            return redirect(url_for("criar_usuario"))
+
         cur.execute("SELECT id FROM usuarios WHERE username = %s", (username,))
         if cur.fetchone():
             cur.close(); conn.close()
-            flash("Já existe um usuário com esse login.", "danger")
+            flash("Já existe um usuário com esse e-mail.", "danger")
             return redirect(url_for("criar_usuario"))
 
         password_hash = bcrypt.hashpw(senha.encode(), bcrypt.gensalt()).decode()
@@ -480,13 +585,17 @@ def criar_usuario():
         flash("Usuário criado com sucesso!", "success")
         return redirect(url_for("criar_usuario"))
 
-    return render_template("criar_usuario.html")
+    perfis = get_perfis()
+    return render_template("criar_usuario.html", perfis=perfis)
 
 
+# ===========================
 # Consultar usuários OFS
-# Consultar usuários OFS
+# ===========================
+
 @app.route("/consultar-usuarios")
 @login_required
+@perm_required("ofs.consultar")
 def consultar_usuarios():
     client = OFSClient()
     usuarios_raw = client.get_usuarios()
@@ -525,7 +634,11 @@ def consultar_usuarios():
         total_ativos=ativos
     )
 
-# Desativar inativos / sem login (preview/run)
+
+# ===========================
+# Desativar inativos / sem login
+# ===========================
+
 @app.route("/desativar_inativos", methods=["GET", "POST"])
 @login_required
 @perm_required("ofs.desativar")
@@ -567,22 +680,272 @@ def desativar_inativos():
     )
 
 
-# Utilidades gerais
-def get_tipos_user():
-    """Carrega lista de tipos do OFS (tabela local tipos_ofs)."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT codigo, descricao FROM tipos_ofs ORDER BY descricao")
-    resultados = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return [{"codigo": row[0], "descricao": row[1]} for row in resultados]
+# ===========================
+# Gestão de perfis e permissões
+# ===========================
 
+# Gerenciar perfis e permissões
+@app.route("/perfis", methods=["GET", "POST"])
+@login_required
+@perm_required("perfis.gerenciar")
+def perfis_view():
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    # ---------- POST: criar, salvar, deletar ----------
+    if request.method == "POST":
+        acao = request.form.get("acao")
+        perfil_id_raw = (request.form.get("perfil_id") or "").strip()
+
+        # --- CRIAR PERFIL ---
+        if acao == "criar":
+            novo_nome = (request.form.get("novo_perfil") or "").strip()
+            if not novo_nome:
+                flash("Informe um nome para o novo perfil.", "danger")
+                cur.close()
+                conn.close()
+                return redirect(url_for("perfis_view"))
+
+            slug = novo_nome.lower().strip().replace(" ", "_")
+
+            # Gera próximo ID manualmente (MAX(id) + 1)
+            cur.execute("SELECT COALESCE(MAX(id), 0) + 1 AS prox_id FROM perfis")
+            row = cur.fetchone()
+            prox_id = row["prox_id"] if row and "prox_id" in row else 1
+
+            cur.execute(
+                "INSERT INTO perfis (id, nome, slug) VALUES (%s, %s, %s)",
+                (prox_id, novo_nome, slug),
+            )
+            conn.commit()
+            flash("Perfil criado com sucesso.", "success")
+
+            cur.close()
+            conn.close()
+            return redirect(url_for("perfis_view"))
+
+        # --- SALVAR ALTERAÇÕES DE PERFIL ---
+        if acao == "salvar" and perfil_id_raw:
+            try:
+                perfil_id = int(perfil_id_raw)
+            except ValueError:
+                flash("Perfil inválido.", "danger")
+                cur.close()
+                conn.close()
+                return redirect(url_for("perfis_view"))
+
+            nome_editado = (request.form.get("nome_perfil") or "").strip()
+            ids_permissoes = request.form.getlist("permissoes[]")
+
+            if not nome_editado:
+                flash("O nome do perfil não pode ser vazio.", "danger")
+                cur.close()
+                conn.close()
+                return redirect(url_for("perfis_view", perfil_id=perfil_id))
+
+            cur.execute(
+                "UPDATE perfis SET nome = %s WHERE id = %s",
+                (nome_editado, perfil_id),
+            )
+
+            # Atualiza permissões
+            cur.execute("DELETE FROM perfil_permissao WHERE perfil_id = %s", (perfil_id,))
+            for pid in ids_permissoes:
+                try:
+                    pid_int = int(pid)
+                    cur.execute(
+                        "INSERT INTO perfil_permissao (perfil_id, permissao_id) VALUES (%s, %s)",
+                        (perfil_id, pid_int),
+                    )
+                except ValueError:
+                    continue
+
+            conn.commit()
+            flash("Perfil atualizado com sucesso.", "success")
+
+            cur.close()
+            conn.close()
+            return redirect(url_for("perfis_view", perfil_id=perfil_id))
+
+        # --- DELETAR PERFIL ---
+        if acao == "deletar" and perfil_id_raw:
+            try:
+                perfil_id = int(perfil_id_raw)
+            except ValueError:
+                flash("Perfil inválido.", "danger")
+                cur.close()
+                conn.close()
+                return redirect(url_for("perfis_view"))
+
+            # Verifica se há usuários usando esse perfil
+            cur.execute(
+                "SELECT COUNT(*) AS total FROM usuarios WHERE tipo_id = %s",
+                (perfil_id,),
+            )
+            qtd_usuarios = cur.fetchone()["total"]
+
+            if qtd_usuarios > 0:
+                flash(
+                    f"Não é possível apagar: existem {qtd_usuarios} usuário(s) usando este perfil.",
+                    "danger",
+                )
+                cur.close()
+                conn.close()
+                return redirect(url_for("perfis_view", perfil_id=perfil_id))
+
+            # Remove vínculos antes de apagar
+            cur.execute("DELETE FROM perfil_permissao WHERE perfil_id = %s", (perfil_id,))
+            cur.execute("DELETE FROM perfis WHERE id = %s", (perfil_id,))
+            conn.commit()
+
+            flash("Perfil removido com sucesso.", "success")
+            cur.close()
+            conn.close()
+            return redirect(url_for("perfis_view"))
+
+    # ---------- GET: Carregamento da tela ----------
+    cur.execute("SELECT id, nome, slug FROM perfis ORDER BY nome")
+    perfis = cur.fetchall()
+
+    # Seleção do perfil atual via GET
+    perfil_id = request.args.get("perfil_id", type=int)
+    if not perfil_id and perfis:
+        perfil_id = perfis[0]["id"]
+
+    # Perfil selecionado
+    perfil_atual = None
+    if perfil_id:
+        for p in perfis:
+            if p["id"] == perfil_id:
+                perfil_atual = p
+                break
+
+    # Carrega todas as permissões existentes
+    cur.execute("SELECT id, recurso, descricao FROM permissoes ORDER BY recurso")
+    permissoes = cur.fetchall()
+
+    # Carrega permissões do perfil selecionado
+    perfil_permissoes = set()
+    user_count = 0
+
+    if perfil_atual:
+        cur.execute(
+            "SELECT permissao_id FROM perfil_permissao WHERE perfil_id = %s",
+            (perfil_atual["id"],),
+        )
+        perfil_permissoes = {row["permissao_id"] for row in cur.fetchall()}
+
+        cur.execute(
+            "SELECT COUNT(*) AS total FROM usuarios WHERE tipo_id = %s",
+            (perfil_atual["id"],),
+        )
+        user_count = cur.fetchone()["total"]
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "perfis.html",
+        perfis=perfis,
+        perfil_atual=perfil_atual,
+        permissoes=permissoes,
+        perfil_permissoes=perfil_permissoes,
+        user_count=user_count,
+    )
+
+
+
+# Listar usuários de um perfil específico
+# Listar usuários de um perfil específico
+@app.route("/usuarios-por-perfil/<int:perfil_id>")
+@login_required
+@perm_required("perfis.gerenciar")
+def usuarios_por_perfil(perfil_id):
+    # Redireciona para a nova tela única de usuários, já com filtro aplicado
+    return redirect(url_for("usuarios_painel", perfil_id=perfil_id))
+
+@app.route("/usuarios", methods=["GET"])
+@login_required
+@perm_required("usuarios.criar")  # ou "perfis.gerenciar" se quiser restringir ainda mais
+def usuarios_painel():
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    # carregar perfis para o filtro
+    cur.execute("SELECT id, nome FROM perfis ORDER BY nome")
+    perfis = cur.fetchall()
+
+    perfil_id = request.args.get("perfil_id", type=int)
+
+    query = """
+        SELECT u.id,
+               u.nome,
+               u.username,
+               p.nome AS perfil_nome,
+               u.last_login
+        FROM usuarios u
+        LEFT JOIN perfis p ON p.id = u.tipo_id
+    """
+    params = []
+    if perfil_id:
+        query += " WHERE u.tipo_id = %s"
+        params.append(perfil_id)
+
+    query += " ORDER BY u.nome"
+
+    cur.execute(query, tuple(params))
+    usuarios = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "usuarios_painel.html",
+        usuarios=usuarios,
+        perfis=perfis,
+        perfil_id_selecionado=perfil_id,
+    )
+def registrar_atividade_usuario():
+    """Atualiza a tabela usuarios_online com o último acesso do usuário logado."""
+    usuario_id = session.get("usuario_id")
+    if not usuario_id:
+        return
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    agora = datetime.now()
+    # se quiser UTC, use datetime.utcnow()
+
+    cur.execute(
+        """
+        INSERT INTO usuarios_online (usuario_id, last_seen)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE last_seen = VALUES(last_seen)
+        """,
+        (usuario_id, agora),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# ===========================
+# Logout
+# ===========================
 
 @app.route("/logout")
 def logout():
-    session.pop("usuario_logado", None)
-    flash("Você saiu da sessão.", "success")
+    usuario_id = session.get("usuario_id")
+
+    if usuario_id:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM usuarios_online WHERE usuario_id = %s", (usuario_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+
     session.clear()
     return redirect(url_for("login"))
 

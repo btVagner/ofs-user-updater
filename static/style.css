@@ -2,39 +2,30 @@
     box-sizing: border-box;
 }
 
+/* Fundo sem imagem + layout com espaço para sidebar lateral */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
-    background-color: #000000FF;
+    background-color: #000000;
     color: #f1f1f1;
-    background-repeat: no-repeat;
-    background-position: center center;
-    background-attachment: fixed;
-    background-size: cover;
-    background-image: url("/static/images/oracle-letter.png");
 }
 
-body::before {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-image: url("/static/images/oracle-letter.png");
-    background-repeat: no-repeat;
-    background-position: center center;
-    background-size: cover;
-    opacity: 0.03;
-    z-index: -1;
+/* Páginas normais (logado) terão espaço para a sidebar */
+body:not(.login-page) {
+    padding-left: 220px; /* mesma largura da sidebar */
 }
 
+/* Login centralizado, sem deslocamento pela sidebar */
 body.login-page {
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
+    padding-left: 0;
 }
+
+/* ====== FORMULÁRIOS GERAIS ====== */
+
 .form-container {
     max-width: 400px;
     margin: 100px auto;
@@ -90,6 +81,9 @@ body.login-page {
     background-color: #008ecc;
     transform: scale(1.02);
 }
+
+/* ====== LOGIN ====== */
+
 .login-form {
     background-color: #1f1f1f;
     padding: 40px;
@@ -159,10 +153,25 @@ body.login-page {
     text-align: center;
 }
 
+/* ====== LINKS GERAIS ====== */
+
 .logout-link {
     text-align: center;
     margin-top: 20px;
 }
+
+.logout-link a {
+    color: #00aaff;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.logout-link a:hover {
+    text-decoration: underline;
+}
+
+/* ====== HOME – CARDS ====== */
+
 .menu-container {
     max-width: 960px;
     margin: 60px auto;
@@ -213,11 +222,13 @@ body.login-page {
     overflow: hidden;
     transition: opacity 0.3s ease, max-height 0.3s ease;
 }
+
 .card:hover {
     height: 180px;
     justify-content: flex-start;
     padding-top: 20px;
 }
+
 .card:hover h3 {
     margin-bottom: 8px;
 }
@@ -226,6 +237,7 @@ body.login-page {
     opacity: 1;
     max-height: 80px;
 }
+
 .card.disabled {
     background-color: #2b2b2b;
     cursor: not-allowed;
@@ -233,27 +245,25 @@ body.login-page {
     pointer-events: none;
 }
 
+/* ====== SIDEBAR LATERAL ====== */
 
-.logout-link a {
-    color: #00aaff;
-    text-decoration: none;
-    font-weight: bold;
-}
-
-.logout-link a:hover {
-    text-decoration: underline;
-}
-
-.navbar {
+.sidebar {
     background-color: #1f1f1f;
-    padding: 10px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #333;
-    position: sticky;
+    position: fixed;
     top: 0;
-    z-index: 100;
+    left: 0;
+    bottom: 0;
+    width: 220px;
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    border-right: 1px solid #333;
+    z-index: 150;
+}
+
+.sidebar-logo {
+    margin-bottom: 10px;
 }
 
 .logo {
@@ -263,67 +273,76 @@ body.login-page {
     font-weight: bold;
 }
 
-.dropdown {
-    position: relative;
-    display: inline-block;
+.sidebar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
 }
 
-.dropdown-toggle {
-    background: none;
-    border: none;
+.sidebar-section-title {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #aaaaaa;
+    margin-bottom: 4px;
+}
+
+.sidebar-user-label {
+    font-size: 0.85rem;
+    color: #dddddd;
+    margin: 6px 0 4px;
+}
+
+/* Links com sublinhado animado da esquerda para a direita */
+.sidebar-link {
+    position: relative;
+    display: block;
+    padding: 8px 0;
     color: #f1f1f1;
+    text-decoration: none;
     font-size: 0.95rem;
     cursor: pointer;
-    font-weight: 500;
+    transition: color 0.2s ease;
 }
 
-.dropdown-toggle:hover {
-    text-decoration: underline;
-}
-
-.dropdown-menu {
-    display: block;
+.sidebar-link::after {
+    content: "";
     position: absolute;
-    right: 0;
-    top: 120%;
-    background: rgba(30, 30, 30, 0.7);
-    border-radius: 12px;
-    min-width: 200px;
-    z-index: 200;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-10px);
-    transition: all 0.25s ease;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(6px);
+    left: 0;
+    bottom: -2px;
+    width: 100%;
+    height: 2px;
+    background-color: #00aaff;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.25s ease-out;
 }
 
-.dropdown-menu a {
-    display: block;
-    padding: 12px 16px;
-    text-decoration: none;
-    color: #f1f1f1;
-    font-size: 0.9rem;
-    transition: background-color 0.2s;
-    border-radius: 8px;
-    margin: 2px;
+.sidebar-link:hover,
+.sidebar-link:focus-visible {
+    color: #ffffff;
 }
 
-.dropdown-menu a:hover {
-    background-color: rgba(255, 255, 255, 0.06);
+.sidebar-link:hover::after,
+.sidebar-link:focus-visible::after {
+    transform: scaleX(1); /* linha "nasce" da esquerda pra direita */
 }
 
-.dropdown:hover .dropdown-menu {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
+/* Sidebar em telas menores: reduz largura */
+@media (max-width: 768px) {
+    body:not(.login-page) {
+        padding-left: 180px;
+    }
+
+    .sidebar {
+        width: 180px;
+        padding: 16px 12px;
+    }
 }
 
-@media (min-width: 768px) {
-  .card-grid {
-    gap: 30px;
-  }
-}
+/* ====== CONTAINERS DE ATUALIZAÇÃO ====== */
+
 .update-container {
     max-width: 800px;
     margin: 80px auto;
@@ -340,12 +359,7 @@ body.login-page {
     font-size: 1.6rem;
 }
 
-.card-grid {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 30px;
-}
+/* reuso de card-grid já definido acima para layout de cards */
 
 .update-card {
     background-color: #2b2b2b;
@@ -375,7 +389,7 @@ body.login-page {
 }
 
 .update-card:hover {
-    background-color: #333;
+    background-color: #333333;
     transform: translateY(-4px);
     box-shadow: 0 6px 18px rgba(0,0,0,0.5);
 }
@@ -393,13 +407,20 @@ body.login-page {
 .logout-link a:hover {
     text-decoration: underline;
 }
+
+/* ====== ANIMAÇÃO GERAL (fade-in) ====== */
+
 .fade-in {
-  animation: fadeIn 0.5s ease-in-out forwards;
+    animation: fadeIn 0.5s ease-in-out forwards;
 }
+
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
+
+/* ====== FORM WRAPPER GENÉRICO ====== */
+
 .form-wrapper {
     display: flex;
     justify-content: center;
@@ -415,8 +436,8 @@ body.login-page {
     max-width: 95%;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
     text-align: center;
+    overflow: hidden;
 }
-
 
 .form-box h2 {
     color: white;
@@ -440,6 +461,7 @@ body.login-page {
     font-size: 1rem;
     transition: border-color 0.3s ease, box-shadow 0.2s;
 }
+
 .form-box select {
     width: 100%;
     padding: 12px;
@@ -457,6 +479,7 @@ body.login-page {
     cursor: pointer;
     transition: border-color 0.3s ease, box-shadow 0.2s;
 }
+
 .form-box select:hover,
 .form-box select:focus,
 .form-box input[type="text"]:focus {
@@ -483,101 +506,546 @@ body.login-page {
     background-color: #008ecc;
     transform: scale(1.02);
 }
+
+.form-box input[type="password"] {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background-color: #2b2b2b;
+    color: #f1f1f1;
+    font-size: 1rem;
+}
+
+/* ====== FLASH MESSAGES ====== */
+
 .flash-messages {
-  margin-bottom: 20px;
-  text-align: center;
+    margin-bottom: 20px;
+    text-align: center;
 }
 
 .alert {
-  padding: 10px 16px;
-  border-radius: 6px;
-  margin: 10px auto;
-  font-weight: 500;
-  display: inline-block;
-  width: auto;
-  max-width: 100%;
+    padding: 10px 16px;
+    border-radius: 6px;
+    margin: 10px auto;
+    font-weight: 500;
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
 }
+
 .alert-success {
-  background-color: #006633;
-  color: #ccffcc;
+    background-color: #006633;
+    color: #ccffcc;
 }
 
 .alert-danger {
-  background-color: #660000;
-  color: #ffcccc;
+    background-color: #660000;
+    color: #ffcccc;
 }
+
 .flash-messages-fixed {
-  position: fixed;
-  top: 90px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 999;
-  width: 100%;
-  max-width: 600px;
-  padding: 0 20px;
-  text-align: center;
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 999;
+    width: 100%;
+    max-width: 600px;
+    padding: 0 20px;
+    text-align: center;
 }
+
+/* ====== TABELAS (consultar usuários, etc.) ====== */
+
 .tabela-container {
-  overflow-x: auto;
-  margin-top: 30px;
-  margin-left: 5%;
-  margin-right: 5%;
+    overflow-x: auto;
+    margin-top: 30px;
+    margin-left: 5%;
+    margin-right: 5%;
 }
 
 .tabela-usuarios {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0 auto;
-  background-color: #222;
-  color: white;
-  font-size: 14px;
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 auto;
+    background-color: #222;
+    color: white;
+    font-size: 14px;
 }
 
 .tabela-usuarios th,
 .tabela-usuarios td {
-  padding: 12px 16px;
-  border: 1px solid #444;
-  text-align: left;
+    padding: 12px 16px;
+    border: 1px solid #444;
+    text-align: left;
 }
 
 .tabela-usuarios th {
-  background-color: #333;
+    background-color: #333;
 }
 
 .tabela-usuarios tr:nth-child(even) {
-  background-color: #2a2a2a;
+    background-color: #2a2a2a;
 }
 
 .btn-voltar {
-  color: #00aaff;
-  text-decoration: none;
-  font-weight: bold;
+    color: #00aaff;
+    text-decoration: none;
+    font-weight: bold;
 }
+
 /* Criar técnicos – dicas e cabeçalho CSV */
 .form-box .hint {
-  margin-top: 8px;
-  font-size: 0.9rem;
-  color: #ccc;
+    margin-top: 8px;
+    font-size: 0.9rem;
+    color: #ccc;
 }
 
 .form-box code.csv-head {
-  display: inline-block;
-  max-width: 100%;
-  white-space: normal;         /* permite quebrar */
-  overflow-wrap: anywhere;     /* quebra em qualquer ponto se precisar */
-  word-break: break-word;      /* fallback */
-  background-color: #111; 
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    display: inline-block;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    background-color: #111;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
-.form-box { overflow: hidden; } 
-.form-box input[type="password"] {
-  width: 100%;
-  padding: 12px;
+
+/* ====== CAMPO DE E-MAIL (CRIAR USUÁRIO) ====== */
+
+.email-wrapper {
+    display: flex;
+    align-items: center;
+    background-color: #2b2b2b;
+    border: 1px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.email-wrapper input {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    background: transparent;
+    color: #f1f1f1;
+    font-size: 1rem;
+}
+
+.email-wrapper input:focus {
+    outline: none;
+}
+
+.email-domain {
+    padding: 12px;
+    color: #aaaaaa;
+    background-color: #1f1f1f;
+    border-left: 1px solid #333;
+    font-size: 0.95rem;
+    white-space: nowrap;
+}
+
+/* Ajuste de espaçamento entre cards em telas maiores */
+@media (min-width: 768px) {
+    .card-grid {
+        gap: 30px;
+    }
+}
+
+/* ====== GERENCIAR PERFIS – NOVOS ESTILOS ====== */
+
+.perfis-wrapper {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    align-items: flex-start;
+    margin-top: 30px;
+    flex-wrap: wrap;
+}
+
+.perfis-box,
+.perfis-editor {
+    width: 100%;
+    max-width: 420px;
+}
+
+/* Reaproveita o visual da form-box mas reduz tamanho/padding */
+.perfis-box.form-box,
+.perfis-editor.form-box {
+    padding: 24px 24px;
+    width: 100%;
+    max-width: 420px;
+    text-align: left;
+}
+
+.perfis-editor.form-box {
+    max-width: 480px;
+}
+
+/* Título dos cards de perfis */
+.perfis-title {
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+/* Lista de perfis com barra rolável suave */
+.perfis-scroll {
+    max-height: 220px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    padding-right: 4px;
+}
+
+/* Scrollbar discreto (WebKit) */
+.perfis-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.perfis-scroll::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+.perfis-scroll::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 3px;
+}
+.perfis-scroll::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+.perfis-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.perfil-item {
+    margin-bottom: 6px;
+    border-radius: 6px;
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    padding: 6px 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.perfil-item:hover {
+    background-color: #252525;
+    transform: translateX(2px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+.perfil-item.selected {
+    background-color: #202a33;
+    border-left: 3px solid #00aaff;
+    transform: translateX(2px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+
+.perfil-link {
+    color: #f1f1f1;
+    text-decoration: none;
+    font-size: 0.95rem;
+    position: relative;
+    padding-bottom: 2px;
+}
+
+/* Sub-linha animada no hover da linha de perfil */
+.perfil-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 100%;
+    height: 2px;
+    background-color: #00aaff;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.25s ease-out;
+}
+
+.perfil-link:hover,
+.perfil-link:focus-visible {
+    color: #00aaff;
+}
+
+.perfil-link:hover::after,
+.perfil-link:focus-visible::after {
+    transform: scaleX(1);
+}
+
+.perfil-selected-label {
+    font-size: 0.8rem;
+    color: #cccccc;
+}
+
+/* Separador dentro do card de perfis */
+.perfis-separator {
+    border: none;
+    border-top: 1px solid #333;
+    margin: 16px 0;
+}
+
+/* Ajuste dos inputs/botão dentro dos cards de perfis */
+.perfis-box input[type="text"],
+.perfis-editor input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background-color: #2b2b2b;
+    color: #f1f1f1;
+    font-size: 0.95rem;
+    margin-top: 4px;
+}
+
+.perfis-box input[type="text"]:focus,
+.perfis-editor input[type="text"]:focus {
+    border-color: #00aaff;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0,170,255,0.3);
+}
+
+.perfis-box button,
+.perfis-editor button {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background-color 0.25s ease, transform 0.15s ease;
+}
+
+.perfis-box button {
+    background-color: #00aaff;
+    color: #ffffff;
+    margin-top: 10px;
+}
+
+.perfis-box button:hover {
+    background-color: #008ecc;
+    transform: translateY(-1px);
+}
+
+.perfis-editor button {
+    background-color: #00aaff;
+    color: #ffffff;
+    margin-top: 16px;
+}
+
+.perfis-editor button:hover {
+    background-color: #008ecc;
+    transform: translateY(-1px);
+}
+
+/* Botão de excluir perfil em vermelho */
+.perfis-editor button.btn-delete-perfil {
+    background-color: #660000;
+}
+
+.perfis-editor button.btn-delete-perfil:hover {
+    background-color: #880000;
+}
+
+/* Caixa de permissões (checkboxes) */
+.permissoes-box {
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid #333;
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 8px;
+    background-color: #151515;
+}
+
+/* Scrollbar discreto para a lista de permissões */
+.permissoes-box::-webkit-scrollbar {
+    width: 6px;
+}
+.permissoes-box::-webkit-scrollbar-track {
+    background: #111;
+}
+.permissoes-box::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 3px;
+}
+.permissoes-box::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+.permissao-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+}
+
+.permissao-label input[type="checkbox"] {
+    margin-right: 6px;
+}
+/* LISTA DE PERFIS – ESTILO BASE */
+/* Lista de perfis (lado esquerdo) */
+.perfis-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 16px 0;
+}
+
+.perfis-list li {
+    margin-bottom: 6px;
+}
+
+/* Card/link do perfil */
+.perfil-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    width: 100%;
+    padding: 8px 12px;
+    text-decoration: none;
+
+    background-color: #222;
+    border-radius: 6px;
+    border: 1px solid #333;
+
+    color: #f1f1f1;
+    font-size: 0.95rem;
+    cursor: pointer;
+
+    position: relative;
+    overflow: hidden;
+
+    transition:
+        background-color 0.2s ease,
+        transform 0.15s ease,
+        box-shadow 0.15s ease,
+        border-color 0.2s ease;
+}
+
+/* Efeito de hover */
+.perfil-item:hover {
+    background-color: #2b2b2b;
+    transform: translateX(2px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+/* Sublinhado animado (linha embaixo) */
+.perfil-item::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    width: 100%;
+    background-color: #00aaff;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.25s ease-out;
+}
+
+.perfil-item:hover::after {
+    transform: scaleX(1);
+}
+
+/* Estado selecionado – semi-caixa (L: esquerda + baixo) */
+.perfil-item.selected {
+    background-color: #0b212b;
+    border-color: transparent;
+    border-left: 3px solid #00aaff;
+    border-bottom: 2px solid #00aaff;
+    border-radius: 0 0 0 6px;
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+
+/* Linha debaixo sempre visível quando selecionado */
+.perfil-item.selected::after {
+    transform: scaleX(1);
+}
+
+/* Efeito de “press” no clique */
+.perfil-item:active {
+    transform: translateX(2px) translateY(1px);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+
+/* Label "(selecionado)" discreta à direita */
+.perfil-selected-label {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    color: #d0e8ff;
+}
+.usuarios-filtro {
+  margin-top: 16px;
+  text-align: left;
+}
+
+.usuarios-filtro select {
+  margin-left: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
   border: 1px solid #333;
-  border-radius: 8px;
   background-color: #2b2b2b;
   color: #f1f1f1;
-  font-size: 1rem;
+  font-size: 0.9rem;
+}
+.online-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #b8ffb8;
+    margin-top: 4px;
+}
+
+.online-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #00ff7f;
+    box-shadow: 0 0 8px rgba(0, 255, 127, 0.7);
+}
+
+.online-text {
+    white-space: nowrap;
+}
+/* underline animado do sidebar */
+.sidebar-link {
+    position: relative;
+    text-decoration: none;
+    color: #f1f1f1;
+    display: block;
+    padding: 6px 0;
+    transition: color 0.2s ease;
+}
+
+.sidebar-link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    height: 2px;
+    width: 100%;
+    background-color: #00aaff;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.25s ease-out;
+}
+
+/* hover */
+.sidebar-link:hover::after {
+    transform: scaleX(1);
+}
+
+/* quando estiver ativo, mantém sublinhado */
+.sidebar-link.active::after {
+    transform: scaleX(1);
+}
+
+/* cor levemente diferenciada opcional */
+.sidebar-link.active {
+    color: #00aaff;
 }

@@ -1,0 +1,50 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+  <div class="menu-container" style="max-width: 1000px;">
+    <h2>Usuários com o perfil {{ perfil.nome }}</h2>
+
+    <div style="margin-top:10px; font-size:0.95rem;">
+      Total de usuários: <strong>{{ usuarios|length }}</strong>
+    </div>
+
+    <div class="tabela-container" style="margin-top:24px;">
+      <table class="tabela-usuarios">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nome</th>
+            <th>Login (username)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in usuarios %}
+            <tr>
+              <td>{{ u.id }}</td>
+              <td>{{ u.nome }}</td>
+              <td>{{ u.username }}</td>
+            </tr>
+          {% endfor %}
+
+          {% if usuarios|length == 0 %}
+            <tr>
+              <td colspan="3">Nenhum usuário utiliza este perfil.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="text-align:center; margin-top:18px;">
+      <a href="{{ url_for('perfis_view', perfil_id=perfil.id) }}" class="btn-voltar">
+
+        Voltar para perfis
+      </a>
+    </div>
+  </div>
+</body>
+
+{% include 'includes/footer.html' %}
