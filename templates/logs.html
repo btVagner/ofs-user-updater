@@ -1,0 +1,109 @@
+{% include 'includes/head.html' %}
+{% include 'includes/navbar.html' %}
+
+<body>
+  <div class="menu-container" style="max-width: 1300px;">
+    <h2>Log do sistema</h2>
+
+    <!-- Filtros -->
+    <form method="get" class="logs-filters">
+      <div class="logs-filters-row">
+        <div class="filter-field">
+          <label>Usuário</label>
+          <input type="text" name="user" placeholder="Ex.: bvagner" value="{{ filtros.user }}">
+        </div>
+
+        <div class="filter-field">
+          <label>Módulo</label>
+          <select name="module">
+            <option value="">Todos</option>
+            {% for m in modules %}
+              <option value="{{ m }}" {% if filtros.module == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="filter-field">
+          <label>Ação</label>
+          <select name="action">
+            <option value="">Todas</option>
+            {% for a in actions %}
+              <option value="{{ a }}" {% if filtros.action == a %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="filter-field">
+          <label>De</label>
+          <input type="date" name="date_ini" value="{{ filtros.date_ini }}">
+        </div>
+
+        <div class="filter-field">
+          <label>Até</label>
+          <input type="date" name="date_fim" value="{{ filtros.date_fim }}">
+        </div>
+
+        <div class="filter-field filter-grow">
+          <label>Busca</label>
+          <input type="text" name="q" placeholder="Resumo / Ref." value="{{ filtros.q }}">
+        </div>
+
+        <div class="filter-actions">
+          <button type="submit" class="btn-primary">Filtrar</button>
+
+          <a
+            href="{{ url_for('logs_view',
+                             user=filtros.user,
+                             module=filtros.module,
+                             action=filtros.action,
+                             q=filtros.q,
+                             date_ini=filtros.date_ini,
+                             date_fim=filtros.date_fim,
+                             export=1) }}"
+            class="btn-link"
+          >
+            Exportar CSV
+          </a>
+        </div>
+      </div>
+      <div class="logs-filters-hint">
+        Dica: clique no nome das colunas para ordenar sem recarregar.
+      </div>
+    </form>
+
+    <!-- Tabela -->
+    <div class="tabela-container">
+      <table class="tabela-usuarios logs-table" id="logs-table">
+        <thead>
+          <tr>
+            <th data-sort="datetime">Data/Hora <span class="sort-indicator"></span></th>
+            <th data-sort="text">Usuário <span class="sort-indicator"></span></th>
+            <th data-sort="text">Módulo <span class="sort-indicator"></span></th>
+            <th data-sort="text">Ação <span class="sort-indicator"></span></th>
+            <th data-sort="text">Resumo <span class="sort-indicator"></span></th>
+            <th data-sort="text">Ref. <span class="sort-indicator"></span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <!-- mantém visual pt-BR; JS consegue parsear -->
+            <td>{{ log.created_at.strftime("%d/%m/%Y %H:%M:%S") }}</td>
+            <td>{{ log.actor_username or "-" }}</td>
+            <td>{{ log.module }}</td>
+            <td>{{ log.action }}</td>
+            <td>{{ log.summary }}</td>
+            <td>{{ log.entity_ref or "-" }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" style="text-align:center;">Nenhum registro encontrado</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include 'includes/footer.html' %}
+</body>

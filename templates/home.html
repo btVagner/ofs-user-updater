@@ -1,6 +1,6 @@
 {% include 'includes/head.html' %}
 {% if session.usuario_logado %}
-  {% include 'includes/navbar.html' %}
+{% include 'includes/navbar.html' %}
 {% endif %}
 
 <body>
@@ -8,12 +8,13 @@
     <h2>Painel OFS</h2>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
-      {% endfor %}
+    {% for category, message in messages %}
+    <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+    {% endfor %}
     {% endwith %}
 
     <div class="card-grid">
+      {# ====== OFS ====== #}
       {% if has_perm('ofs.atualizar_tipo') %}
       <a href="{{ url_for('atualizar_user_type') }}" class="card">
         <h3>Tipos de usuário</h3>
@@ -61,7 +62,65 @@
       </a>
       {% endif %}
 
+      {# ====== ADMIN / PORTAL ====== #}
+      {% if has_perm('perfis.gerenciar') %}
+      <a href="{{ url_for('perfis_view') }}" class="card">
+        <h3>Gerenciar Perfis</h3>
+        <div class="card-description">
+          <p>
+            ➤ Crie/edite perfis e permissões.<br>
+            ➤ Controle de acesso do portal por tela.
+          </p>
+        </div>
+      </a>
+      {% endif %}
 
+      {% if has_perm('usuarios.criar') %}
+      <a href="{{ url_for('usuarios_painel') }}" class="card">
+        <h3>Usuários do painel</h3>
+        <div class="card-description">
+          <p>
+            ➤ Liste e filtre usuários do portal.<br>
+            ➤ Visualize perfil e last login.
+          </p>
+        </div>
+      </a>
+      {% endif %}
+
+      {% if has_perm('adapter.fechar_os') %}
+      <a href="{{ url_for('fechar_os_adapter') }}" class="card">
+        <h3>Fechar OS Adapter</h3>
+        <div class="card-description">
+          <p>
+            ➤ Fecha OS manualmente quando a integração falha.<br>
+            ➤ Pré-visualize dados antes de enviar.
+          </p>
+        </div>
+      </a>
+      {% endif %}
+      {% if has_perm('logs.visualizar') %}
+      <a href="{{ url_for('logs_view') }}" class="card">
+        <h3>Log do sistema</h3>
+        <div class="card-description">
+          <p>
+            ➤ Visualize todas as ações realizadas no portal.<br>
+            ➤ Auditoria por usuário, módulo e data.
+          </p>
+        </div>
+      </a>
+      {% endif %}
+
+      {# Link externo pode ficar sempre visível (ou condicionar se quiser) #}
+      <a href="https://docs.oracle.com/en/cloud/saas/field-service/index.html" target="_blank" class="card">
+        <h3>Documentação Oracle</h3>
+        <div class="card-description">
+          <p>
+            ➤ Acessar documentação oficial do Oracle Field Service.
+          </p>
+        </div>
+      </a>
+
+      {# Futuras features reservadas (mantidas comentadas) #}
       {# {% if has_perm('sap.reenviar') %}
       <a href="#" class="card">
         <h3>Reenviar integração SAP</h3>
@@ -81,4 +140,6 @@
       {% endif %} #}
     </div>
   </div>
-{% include 'includes/footer.html' %}
+
+  {% include 'includes/footer.html' %}
+</body>

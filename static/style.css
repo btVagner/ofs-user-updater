@@ -1049,3 +1049,123 @@ body.login-page {
 .sidebar-link.active {
     color: #00aaff;
 }
+/* ===== Logs: filtros bonitos ===== */
+.logs-filters {
+  margin: 18px auto 16px;
+  padding: 14px 16px;
+  background: #1f1f1f;
+  border: 1px solid #333;
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+}
+
+.logs-filters-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 150px;
+}
+
+.filter-field label {
+  font-size: 0.82rem;
+  color: #cfcfcf;
+  opacity: 0.95;
+}
+
+.filter-field input,
+.filter-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background-color: #2b2b2b;
+  color: #f1f1f1;
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-field input:focus,
+.filter-field select:focus {
+  outline: none;
+  border-color: #00aaff;
+  box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.25);
+}
+
+.filter-grow {
+  flex: 1;
+  min-width: 220px;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-primary {
+  padding: 10px 14px;
+  background-color: #00aaff;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.btn-primary:hover {
+  background-color: #008ecc;
+  transform: translateY(-1px);
+}
+
+.btn-link {
+  color: #00aaff;
+  text-decoration: none;
+  font-weight: 700;
+  padding: 10px 2px;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+.logs-filters-hint {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: #bdbdbd;
+  opacity: 0.9;
+}
+
+/* ===== Logs: ordenação sem reload ===== */
+.logs-table thead th {
+  user-select: none;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+}
+
+.logs-table thead th:hover {
+  background-color: #3a3a3a;
+}
+
+.logs-table .sort-indicator {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.logs-table thead th.sort-asc .sort-indicator::after {
+  content: "▲";
+}
+
+.logs-table thead th.sort-desc .sort-indicator::after {
+  content: "▼";
+}

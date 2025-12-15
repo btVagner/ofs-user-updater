@@ -1,0 +1,119 @@
+{% include 'includes/head.html' %}
+{% include 'includes/navbar.html' %}
+
+<body>
+    <div class="menu-container" style="max-width: 980px;">
+        <h2>Fechar OS Adapter</h2>
+
+        <!-- FLASH MESSAGES (isso é o que estava faltando) -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+            <div class="alert {{ 'alert-success' if category == 'success' else 'alert-danger' }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        {% if stage == "form" %}
+        <div class="form-box" style="max-width: 640px; margin: 0 auto;">
+            <form method="post" action="{{ url_for('fechar_os_adapter') }}">
+                <input type="hidden" name="acao" value="preview">
+                <label for="activity_id">ID da atividade OFS</label>
+                <input type="text" id="activity_id" name="activity_id" value="{{ activity_id or '' }}"
+                    placeholder="Ex: 40496" required>
+                <button type="submit">Buscar e pré-visualizar</button>
+            </form>
+        </div>
+        {% endif %}
+
+        {% if stage == "preview" and preview %}
+        <div class="update-container" style="max-width: 980px;">
+            <h2>Pré-visualização</h2>
+
+            <div class="tabela-container" style="margin-top: 18px;">
+                <table class="tabela-usuarios">
+                    <tbody>
+                        <tr>
+                            <th style="width:260px;">Activity ID</th>
+                            <td>{{ preview.activity_id }}</td>
+                        </tr>
+                        <tr>
+                            <th>Resource (técnico)</th>
+                            <td>{{ preview.resource_id }}</td>
+                        </tr>
+                        <tr>
+                            <th>Nome do recurso (name)</th>
+                            <td>{{ preview.resource_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Login Adapter (XR_USER_ADAPTER)</th>
+                            <td>{{ preview.xr_user }}</td>
+                        </tr>
+                        <tr>
+                            <th>Senha Adapter (XR_PASSWORD_ADAPTER)</th>
+                            <td>{{ preview.xr_pass }}</td>
+                        </tr>
+                        <tr>
+                            <th>CodAtendimento (XA_SOL_ID)</th>
+                            <td>{{ preview.cod_atendimento }}</td>
+                        </tr>
+                        <tr>
+                            <th>DataInicioAtendimento (startTime)</th>
+                            <td>{{ preview.start_time }}</td>
+                        </tr>
+                        <!-- <tr><th>IDFechamento</th><td>{{ preview.id_fechamento }}</td></tr> -->
+                        <tr>
+                            <th>ObsFechamento (XA_TSK_NOT)</th>
+                            <td>{{ preview.obs or '-' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="display:flex; gap:12px; justify-content:center; margin-top:18px;">
+                <form method="post" action="{{ url_for('fechar_os_adapter') }}">
+                    <input type="hidden" name="acao" value="confirmar">
+                    <button type="submit">Confirmar e enviar</button>
+                </form>
+
+                <form method="get" action="{{ url_for('fechar_os_adapter') }}">
+                    <button type="submit" style="background:#444;">Cancelar</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if stage == "result" and result %}
+        <div class="update-container" style="max-width: 980px;">
+            <h2>Resultado do Adapter</h2>
+
+            <div class="tabela-container" style="margin-top: 18px;">
+                <table class="tabela-usuarios">
+                    <tbody>
+                        <tr>
+                            <th style="width:260px;">HTTP Status</th>
+                            <td>{{ result.status_code }}</td>
+                        </tr>
+                        <tr>
+                            <th>Resposta (parcial)</th>
+                            <td>
+                                <pre style="white-space: pre-wrap; margin: 0;">{{ result.body }}</pre>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="text-align:center; margin-top:18px;">
+                <a class="btn-voltar" href="{{ url_for('fechar_os_adapter') }}">Novo fechamento</a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% include 'includes/footer.html' %}
+</body>
