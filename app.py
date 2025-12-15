@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session
+from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session, jsonify
 import requests
 from datetime import datetime, timedelta
 import csv
@@ -929,7 +929,26 @@ def registrar_atividade_usuario():
     cur.close()
     conn.close()
 
+@app.route("/status-online")
+@login_required
+def status_online():
+    conn = get_connection()
+    cur = conn.cursor()
 
+    limite = datetime.now() - timedelta(minutes=5)
+
+    cur.execute(
+        "SELECT COUNT(*) FROM usuarios_online WHERE last_seen >= %s",
+        (limite,),
+    )
+    count = cur.fetchone()[0]
+
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        "usuarios_online": count
+    })
 # ===========================
 # Logout
 # ===========================
