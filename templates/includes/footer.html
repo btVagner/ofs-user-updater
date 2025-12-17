@@ -1,17 +1,20 @@
-<script src="{{ url_for('static', filename='js/flash_messages.js') }}"></script>
-<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- JS local (defer evita “flash” e melhora carregamento) -->
+  <script defer src="{{ url_for('static', filename='js/flash_messages.js') }}"></script>
 
-<script src="{{ url_for('static', filename='js/usuarios_table.js') }}"></script>
-<script src="{{ url_for('static', filename='js/status_online.js') }}"></script>
-{% if request.endpoint == 'logs_view' %}
-<script src="{{ url_for('static', filename='js/logs_table.js') }}"></script>
-{% endif %}
+  <!-- Libs -->
+  <script defer src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script defer src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script defer src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+  <script defer src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
+  <!-- JS do projeto -->
+  <script defer src="{{ url_for('static', filename='js/usuarios_table.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/status_online.js') }}"></script>
+
+  {% if request.endpoint == 'logs_view' %}
+    <script defer src="{{ url_for('static', filename='js/logs_table.js') }}"></script>
+  {% endif %}
 
 </body>
-
 </html>
