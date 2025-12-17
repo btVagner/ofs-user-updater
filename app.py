@@ -19,6 +19,7 @@ from ofs.cleanup import find_stale_users, execute_cleanup
 from ofs.client import OFSClient
 
 app = Flask(__name__)
+app.config["APPLICATION_ROOT"]="/ofs"
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "minha_chave_secreta")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
