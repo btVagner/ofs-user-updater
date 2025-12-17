@@ -11,7 +11,7 @@ from io import BytesIO, StringIO
 import json
 import time
 from database.audit import audit_log
-
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
@@ -20,6 +20,7 @@ from ofs.client import OFSClient
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "minha_chave_secreta")
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 @app.before_request
 def atualizar_online():
