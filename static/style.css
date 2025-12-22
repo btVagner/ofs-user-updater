@@ -1169,3 +1169,59 @@ body.login-page {
 .logs-table thead th.sort-desc .sort-indicator::after {
   content: "▼";
 }
+/* Modal genérico (Logs - Resposta API) */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 9999;
+  padding: 24px;
+}
+
+.modal-overlay.is-open {
+  display: block;
+}
+
+.modal-card {
+  max-width: 980px;
+  width: 100%;
+  margin: 6vh auto;
+  background: #1e1e1e;
+  color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal-pre {
+  margin: 0;
+  padding: 14px 16px;
+  background: #121212;
+  max-height: 60vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 13px;
+}
+
+/* Se você já tem btn-secondary/btn-sm, pode ignorar. Se não tiver, adicione: */
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+}

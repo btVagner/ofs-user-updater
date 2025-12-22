@@ -14,6 +14,7 @@ def audit_log(
     before=None,
     after=None,
     meta=None,
+    api_response=None
 ):
     """
     before/after/meta podem ser dict/list/str. Serão serializados como JSON.
@@ -31,8 +32,8 @@ def audit_log(
         """
         INSERT INTO audit_log
         (actor_user_id, actor_username, module, action, entity_type, entity_id, entity_ref,
-         summary, before_json, after_json, meta_json)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+         summary, before_json, after_json, meta_json, api_response)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
         (
             actor_user_id,
@@ -46,6 +47,7 @@ def audit_log(
             _to_json(before),
             _to_json(after),
             _to_json(meta),
+            json.dumps(api_response, ensure_ascii=False) if api_response else None,
         ),
     )
     conn.commit()

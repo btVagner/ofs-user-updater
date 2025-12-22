@@ -18,7 +18,7 @@
           <select name="module">
             <option value="">Todos</option>
             {% for m in modules %}
-              <option value="{{ m }}" {% if filtros.module == m %}selected{% endif %}>{{ m }}</option>
+            <option value="{{ m }}" {% if filtros.module==m %}selected{% endif %}>{{ m }}</option>
             {% endfor %}
           </select>
         </div>
@@ -28,7 +28,7 @@
           <select name="action">
             <option value="">Todas</option>
             {% for a in actions %}
-              <option value="{{ a }}" {% if filtros.action == a %}selected{% endif %}>{{ a }}</option>
+            <option value="{{ a }}" {% if filtros.action==a %}selected{% endif %}>{{ a }}</option>
             {% endfor %}
           </select>
         </div>
@@ -51,17 +51,14 @@
         <div class="filter-actions">
           <button type="submit" class="btn-primary">Filtrar</button>
 
-          <a
-            href="{{ url_for('logs_view',
+          <a href="{{ url_for('logs_view',
                              user=filtros.user,
                              module=filtros.module,
                              action=filtros.action,
                              q=filtros.q,
                              date_ini=filtros.date_ini,
                              date_fim=filtros.date_fim,
-                             export=1) }}"
-            class="btn-link"
-          >
+                             export=1) }}" class="btn-link">
             Exportar CSV
           </a>
         </div>
@@ -82,26 +79,53 @@
             <th data-sort="text">Ação <span class="sort-indicator"></span></th>
             <th data-sort="text">Resumo <span class="sort-indicator"></span></th>
             <th data-sort="text">Ref. <span class="sort-indicator"></span></th>
+            <th data-sort="none">Resposta (API)</th>
           </tr>
         </thead>
         <tbody>
           {% for log in logs %}
           <tr>
-            <!-- mantém visual pt-BR; JS consegue parsear -->
-            <td>{{ log.created_at.strftime("%d/%m/%Y %H:%M:%S") }}</td>
+            <td>{{ log.created_at.strftime("%d/%m/%Y %H:%M:%S") if log.created_at else "-" }}</td>
             <td>{{ log.actor_username or "-" }}</td>
             <td>{{ log.module }}</td>
             <td>{{ log.action }}</td>
             <td>{{ log.summary }}</td>
             <td>{{ log.entity_ref or "-" }}</td>
+            <td>
+              {% if log.api_response_text %}
+              <button type="button" class="btn-secondary btn-sm" data-api-id="{{ log.id }}">
+                Ver
+              </button>
+
+              <!-- Guarda o conteúdo de forma segura fora de atributos HTML -->
+              <script type="application/json" id="apiresp-{{ log.id }}">
+                {{ log.api_response_text | tojson }}
+              </script>
+              {% else %}
+              -
+              {% endif %}
+            </td>
+
           </tr>
           {% else %}
           <tr>
-            <td colspan="6" style="text-align:center;">Nenhum registro encontrado</td>
+            <td colspan="7" style="text-align:center;">Nenhum registro encontrado</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- Modal (sem CSS inline) -->
+  <div id="apiRespModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Resposta da API (Adapter)</h3>
+        <button type="button" id="apiRespClose" class="btn-danger btn-sm">Fechar</button>
+      </div>
+
+      <pre id="apiRespContent" class="modal-pre"></pre>
     </div>
   </div>
 

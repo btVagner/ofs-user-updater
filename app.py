@@ -1217,6 +1217,10 @@ def fechar_os_adapter():
 
             payload = preview["payload"]
             resp = requests.post(close_url, json=payload, headers=headers, timeout=30)
+            try:
+                api_response = resp.json()
+            except Exception:
+                api_response = {"raw": (resp.text or "")}
 
             usuario_id = _get_usuario_id_logado()
 
@@ -1249,6 +1253,7 @@ def fechar_os_adapter():
                     "id_fechamento": preview.get("id_fechamento"),
                     "status_code": resp.status_code,
                 },
+                api_response=api_response,
             )
 
             # limpa preview após tentativa
@@ -1302,6 +1307,8 @@ def fechar_os_adapter():
 @login_required
 @perm_required("logs.visualizar")
 def logs_view():
+    import json
+
     conn = get_connection()
     cur = conn.cursor(dictionary=True)
 
@@ -1365,7 +1372,6 @@ def logs_view():
         cur.close()
         conn.close()
 
-        # CSV em texto
         text_buffer = StringIO()
         writer = csv.writer(text_buffer)
         writer.writerow([
@@ -1389,8 +1395,7 @@ def logs_view():
                 r.get("entity_ref") or "",
             ])
 
-        # Converte para bytes e envia
-        csv_bytes = text_buffer.getvalue().encode("utf-8-sig")  # UTF-8 com BOM (excel-friendly)
+        csv_bytes = text_buffer.getvalue().encode("utf-8-sig")
         output = BytesIO(csv_bytes)
 
         return send_file(
@@ -1411,7 +1416,8 @@ def logs_view():
             action,
             summary,
             entity_type,
-            entity_ref
+            entity_ref,
+            api_response
         {base_query}
         ORDER BY created_at DESC
         LIMIT 500
@@ -1419,6 +1425,19 @@ def logs_view():
         tuple(params),
     )
     logs = cur.fetchall()
+
+    # prepara texto do api_response para UI
+    for r in logs:
+        raw = r.get("api_response")
+        if raw is None:
+            r["api_response_text"] = ""
+        elif isinstance(raw, (dict, list)):
+            r["api_response_text"] = json.dumps(raw, ensure_ascii=False)
+        else:
+            r["api_response_text"] = str(raw)
+
+        # limite de segurança para não estourar tela/HTML
+        r["api_response_text"] = (r["api_response_text"] or "")[:10000]
 
     # filtros auxiliares
     cur.execute("SELECT DISTINCT module FROM audit_log ORDER BY module")
