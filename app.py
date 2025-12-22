@@ -19,7 +19,9 @@ from ofs.cleanup import find_stale_users, execute_cleanup
 from ofs.client import OFSClient
 
 app = Flask(__name__)
-app.config["APPLICATION_ROOT"]="/ofs"
+APP_ROOT = os.getenv("APP_ROOT", "")  # em produção defina "/ofs", em dev deixe vazio
+if APP_ROOT:
+    app.config["APPLICATION_ROOT"] = APP_ROOT
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "minha_chave_secreta")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
@@ -1076,6 +1078,13 @@ def fechar_os_adapter():
         cur.close()
         conn.close()
 
+    def _to_int_or_keep(v):
+        """Converte para int se for numérico; caso contrário mantém."""
+        if v is None:
+            return None
+        s = str(v).strip()
+        return int(s) if s.isdigit() else v
+
     # -------- GET: tela vazia --------
     if request.method == "GET":
         # não mantém preview antigo ao entrar na página
@@ -1099,7 +1108,7 @@ def fechar_os_adapter():
                 raise ValueError("A atividade não possui resourceId.")
 
             cod_atendimento = atividade.get("XA_SOL_ID")
-            start_time = atividade.get("startTime")
+            start_time = atividade.get("startTime")  # conforme você disse: já vem "AAAA-MM-DD HH:MM:SS"
             obs = atividade.get("XA_TSK_NOT")
             id_fechamento = atividade.get("XA_SER_CLO_PRO_ADA") or atividade.get("XA_SER_CLO_IMP_ADA")
 
@@ -1107,33 +1116,53 @@ def fechar_os_adapter():
                 raise ValueError("Atividade sem XA_SOL_ID (CodAtendimento).")
             if not id_fechamento:
                 raise ValueError("Atividade sem XA_SER_CLO_PRO_ADA e sem XA_SER_CLO_IMP_ADA.")
+            if not start_time:
+                raise ValueError("Atividade sem startTime (DataInicioAtendimento).")
 
             # 2) Get Resource
             recurso = client.authenticated_get(f"{client.base_url}/resources/{resource_id}")
             resource_name = recurso.get("name")
             xr_user = recurso.get("XR_USER_ADAPTER")
             xr_pass = recurso.get("XR_PASSWORD_ADAPTER")
-            
+
             if not resource_name:
                 resource_name = "Recurso sem nome"
-            
+
             if not xr_user or not xr_pass:
                 raise ValueError("Recurso sem XR_USER_ADAPTER ou XR_PASSWORD_ADAPTER.")
 
-            # 3) Monta payload (não envia ainda)
+            # 3) Monta payload (não envia ainda) — modelo atualizado
             payload = {
                 "usuario": xr_user,
                 "senha": xr_pass,
                 "DadosFechamento": {
-                    "CodAtendimento": cod_atendimento,
-                    "DataInicioAtendimento": start_time,
-                    "IDFechamento": id_fechamento,
+                    "CodAtendimento": str(cod_atendimento),
+
+                    # novos campos do modelo do Adapter
+                    "WifiUsuario": "NULL",
+                    "WifiSenha": "NULL",
+
+                    # mantém como vem do OFS
+                    "DataInicioAtendimento": str(start_time),
+                    "IDFechamento": str(id_fechamento),
+
+                    # novos campos do modelo do Adapter (null real)
+                    "MACONU": None,
+                    "IDSaidaCaixaEscolhida": None,
+
+                    # mantém
                     "IDInterface": None,
-                    "JustificativaReagendamento": "null",
+
+                    # correção: null real (não string "null")
+                    "JustificativaReagendamento": None,
                     "IDMotivoReagendamento": None,
+
                     "ObsFechamento": obs,
                     "obsFechamentoLog": "NULL",
-                    "CodTecnico": resource_id,
+
+                    # no exemplo é numérico; converte se der
+                    "CodTecnico": _to_int_or_keep(resource_id),
+
                     "MovimentouEquipamento": True,
                     "MovimentouMaterial": True,
                     "MovimentouEquipamentoCliente": True
@@ -1143,11 +1172,11 @@ def fechar_os_adapter():
             preview = {
                 "activity_id": activity_id,
                 "resource_id": str(resource_id),
-                "resource_name": resource_name,   
-                "xr_user": xr_user,            
-                "xr_pass": xr_pass,               
+                "resource_name": resource_name,
+                "xr_user": xr_user,
+                "xr_pass": xr_pass,
                 "cod_atendimento": str(cod_atendimento),
-                "start_time": start_time,
+                "start_time": str(start_time),
                 "id_fechamento": str(id_fechamento),
                 "obs": obs,
                 "payload": payload,  # fica na sessão
@@ -1202,6 +1231,7 @@ def fechar_os_adapter():
                 response_body=(resp.text or "")[:65000],
                 error_message=None,
             )
+
             actor = current_actor()
             audit_log(
                 actor_user_id=actor.get("id"),
@@ -1255,11 +1285,19 @@ def fechar_os_adapter():
                 pass
 
             flash(f"Erro ao enviar fechamento: {e}", "danger")
-            return render_template("fechar_os_adapter.html", stage="preview", preview=preview, activity_id=preview.get("activity_id"))
+            return render_template(
+                "fechar_os_adapter.html",
+                stage="preview",
+                preview=preview,
+                activity_id=(preview or {}).get("activity_id") or activity_id,
+            )
 
     # fallback
     flash("Ação inválida.", "danger")
     return redirect(url_for("fechar_os_adapter"))
+
+
+
 @app.route("/logs", methods=["GET"])
 @login_required
 @perm_required("logs.visualizar")
