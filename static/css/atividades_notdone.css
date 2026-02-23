@@ -1,0 +1,467 @@
+/* ================================
+   Atividades NotDone - Layout
+================================ */
+
+.page-atividades {
+    width:100%;
+    max-width: none;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.page-atividades h2 {
+    margin-bottom: 20px;
+}
+
+/* ---------- Filtro ---------- */
+
+.filtro-card {
+    background: #1f1f1f;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 25px;
+}
+
+.filtro-form {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filtro-form label {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 5px;
+    color: #ccc;
+}
+
+.filtro-form input {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: #2c2c2c;
+    color: #fff;
+}
+
+.filtro-form button {
+    padding: 9px 18px;
+}
+
+/* ---------- Tabela ---------- */
+
+.tabela-card {
+    background: #1f1f1f;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.tabela-container {
+    overflow-x: auto;
+    border-radius: 5px;
+}
+
+.tabela-atividades {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tabela-atividades thead {
+    background: #2a2a2a;
+}
+
+.tabela-atividades th,
+.tabela-atividades td {
+    padding: 14px;
+    text-align: left;
+}
+
+.tabela-atividades th {
+    font-weight: 600;
+    border-bottom: 1px solid #444;
+}
+
+.tabela-atividades tr {
+    border-bottom: 1px solid #333;
+}
+
+.tabela-atividades tr:hover {
+    background: #2c2c2c;
+}
+
+/* ---------- Botão ---------- */
+
+.btn-tratar {
+    background: #0d6efd;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+}
+
+.btn-tratar:hover {
+    background: #0b5ed7;
+}
+
+/* ---------- Modal ---------- */
+
+.modal-backdrop-custom {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 9998;
+}
+
+.modal-custom {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(900px, 95vw);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: #1f1f1f;
+    padding: 20px;
+    border-radius: 12px;
+    z-index: 9999;
+}
+
+.modal-custom h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+}
+
+.modal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.modal-grid input,
+.modal-grid textarea {
+    width: 100%;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: #2c2c2c;
+    color: #fff;
+}
+
+.modal-grid textarea {
+    resize: vertical;
+}
+
+.modal-full {
+    grid-column: 1 / -1;
+}
+
+.modal-actions {
+    margin-top: 20px;
+    text-align: right;
+}
+
+.modal-close {
+    background: #6c757d;
+    border: none;
+    padding: 7px 14px;
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    background: #5a6268;
+}
+
+.page-header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.kpis{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.kpi{
+  background:#1f1f1f;
+  border:1px solid #333;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:13px;
+  color:#ddd;
+}
+
+.filtro-card{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:flex-end;
+}
+
+.import-form{
+  margin-left:auto;
+}
+
+.btn-primary{
+  background:#0d6efd;
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  color:#fff;
+  cursor:pointer;
+}
+.btn-primary:hover{ background:#0b5ed7; }
+
+.btn-secondary{
+  background:#6c757d;
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  color:#fff;
+  cursor:pointer;
+}
+.btn-secondary:hover{ background:#5a6268; }
+
+.btn-success{
+  background:#198754;
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  color:#fff;
+  cursor:pointer;
+}
+.btn-success:hover{ background:#157347; }
+
+.btn-treated{
+  background:#2f2f2f;
+  border:1px solid #444;
+  padding:6px 12px;
+  border-radius:8px;
+  color:#bbb;
+  cursor:not-allowed;
+}
+
+.empty-row{
+  text-align:center;
+  padding:20px;
+  color:#aaa;
+}
+
+.modal-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:12px;
+}
+.modal-top-actions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.tratativa-box{
+  margin-top:16px;
+  padding-top:16px;
+  border-top:1px solid #333;
+}
+
+.tratativa-grid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:12px;
+}
+.tratativa-full{ width:100%; }
+
+.tratativa-actions{
+  margin-top:12px;
+  display:flex;
+  justify-content:flex-end;
+}
+
+/* Modal pequeno */
+.modal-small {
+  width: min(520px, 95vw);
+  max-height: 70vh;
+}
+
+.modal-grid-1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.modal-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-danger{
+  background:#dc3545;
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  color:#fff;
+  cursor:pointer;
+}
+.btn-danger:hover{ background:#bb2d3b; }
+
+/* ===== Filtro estilo Excel ===== */
+.tabela-atividades th {
+  position: relative;
+  white-space: nowrap;
+}
+
+.th-filter-btn{
+  margin-left: 8px;
+  border: 1px solid #444;
+  background: #2b2b2b;
+  color: #ddd;
+  border-radius: 6px;
+  padding: 2px 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.th-filter-btn:hover{
+  background:#3a3a3a;
+}
+
+.th-filter-menu{
+  position: fixed;
+  z-index: 10050;
+  width: 280px;
+  background: #1f1f1f;
+  border: 1px solid #3a3a3a;
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+
+.th-filter-actions{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-bottom: 12px;
+}
+
+.th-filter-action{
+  text-align:left;
+  border: 1px solid #444;
+  background: #2b2b2b;
+  color:#ddd;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor:pointer;
+}
+
+.th-filter-action:hover{
+  background:#3a3a3a;
+}
+
+.th-filter-search label{
+  display:block;
+  color:#ccc;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.th-filter-search input{
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #2c2c2c;
+  color: #fff;
+}
+
+.th-filter-footer{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top: 12px;
+}
+.tabela-atividades td[data-col="date"] {
+  white-space: nowrap;
+  min-width: 110px;
+}
+
+/* ================================
+   Responsividade da TABELA
+   (não mexe no botão Tratar)
+================================ */
+
+/* Fonte e espaçamento base da tabela */
+.tabela-atividades{
+  font-size: 13px;          /* menor que o padrão */
+  table-layout: auto;
+}
+
+/* Cabeçalho um pouco menor também */
+.tabela-atividades th{
+  font-size: 13px;
+}
+
+/* Diminui o padding (ganha MUITA largura) */
+.tabela-atividades th,
+.tabela-atividades td{
+  padding: 10px 12px;       /* era 14px */
+  vertical-align: top;
+}
+
+/* Mantém a coluna de Ações sempre “confortável” e sem quebrar */
+.tabela-atividades th:last-child,
+.tabela-atividades td:last-child{
+  white-space: nowrap;
+  min-width: 130px;
+  padding-left: 14px;
+  padding-right: 14px;
+  font-size: 13px;          /* mantém legível */
+}
+
+/* Não encosta no botão Tratar */
+.tabela-atividades td:last-child .btn-tratar{
+  font-size: inherit;       /* mantém o que já está */
+}
+
+/* ===== Ajuste por largura de tela ===== */
+@media (max-width: 1366px){
+  .tabela-atividades{ font-size: 12px; }
+  .tabela-atividades th{ font-size: 12px; }
+  .tabela-atividades th,
+  .tabela-atividades td{
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 1024px){
+  .tabela-atividades{ font-size: 11.5px; }
+  .tabela-atividades th,
+  .tabela-atividades td{
+    padding: 7px 8px;
+  }
+
+  /* Data compacta */
+  .tabela-atividades th[data-col="date"],
+  .tabela-atividades td[data-col="date"]{
+    min-width: 96px;
+  }
+
+  /* Bucket costuma ser enorme: não quebra, mas corta com reticências */
+  .tabela-atividades td[data-col="bucket"]{
+    max-width: 260px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

@@ -110,15 +110,17 @@
       </a>
       {% endif %}
 
-      {# Link externo pode ficar sempre visível (ou condicionar se quiser) #}
-      <a href="https://docs.oracle.com/en/cloud/saas/field-service/index.html" target="_blank" class="card">
-        <h3>Documentação Oracle</h3>
+      {% if has_perm('ofs.atividades_notdone') %}
+      <a href="{{ url_for('atividades_notdone') }}" class="card">
+        <h3>Atividades notdone</h3>
         <div class="card-description">
           <p>
-            ➤ Acessar documentação oficial do Oracle Field Service.
+            ➤ Lista atividades notdone por data e resource.<br>
+            ➤ Botão Tratar abre modal com detalhes.
           </p>
         </div>
       </a>
+      {% endif %}
 
       {# Futuras features reservadas (mantidas comentadas) #}
       {# {% if has_perm('sap.reenviar') %}

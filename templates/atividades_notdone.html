@@ -1,0 +1,327 @@
+{% include 'includes/head.html' %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/atividades_notdone.css') }}">
+
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+<div class="page-atividades">
+
+  <div class="page-header">
+    <h2>Atividades (Improdutivas)</h2>
+
+    <div class="kpis">
+      <span class="kpi">Total: <b>{{ total }}</b></span>
+      <span class="kpi">Pendentes: <b>{{ pendentes }}</b></span>
+      <span class="kpi">Tratados: <b>{{ tratados }}</b></span>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">
+        {{ message }}
+      </p>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- FILTROS + IMPORTAÇÃO -->
+  <div class="filtro-card">
+
+    <form method="GET" action="{{ url_for('atividades_notdone') }}" class="filtro-form">
+      <div>
+        <label>De</label>
+        <input type="date" name="dateFrom" value="{{ date_from }}">
+      </div>
+
+      <div>
+        <label>Até</label>
+        <input type="date" name="dateTo" value="{{ date_to }}">
+      </div>
+
+      <div>
+        <label>Recurso Pai</label>
+        <input type="text" name="resources" value="{{ resources }}" placeholder="MG">
+      </div>
+
+      <button type="submit" class="btn-secondary">Filtrar</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('atividades_notdone_importar') }}" class="import-form">
+      <input type="hidden" name="dateFrom" value="{{ date_from }}">
+      <input type="hidden" name="dateTo" value="{{ date_to }}">
+      <input type="hidden" name="resources" value="{{ resources }}">
+
+      <button type="submit" class="btn-primary">
+        Atualizar da API
+      </button>
+    </form>
+
+  </div>
+
+  <!-- TABELA -->
+  <div class="tabela-card">
+    <div class="tabela-container">
+      <table class="tabela-atividades">
+        <thead>
+          <tr>
+            <th data-col="cliente">
+              Cliente
+              <button type="button" class="th-filter-btn" data-col="cliente">▾</button>
+            </th>
+            <th data-col="cidade">
+              Cidade
+              <button type="button" class="th-filter-btn" data-col="cidade">▾</button>
+            </th>
+            <th data-col="bucket">
+              Bucket
+              <button type="button" class="th-filter-btn" data-col="bucket">▾</button>
+            </th>
+            <th data-col="date">
+              Data
+              <button type="button" class="th-filter-btn" data-col="date">▾</button>
+            </th>
+            <th data-col="tratativa">
+              Tratativa
+              <button type="button" class="th-filter-btn" data-col="tratativa">▾</button>
+            </th>
+            <th data-col="tratadopor">
+              Tratado por
+              <button type="button" class="th-filter-btn" data-col="tratadopor">▾</button>
+            </th>
+            <th style="width:150px;">Ações</th>
+          </tr>
+        </thead>
+
+        <tbody>
+        {% for a in items %}
+          {% set tratado = a.tratado_em is not none %}
+          <tr id="row-{{ a.activityId }}">
+
+            <td data-col="cliente">{{ a.customerName or '-' }}</td>
+            <td data-col="cidade">{{ a.city or '-' }}</td>
+            <td data-col="bucket">{{ a.XA_ORIGIN_BUCKET or '-' }}</td>
+            <td data-col="date">{{ a.date or '-' }}</td>
+
+            <td data-col="tratativa" class="td-tratativa-status">
+              {{ a.tratativa_status or '-' }}
+            </td>
+
+            <td data-col="tratadopor" class="td-tratado-por">
+              {{ a.tratado_por_username or '-' }}
+            </td>
+
+            <td>
+              {% if tratado %}
+                <button type="button"
+                        class="btn-treated btn-ver-tratado"
+                        data-activityid="{{ a.activityId }}">
+                  Tratado
+                </button>
+              {% else %}
+                <button type="button"
+                        class="btn-tratar btn-tratar-byid"
+                        data-activityid="{{ a.activityId }}">
+                  Tratar
+                </button>
+              {% endif %}
+            </td>
+
+          </tr>
+        {% endfor %}
+
+        {% if items|length == 0 %}
+          <tr>
+            <td colspan="6" class="empty-row">
+              Nenhuma atividade encontrada.
+            </td>
+          </tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- MENU DE FILTRO (EXCEL) -->
+<div id="thFilterMenu" class="th-filter-menu" style="display:none;">
+  <div class="th-filter-actions">
+    <button type="button" class="th-filter-action" data-action="asc">Ordenar A → Z</button>
+    <button type="button" class="th-filter-action" data-action="desc">Ordenar Z → A</button>
+  </div>
+
+  <div class="th-filter-search">
+    <label>Filtro (contém)</label>
+    <input type="text" id="thFilterInput" placeholder="Digite para filtrar...">
+  </div>
+
+  <div class="th-filter-footer">
+    <button type="button" id="thFilterClear" class="btn-secondary">Limpar</button>
+    <button type="button" id="thFilterApply" class="btn-primary">Aplicar</button>
+  </div>
+</div>
+
+<!-- MODAL GRANDE (DETALHES) -->
+<div id="modalBackdrop" class="modal-backdrop-custom"></div>
+
+<div id="modalTratar" class="modal-custom">
+  <div class="modal-top">
+    <h3>Detalhes da atividade</h3>
+
+    <div class="modal-top-actions">
+      <button type="button" id="btnAbrirTratativa" class="btn-primary">
+        Finalizar tratativa
+      </button>
+
+      <button type="button" id="btnRevogarTratativa"
+              class="btn-secondary"
+              style="display:none;">
+        Revogar tratativa
+      </button>
+
+      <button type="button" id="btnFecharModal" class="modal-close">
+        Fechar
+      </button>
+    </div>
+  </div>
+
+  <div class="modal-grid">
+    <div>
+      <label>activityId</label>
+      <input id="m_activityId" readonly>
+    </div>
+
+    <div>
+      <label>Código do técnico</label>
+      <input id="m_resourceId" readonly>
+    </div>
+
+    <div>
+      <label>Códigoda OS</label>
+      <input id="m_apptNumber" readonly>
+    </div>
+
+    <div>
+      <label>Contrato</label>
+      <input id="m_customerNumber" readonly>
+    </div>
+
+    <div class="modal-full">
+      <label>Cliente</label>
+      <input id="m_customerName" readonly>
+    </div>
+    <div>
+      <label>Telefone</label>
+      <input id="m_customerPhone" readonly>
+    </div>
+    <div>
+      <label>Cidade</label>
+      <input id="m_city" readonly>
+    </div>
+
+    <div>
+      <label>Bucket de Origem</label>
+      <input id="m_bucket" readonly>
+    </div>
+
+    <div>
+      <label>Data do agendamento</label>
+      <input id="m_date" readonly>
+    </div>
+
+    <div class="modal-full">
+      <label>Observação técnica (XA_TSK_NOT)</label>
+      <textarea id="m_tskNot" rows="6" readonly></textarea>
+    </div>
+  </div>
+
+  <!-- BLOCO DE TRATATIVA ATUAL -->
+  <div class="modal-grid" style="margin-top:15px;">
+    <div>
+      <label>Tratativa</label>
+      <input id="m_tratativa_status" readonly>
+    </div>
+
+    <div>
+      <label>Tratado por</label>
+      <input id="m_tratado_por" readonly>
+    </div>
+
+    <div class="modal-full">
+      <label>Observações da tratativa</label>
+      <textarea id="m_tratativa_obs" rows="4" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PEQUENO - FINALIZAR -->
+<div id="modalTratativaBackdrop" class="modal-backdrop-custom"></div>
+
+<div id="modalTratativa" class="modal-custom modal-small">
+  <div class="modal-top">
+    <h3>Finalizar tratativa</h3>
+    <div class="modal-top-actions">
+      <button type="button" id="btnFecharTratativa" class="modal-close">Fechar</button>
+    </div>
+  </div>
+
+  <div class="modal-grid modal-grid-1">
+    <div>
+      <label>Resultado</label>
+      <select id="t_status" class="form-control">
+        <option value="">Selecione...</option>
+        <option>Reagendado</option>
+        <option>Sem contato</option>
+        <option>Reagendado sem contato</option>
+      </select>
+    </div>
+
+    <div>
+      <label>Observações</label>
+      <textarea id="t_obs" rows="5" class="form-control" placeholder="Detalhe o que foi tratado..."></textarea>
+    </div>
+  </div>
+
+  <div class="modal-actions">
+    <button type="button" id="btnSalvarTratativa" class="btn-success">
+      Salvar tratativa
+    </button>
+  </div>
+</div>
+
+<!-- MODAL PEQUENO - REVOGAR -->
+<div id="modalRevogarBackdrop" class="modal-backdrop-custom"></div>
+
+<div id="modalRevogar" class="modal-custom modal-small">
+  <div class="modal-top">
+    <h3>Revogar tratativa</h3>
+    <div class="modal-top-actions">
+      <button type="button" id="btnFecharRevogar" class="modal-close">Fechar</button>
+    </div>
+  </div>
+
+  <div class="modal-grid modal-grid-1">
+    <div>
+      <label>Observação (obrigatória)</label>
+      <textarea id="r_obs" rows="5" class="form-control" placeholder="Explique por que está revogando..."></textarea>
+    </div>
+  </div>
+
+  <div class="modal-actions">
+    <button type="button" id="btnConfirmarRevogar" class="btn-danger">
+      Confirmar revogação
+    </button>
+  </div>
+</div>
+
+<!-- JSON (mantemos para coisas auxiliares, mas o clique abre por activityId) -->
+<script id="activities-json" type="application/json">
+  {{ items|tojson }}
+</script>
+
+<script src="{{ url_for('static', filename='js/atividades_notdone.js') }}"></script>
+
+{% include 'includes/footer.html' %}
+</body>
