@@ -1630,7 +1630,13 @@ def atividades_notdone_tratar():
     status = (data.get("status") or "").strip()
     obs = (data.get("observacoes") or "").strip()
 
-    allowed = {"Reagendado", "Sem contato", "Reagendado sem contato"}
+    allowed = {
+        "Reagendado", 
+        "Sem contato", 
+        "Reagendado sem contato",
+        "Visita cancelada",
+        "Aberto Lecom (Crescimento Organico)"
+        }
     if not activity_id:
         return jsonify({"ok": False, "error": "activityId obrigatório"}), 400
     if status not in allowed:
