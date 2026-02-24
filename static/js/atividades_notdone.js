@@ -459,3 +459,31 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 })();
+
+// ===== Exportação (modal) =====
+(function () {
+  const btn = document.getElementById("btnExportacao");
+  const modal = document.getElementById("modalExport");
+  const backdrop = document.getElementById("modalExportBackdrop");
+  const closeBtn = document.getElementById("btnFecharExport");
+
+  if (!btn || !modal || !backdrop || !closeBtn) return;
+
+  function openExport() {
+    modal.style.display = "block";
+    backdrop.style.display = "block";
+  }
+
+  function closeExport() {
+    modal.style.display = "none";
+    backdrop.style.display = "none";
+  }
+
+  btn.addEventListener("click", openExport);
+  closeBtn.addEventListener("click", closeExport);
+  backdrop.addEventListener("click", closeExport);
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeExport();
+  });
+})();

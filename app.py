@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session, jsonify
+from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session, jsonify, send_file
 import requests
 from datetime import datetime, timedelta
 import csv
@@ -8,6 +8,8 @@ import bcrypt
 import os
 from functools import wraps
 from io import BytesIO, StringIO
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 import json
 import time
 from database.audit import audit_log
@@ -25,6 +27,8 @@ if APP_ROOT:
     app.config["APPLICATION_ROOT"] = APP_ROOT
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "minha_chave_secreta")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+
 
 @app.before_request
 def atualizar_online():
@@ -135,6 +139,20 @@ def all_perms(*recursos) -> bool:
         return session.get("tipo_id") == 1
     perms = set(perms)
     return all(r in perms for r in recursos)
+def _xlsx_auto_width(ws, max_width=60):
+    """Ajuste simples de largura de colunas (sem exagerar)."""
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            try:
+                v = "" if cell.value is None else str(cell.value)
+                if len(v) > max_len:
+                    max_len = len(v)
+            except Exception:
+                pass
+        ws.column_dimensions[col_letter].width = min(max_len + 2, max_width)
+
 
 
 # Disponibiliza os helpers pra TODOS os templates
@@ -171,6 +189,136 @@ def get_perfis():
     return perfis
 
 
+@app.route("/atividades-notdone/exportar", methods=["POST"])
+@login_required
+@perm_required("ofs.atividades_notdone")
+def atividades_notdone_exportar():
+    """
+    Exporta XLSX:
+      - tipo=clientes -> tabela ofs_atividades_notdone filtrada por date (agendamento)
+      - tipo=tratativas -> history + join com notdone, filtrada por h.created_at
+    """
+    tipo = (request.form.get("tipo") or "").strip().lower()
+    date_from = (request.form.get("dateFrom") or "").strip()
+    date_to = (request.form.get("dateTo") or "").strip()
+
+    if tipo not in {"clientes", "tratativas"}:
+        flash("Tipo de exportação inválido.", "danger")
+        return redirect(url_for("atividades_notdone"))
+
+    # valida datas
+    try:
+        dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+        dt_to = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except Exception:
+        flash("Informe um período válido (De / Até).", "danger")
+        return redirect(url_for("atividades_notdone"))
+
+    if dt_to < dt_from:
+        flash("O campo 'Até' não pode ser menor que 'De'.", "danger")
+        return redirect(url_for("atividades_notdone"))
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        if tipo == "clientes":
+            # (IMPORTANTE) date é VARCHAR, então compare como string.
+            # E use crase porque "date" é um nome sensível.
+            cur.execute("""
+                SELECT
+                    activity_id,
+                    `date`,
+                    city,
+                    customer_number,
+                    customer_phone,
+                    customer_name,
+                    appt_number,
+                    origin_bucket,
+                    ser_clo_imp_ada,
+                    resource_id,
+                    tratativa_status,
+                    tratado_por_username,
+                    tratado_em,
+                    created_at
+                FROM ofs_atividades_notdone
+                WHERE `date` BETWEEN %s AND %s
+                ORDER BY `date` ASC, created_at DESC
+            """, (date_from, date_to))  # <-- strings mesmo
+
+            rows = cur.fetchall()
+
+            sheet_name = "Clientes"
+            headers = [
+                "activity_id", "date", "city",
+                "customer_number", "customer_phone", "customer_name",
+                "appt_number", "origin_bucket",
+                "ser_clo_imp_ada", "resource_id",
+                "tratativa_status", "tratado_por_username", "tratado_em", "created_at"
+            ]
+
+        else:
+            # Filtra por created_at da history (data/hora da ação)
+            # Join para trazer customer_name/number/appt_number
+            cur.execute("""
+                SELECT
+                    h.id AS history_id,
+                    h.activity_id,
+                    n.customer_name,
+                    n.customer_number,
+                    n.appt_number,
+
+                    h.action,
+                    h.status,
+                    h.obs,
+                    h.actor_username,
+                    h.created_at
+                FROM ofs_atividades_notdone_history h
+                LEFT JOIN ofs_atividades_notdone n
+                  ON n.activity_id = h.activity_id
+                WHERE h.created_at BETWEEN %s AND %s
+                ORDER BY h.created_at DESC
+            """, (f"{dt_from} 00:00:00", f"{dt_to} 23:59:59"))
+            rows = cur.fetchall()
+
+            sheet_name = "Tratativas"
+            headers = [
+                "history_id", "activity_id",
+                "customer_name", "customer_number", "appt_number",
+                "action", "status", "obs", "actor_username", "created_at"
+            ]
+
+    finally:
+        cur.close()
+        conn.close()
+
+    # Monta XLSX
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+
+    # Header
+    ws.append(headers)
+
+    # Dados
+    for r in rows:
+        ws.append([r.get(h) for h in headers])
+
+    _xlsx_auto_width(ws)
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"ofs_notdone_{tipo}_{dt_from}_{dt_to}_{stamp}.xlsx"
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 # =====
 # Login
 # =====

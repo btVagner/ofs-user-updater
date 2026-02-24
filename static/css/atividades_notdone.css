@@ -397,71 +397,49 @@
 }
 
 /* ================================
-   Responsividade da TABELA
-   (não mexe no botão Tratar)
+   Ajuste responsivo de fontes (tabela)
 ================================ */
 
-/* Fonte e espaçamento base da tabela */
-.tabela-atividades{
-  font-size: 13px;          /* menor que o padrão */
-  table-layout: auto;
+/* Cabeçalho e KPIs um pouco menores */
+.page-header h2 { font-size: 22px; }
+.kpi { font-size: 12px; }
+
+/* Tabela: reduz fonte e padding das células */
+.tabela-atividades th { 
+  font-size: 12.5px; 
+  padding: 10px 12px;
 }
 
-/* Cabeçalho um pouco menor também */
-.tabela-atividades th{
-  font-size: 13px;
+.tabela-atividades td { 
+  font-size: 12.5px; 
+  padding: 10px 12px;
 }
 
-/* Diminui o padding (ganha MUITA largura) */
-.tabela-atividades th,
-.tabela-atividades td{
-  padding: 10px 12px;       /* era 14px */
-  vertical-align: top;
+/* Botões do filtro no TH (setinha) menores */
+.th-filter-btn { 
+  font-size: 11px; 
+  padding: 1px 5px;
 }
 
-/* Mantém a coluna de Ações sempre “confortável” e sem quebrar */
-.tabela-atividades th:last-child,
-.tabela-atividades td:last-child{
-  white-space: nowrap;
-  min-width: 130px;
-  padding-left: 14px;
-  padding-right: 14px;
-  font-size: 13px;          /* mantém legível */
+.tabela-atividades td button:not(.btn-tratar) {
+  font-size: 12px;
+  padding: 5px 10px;
 }
 
-/* Não encosta no botão Tratar */
-.tabela-atividades td:last-child .btn-tratar{
-  font-size: inherit;       /* mantém o que já está */
+/* ================================
+   Respiro lateral garantido
+================================ */
+.page-atividades {
+  padding-left: 28px !important;
+  padding-right: 28px !important;
+  box-sizing: border-box;
 }
 
-/* ===== Ajuste por largura de tela ===== */
-@media (max-width: 1366px){
-  .tabela-atividades{ font-size: 12px; }
-  .tabela-atividades th{ font-size: 12px; }
-  .tabela-atividades th,
-  .tabela-atividades td{
-    padding: 8px 10px;
+/* Em telas menores, reduz pra não perder área útil */
+@media (max-width: 992px) {
+  .page-atividades {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
   }
 }
 
-@media (max-width: 1024px){
-  .tabela-atividades{ font-size: 11.5px; }
-  .tabela-atividades th,
-  .tabela-atividades td{
-    padding: 7px 8px;
-  }
-
-  /* Data compacta */
-  .tabela-atividades th[data-col="date"],
-  .tabela-atividades td[data-col="date"]{
-    min-width: 96px;
-  }
-
-  /* Bucket costuma ser enorme: não quebra, mas corta com reticências */
-  .tabela-atividades td[data-col="bucket"]{
-    max-width: 260px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-}
