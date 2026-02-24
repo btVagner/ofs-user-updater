@@ -135,7 +135,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   async function fetchByActivityId(activityId) {
-    const resp = await fetch(`/atividades-notdone/${encodeURIComponent(activityId)}`);
+    const resp = await fetch(`atividades-notdone/${encodeURIComponent(activityId)}`);
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       throw new Error(data.error || "Falha ao buscar detalhes");
@@ -214,7 +214,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const payload = { activityId: currentActivity.activityId, status, observacoes: obs };
 
       try {
-        const resp = await fetch("/atividades-notdone/tratar", {
+        const resp = await fetch("atividades-notdone/tratar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -286,7 +286,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       try {
-        const resp = await fetch("/atividades-notdone/revogar", {
+        const resp = await fetch("atividades-notdone/revogar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ activityId: currentActivity.activityId, observacoes: obs }),
