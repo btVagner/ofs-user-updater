@@ -41,8 +41,8 @@
     try {
       // ✅ importante: use uma rota JSON (exata) no backend
       // default: /sap/acompanhamento-critica/<activity_id>
-      const baseUrl = window.LDG_DETAIL_URL_BASE || "/sap/acompanhamento-critica";
-      const url = `${baseUrl}/${encodeURIComponent(activityId)}`;
+      const tpl = window.LDG_DETAIL_URL_TEMPLATE || "/sap/acompanhamento-critica/__ID__";
+      const url = tpl.replace("__ID__", encodeURIComponent(activityId));
 
       const resp = await fetch(url, {
         headers: { "Accept": "application/json" },
