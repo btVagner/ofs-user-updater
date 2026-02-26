@@ -121,7 +121,7 @@
     </div>
   </div>
   <script>
-    window.LDG_DETAIL_URL_TEMPLATE = "{{ url_for('sap_critica_detalhe', activity_id='__ID__') }}";
+    window.LDG_DETAIL_URL_TEMPLATE = "{{ url_for('sap_acompanhamento_critica_get', activity_id='__ID__') }}";
   </script>
   <script src="{{ url_for('static', filename='criticas_sap/criticas_sap.js') }}"></script>
   {% include 'includes/footer.html' %}
