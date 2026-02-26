@@ -1,6 +1,6 @@
 {% include 'includes/head.html' %}
 {% if session.usuario_logado %}
-  {% include 'includes/navbar.html' %}
+{% include 'includes/navbar.html' %}
 {% endif %}
 
 <link rel="stylesheet" href="{{ url_for('static', filename='criticas_sap/criticas_sap.css') }}">
@@ -18,9 +18,9 @@
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
-      {% endfor %}
+    {% for category, message in messages %}
+    <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+    {% endfor %}
     {% endwith %}
 
     <!-- ===== Filtro (igual notdone) ===== -->
@@ -83,10 +83,7 @@
               <td>{{ i.resourceId or '-' }}</td>
               <td>{{ i.XA_SAP_CRT }}</td>
               <td>
-                <button
-                  type="button"
-                  class="btn-tratar js-open-ldg"
-                  data-activity-id="{{ i.activityId }}">
+                <button type="button" class="btn-tratar js-open-ldg" data-activity-id="{{ i.activityId }}">
                   Ver texto
                 </button>
               </td>
@@ -123,7 +120,9 @@
       </div>
     </div>
   </div>
-
+  <script>
+    window.LDG_DETAIL_URL_TEMPLATE = "{{ url_for('sap_critica_detalhe', activity_id='__ID__') }}";
+  </script>
   <script src="{{ url_for('static', filename='criticas_sap/criticas_sap.js') }}"></script>
   {% include 'includes/footer.html' %}
 </body>
