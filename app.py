@@ -2290,7 +2290,7 @@ def sap_acompanhamento_critica_get(activity_id):
         FROM sap_criticas_atividades
         WHERE activity_id = %s
         LIMIT 1
-    """, (activity_id,))
+    """, (activity_id,)) 
     row = cur.fetchone()
 
     cur.close()
