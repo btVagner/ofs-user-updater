@@ -46,6 +46,7 @@
                         {% endfor %}
                     </select>
                 </div>
+
                 <div>
                     <label>Origin Bucket</label>
 
@@ -57,6 +58,7 @@
                         Selecionados: <b id="bucketCount">0</b>
                     </div>
                 </div>
+
                 <button type="submit" class="btn-secondary">Aplicar</button>
             </form>
         </div>
@@ -77,6 +79,7 @@
         </div>
 
     </div>
+
     <!-- ===== Modal Buckets (checkbox) ===== -->
     <div class="modal-backdrop-custom" id="bucketBackdrop"></div>
 
@@ -113,8 +116,15 @@
             </div>
         </div>
     </div>
+
     <!-- Chart.js (CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- ✅ URL correta (respeita APP_ROOT) -->
+    <script>
+      window.DASH_DATA_URL = "{{ url_for('sap_dashboard_critica_data') }}";
+    </script>
+
     <script src="{{ url_for('static', filename='criticas_sap/criticas_sap.js') }}"></script>
 
     {% include 'includes/footer.html' %}

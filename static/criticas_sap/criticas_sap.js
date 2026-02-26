@@ -10,6 +10,9 @@
   const canvas = document.getElementById("chartCriticas");
   const ctx = canvas.getContext("2d");
 
+  // Endpoint vindo do template (respeita APP_ROOT)
+  const DATA_URL = window.DASH_DATA_URL || "/sap/acompanhamento-critica/dashboard/data";
+
   // ===== Buckets modal state =====
   const btnOpenBuckets = document.getElementById("btnOpenBuckets");
   const bucketBackdrop = document.getElementById("bucketBackdrop");
@@ -24,9 +27,7 @@
 
   const bucketChecks = Array.from(document.querySelectorAll(".bucket-check"));
 
-  // seleção efetiva usada no gráfico
   let selectedBuckets = [];
-  // snapshot pra permitir Cancelar
   let snapshotBuckets = [];
 
   function computeTickStep(dayCount) {
@@ -34,7 +35,6 @@
     return Math.ceil((dayCount - 9) / 5) + 1;
   }
 
-  // Chart instance
   let chart = new Chart(ctx, {
     type: "line",
     data: {
@@ -65,7 +65,6 @@
               if (!n) return "";
 
               const step = computeTickStep(n);
-
               if (index === 0 || index === n - 1) return labels[index];
               return (index % step === 0) ? labels[index] : "";
             },
@@ -122,7 +121,6 @@
   });
 
   btnBucketsAll?.addEventListener("click", () => {
-    // seleciona todos os visíveis (respeita busca)
     bucketChecks.forEach(ch => {
       const label = ch.closest(".bucket-item");
       if (label && label.style.display !== "none") ch.checked = true;
@@ -141,7 +139,7 @@
     selectedBuckets = bucketChecks.filter(ch => ch.checked).map(ch => ch.value);
     updateBucketSummary();
     closeBucketModal();
-    refresh(); // recarrega o gráfico ao salvar
+    refresh();
   });
 
   updateBucketSummary();
@@ -159,14 +157,16 @@
     params.set("dateTo", dateTo);
     if (activityType) params.set("activityType", activityType);
 
-    // ✅ buckets do MODAL (lista)
     if (selectedBuckets.length) {
       for (const b of selectedBuckets) params.append("buckets", b);
     }
 
-    const url = `/sap/acompanhamento-critica/dashboard/data?${params.toString()}`;
+    const url = `${DATA_URL}?${params.toString()}`;
 
-    const resp = await fetch(url, { headers: { "Accept": "application/json" } });
+    const resp = await fetch(url, {
+      headers: { "Accept": "application/json" },
+      credentials: "same-origin" // ✅ garante cookies de sessão
+    });
 
     let data;
     try {
