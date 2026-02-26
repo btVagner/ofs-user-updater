@@ -1,0 +1,121 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='criticas_sap/criticas_sap.css') }}">
+
+<body>
+    <div class="page-atividades">
+
+        <div class="page-header">
+            <h2>Dashboard Crítica SAP</h2>
+
+            <div class="kpis">
+                <a class="btn-secondary" href="{{ url_for('sap_acompanhamento_critica') }}">Voltar</a>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+        {% endfor %}
+        {% endwith %}
+
+        <!-- Filtros (mesmo padrão notdone) -->
+        <div class="filtro-card">
+            <form class="filtro-form" id="dashFilters" autocomplete="off">
+                <div>
+                    <label>De</label>
+                    <input type="date" id="dateFrom" name="dateFrom" min="{{ min_date }}" max="{{ max_date }}"
+                        value="{{ min_date }}">
+                </div>
+
+                <div>
+                    <label>Até</label>
+                    <input type="date" id="dateTo" name="dateTo" min="{{ min_date }}" max="{{ max_date }}"
+                        value="{{ max_date }}">
+                </div>
+
+                <div>
+                    <label>Tipo de atividade</label>
+                    <select id="activityType" name="activityType" class="dash-select">
+                        <option value="">(Todos)</option>
+                        {% for t in types %}
+                        <option value="{{ t }}">{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label>Origin Bucket</label>
+
+                    <button type="button" class="btn-secondary" id="btnOpenBuckets">
+                        Selecionar buckets
+                    </button>
+
+                    <div class="kpi" id="bucketSummary" style="margin-top:8px;">
+                        Selecionados: <b id="bucketCount">0</b>
+                    </div>
+                </div>
+                <button type="submit" class="btn-secondary">Aplicar</button>
+            </form>
+        </div>
+
+        <!-- Card do gráfico -->
+        <div class="tabela-card" style="padding:16px;">
+            <div
+                style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+                <div class="kpi" id="kpiTotal">Total no período: <b>-</b></div>
+                <div class="kpi" id="kpiRange">Período: <b>-</b></div>
+            </div>
+
+            <div style="background:#1f1f1f; border-radius:10px;">
+                <div class="chart-wrap">
+                    <canvas id="chartCriticas"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <!-- ===== Modal Buckets (checkbox) ===== -->
+    <div class="modal-backdrop-custom" id="bucketBackdrop"></div>
+
+    <div class="modal-custom modal-small" id="bucketModal">
+        <div class="modal-top">
+            <h3>Selecionar buckets</h3>
+            <div class="modal-top-actions">
+                <button type="button" class="btn-secondary" id="btnBucketsAll">Selecionar todos</button>
+                <button type="button" class="btn-danger" id="btnBucketsClear">Limpar</button>
+                <button type="button" class="modal-close" id="btnBucketsClose">Fechar</button>
+            </div>
+        </div>
+
+        <div class="modal-grid-1">
+            <div class="modal-full">
+                <label style="display:block; font-size:13px; margin-bottom:6px; color:#ccc;">Buscar</label>
+                <input type="text" id="bucketSearch" placeholder="Digite para filtrar..." />
+            </div>
+
+            <div class="modal-full" style="margin-top:10px;">
+                <div id="bucketList" class="bucket-list">
+                    {% for b in buckets %}
+                    <label class="bucket-item">
+                        <input type="checkbox" class="bucket-check" value="{{ b }}">
+                        <span>{{ b }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="btnBucketsCancel">Cancelar</button>
+                <button type="button" class="btn-primary" id="btnBucketsSave">Salvar</button>
+            </div>
+        </div>
+    </div>
+    <!-- Chart.js (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='criticas_sap/criticas_sap.js') }}"></script>
+
+    {% include 'includes/footer.html' %}
+</body>

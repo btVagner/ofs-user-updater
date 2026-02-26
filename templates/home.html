@@ -98,13 +98,13 @@
         </div>
       </a>
       {% endif %}
-      {% if has_perm('logs.visualizar') %}
-      <a href="{{ url_for('logs_view') }}" class="card">
-        <h3>Log do sistema</h3>
+      {% if has_perm('sap.acompanhamento_critica') %}
+      <a href="{{ url_for('sap_acompanhamento_critica') }}" class="card">
+        <h3>Acompanhamento Crítica SAP</h3>
         <div class="card-description">
           <p>
-            ➤ Visualize todas as ações realizadas no portal.<br>
-            ➤ Auditoria por usuário, módulo e data.
+            ➤ Acompanhamento e tratativa de críticas SAP.<br>
+            ➤ Visão restrita por permissão.
           </p>
         </div>
       </a>
@@ -121,25 +121,6 @@
         </div>
       </a>
       {% endif %}
-
-      {# Futuras features reservadas (mantidas comentadas) #}
-      {# {% if has_perm('sap.reenviar') %}
-      <a href="#" class="card">
-        <h3>Reenviar integração SAP</h3>
-        <div class="card-description">
-          <p>➤ Reenvia dados de integração pendentes ou com erro para o SAP.</p>
-        </div>
-      </a>
-      {% endif %}
-
-      {% if has_perm('feature.reservado') %}
-      <a href="#" class="card">
-        <h3>Reservado</h3>
-        <div class="card-description">
-          <p>➤ Espaço reservado para funcionalidade futura.</p>
-        </div>
-      </a>
-      {% endif %} #}
     </div>
   </div>
 

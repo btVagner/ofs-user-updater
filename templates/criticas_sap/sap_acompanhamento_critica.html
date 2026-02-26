@@ -1,0 +1,129 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='criticas_sap/criticas_sap.css') }}">
+
+<body>
+  <div class="page-atividades">
+
+    <div class="page-header">
+      <h2>Acompanhamento Crítica SAP</h2>
+
+      <div class="kpis">
+        <div class="kpi">Total: <b>{{ total or 0 }}</b></div>
+        <a class="btn-secondary" href="{{ url_for('sap_dashboard_critica') }}">Ir para Dashboard</a>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+      {% endfor %}
+    {% endwith %}
+
+    <!-- ===== Filtro (igual notdone) ===== -->
+    <div class="filtro-card">
+      <form class="filtro-form" method="GET" action="{{ url_for('sap_acompanhamento_critica') }}">
+        <div>
+          <label>De</label>
+          <input type="date" name="dateFrom" value="{{ date_from }}">
+        </div>
+
+        <div>
+          <label>Até</label>
+          <input type="date" name="dateTo" value="{{ date_to }}">
+        </div>
+
+        <div>
+          <label>Resources</label>
+          <input type="text" name="resources" value="{{ resources }}" placeholder="MG">
+        </div>
+
+        <button type="submit" class="btn-secondary">Atualizar filtros</button>
+      </form>
+
+      <!-- Importar (direita, igual notdone) -->
+      <form class="import-form" method="POST" action="{{ url_for('sap_acompanhamento_critica_importar') }}">
+        <input type="hidden" name="dateFrom" value="{{ date_from }}">
+        <input type="hidden" name="dateTo" value="{{ date_to }}">
+        <input type="hidden" name="resources" value="{{ resources }}">
+        <button type="submit" class="btn-primary">Importar da API</button>
+      </form>
+    </div>
+
+    <!-- ===== Tabela (igual notdone) ===== -->
+    <div class="tabela-card">
+      <div class="tabela-container">
+        <table class="tabela-atividades">
+          <thead>
+            <tr>
+              <th>activityId</th>
+              <th>date</th>
+              <th>city</th>
+              <th>activityType</th>
+              <th>apptNumber</th>
+              <th>originBucket</th>
+              <th>resourceId</th>
+              <th>critica</th>
+              <th>Detalhe</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for i in items %}
+            <tr>
+              <td>{{ i.activityId }}</td>
+              <td data-col="date">{{ i.date }}</td>
+              <td>{{ i.city or '-' }}</td>
+              <td>{{ i.activityType or '-' }}</td>
+              <td>{{ i.apptNumber or '-' }}</td>
+              <td>{{ i.XA_ORIGIN_BUCKET or '-' }}</td>
+              <td>{{ i.resourceId or '-' }}</td>
+              <td>{{ i.XA_SAP_CRT }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="btn-tratar js-open-ldg"
+                  data-activity-id="{{ i.activityId }}">
+                  Ver texto
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+
+            {% if not items %}
+            <tr>
+              <td colspan="9" class="empty-row">Sem dados no período.</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== Modal (mesmo padrão notdone) ===== -->
+  <div class="modal-backdrop-custom" id="ldgBackdrop"></div>
+
+  <div class="modal-custom modal-small" id="ldgModal">
+    <div class="modal-top">
+      <h3 id="ldgTitle">Detalhe da crítica</h3>
+      <div class="modal-top-actions">
+        <button type="button" class="modal-close" id="ldgClose">Fechar</button>
+      </div>
+    </div>
+
+    <div class="modal-grid-1">
+      <div class="modal-full">
+        <label style="display:block; font-size:13px; margin-bottom:6px; color:#ccc;">XA_SAP_CRT_LDG</label>
+        <textarea id="ldgContent" rows="18" readonly></textarea>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='criticas_sap/criticas_sap.js') }}"></script>
+  {% include 'includes/footer.html' %}
+</body>
