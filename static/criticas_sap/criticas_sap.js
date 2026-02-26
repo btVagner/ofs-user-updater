@@ -1,4 +1,81 @@
 (function () {
+  // =========================================================
+  // A) MODAL "Ver texto" (LDG) — funciona na tela de tabela
+  // =========================================================
+  const ldgBackdrop = document.getElementById("ldgBackdrop");
+  const ldgModal = document.getElementById("ldgModal");
+  const ldgClose = document.getElementById("ldgClose");
+  const ldgTitle = document.getElementById("ldgTitle");
+  const ldgContent = document.getElementById("ldgContent");
+
+  function openLdgModal() {
+    if (!ldgBackdrop || !ldgModal) return;
+    ldgBackdrop.style.display = "block";
+    ldgModal.style.display = "block";
+  }
+
+  function closeLdgModal() {
+    if (!ldgBackdrop || !ldgModal) return;
+    ldgBackdrop.style.display = "none";
+    ldgModal.style.display = "none";
+  }
+
+  ldgClose?.addEventListener("click", closeLdgModal);
+  ldgBackdrop?.addEventListener("click", closeLdgModal);
+
+  // Delegação: captura clique em qualquer botão "Ver texto"
+  document.addEventListener("click", async (ev) => {
+    const btn = ev.target.closest(".js-open-ldg");
+    if (!btn) return;
+
+    ev.preventDefault();
+
+    const activityId = (btn.getAttribute("data-activity-id") || "").trim();
+    if (!activityId) return;
+
+    // feedback imediato
+    if (ldgTitle) ldgTitle.textContent = `Detalhe da crítica (${activityId})`;
+    if (ldgContent) ldgContent.value = "Carregando...";
+    openLdgModal();
+
+    try {
+      // ✅ importante: use uma rota JSON (exata) no backend
+      // default: /sap/acompanhamento-critica/<activity_id>
+      const baseUrl = window.LDG_DETAIL_URL_BASE || "/sap/acompanhamento-critica";
+      const url = `${baseUrl}/${encodeURIComponent(activityId)}`;
+
+      const resp = await fetch(url, {
+        headers: { "Accept": "application/json" },
+        credentials: "same-origin",
+      });
+
+      let data;
+      try {
+        data = await resp.json();
+      } catch {
+        throw new Error(`Resposta inválida (não JSON). HTTP ${resp.status}`);
+      }
+
+      if (!resp.ok || !data.ok) {
+        throw new Error(data?.error || `Erro HTTP ${resp.status}`);
+      }
+
+      const item = data.item || {};
+      const txt = item.XA_SAP_CRT_LDG ?? item.xa_sap_crt_ldg ?? item.sap_crt_ldg ?? "";
+
+      if (ldgContent) ldgContent.value = txt ? String(txt) : "(vazio)";
+    } catch (e) {
+      if (ldgContent) ldgContent.value = `Erro ao carregar: ${String(e)}`;
+    }
+  });
+
+  // =========================================================
+  // B) DASHBOARD (gráfico + modal buckets)
+  // Só roda se existir o canvas do gráfico
+  // =========================================================
+  const canvas = document.getElementById("chartCriticas");
+  if (!canvas) return; // não é dashboard → encerra aqui sem quebrar tabela
+
   const form = document.getElementById("dashFilters");
   const dateFromEl = document.getElementById("dateFrom");
   const dateToEl = document.getElementById("dateTo");
@@ -7,7 +84,6 @@
   const kpiTotal = document.getElementById("kpiTotal");
   const kpiRange = document.getElementById("kpiRange");
 
-  const canvas = document.getElementById("chartCriticas");
   const ctx = canvas.getContext("2d");
 
   // Endpoint vindo do template (respeita APP_ROOT)
@@ -59,7 +135,7 @@
         x: {
           ticks: {
             autoSkip: false,
-            callback: function (val, index) {
+            callback: function (_, index) {
               const labels = this.getLabels();
               const n = labels.length;
               if (!n) return "";
@@ -85,12 +161,12 @@
     bucketChecks.forEach(ch => {
       const label = ch.closest(".bucket-item");
       const text = (label ? label.innerText : ch.value).toLowerCase();
-      label.style.display = (!needle || text.includes(needle)) ? "flex" : "none";
+      if (label) label.style.display = (!needle || text.includes(needle)) ? "flex" : "none";
     });
   }
 
   function updateBucketSummary() {
-    bucketCountEl.textContent = String(selectedBuckets.length);
+    if (bucketCountEl) bucketCountEl.textContent = String(selectedBuckets.length);
   }
 
   function openBucketModal() {
@@ -98,16 +174,16 @@
     const setSel = new Set(selectedBuckets);
     bucketChecks.forEach(ch => ch.checked = setSel.has(ch.value));
 
-    bucketSearch.value = "";
+    if (bucketSearch) bucketSearch.value = "";
     filterBucketList("");
 
-    bucketBackdrop.style.display = "block";
-    bucketModal.style.display = "block";
+    if (bucketBackdrop) bucketBackdrop.style.display = "block";
+    if (bucketModal) bucketModal.style.display = "block";
   }
 
   function closeBucketModal() {
-    bucketBackdrop.style.display = "none";
-    bucketModal.style.display = "none";
+    if (bucketBackdrop) bucketBackdrop.style.display = "none";
+    if (bucketModal) bucketModal.style.display = "none";
   }
 
   btnOpenBuckets?.addEventListener("click", openBucketModal);
@@ -145,9 +221,9 @@
   updateBucketSummary();
 
   async function fetchData() {
-    const dateFrom = (dateFromEl.value || "").trim();
-    const dateTo = (dateToEl.value || "").trim();
-    const activityType = (activityTypeEl.value || "").trim();
+    const dateFrom = (dateFromEl?.value || "").trim();
+    const dateTo = (dateToEl?.value || "").trim();
+    const activityType = (activityTypeEl?.value || "").trim();
 
     if (!dateFrom || !dateTo) throw new Error("Informe De e Até.");
     if (dateTo < dateFrom) throw new Error("O campo 'Até' não pode ser menor que 'De'.");
@@ -165,13 +241,13 @@
 
     const resp = await fetch(url, {
       headers: { "Accept": "application/json" },
-      credentials: "same-origin" // ✅ garante cookies de sessão
+      credentials: "same-origin"
     });
 
     let data;
     try {
       data = await resp.json();
-    } catch (e) {
+    } catch {
       throw new Error(`Resposta inválida do servidor (não é JSON). HTTP ${resp.status}`);
     }
 
@@ -184,14 +260,14 @@
 
   function updateKpis(labels, values, dateFrom, dateTo) {
     const total = values.reduce((acc, v) => acc + (Number(v) || 0), 0);
-    kpiTotal.innerHTML = `Total no período: <b>${total}</b>`;
-    kpiRange.innerHTML = `Período: <b>${dateFrom}</b> → <b>${dateTo}</b> | Dias com dados: <b>${labels.length}</b>`;
+    if (kpiTotal) kpiTotal.innerHTML = `Total no período: <b>${total}</b>`;
+    if (kpiRange) kpiRange.innerHTML = `Período: <b>${dateFrom}</b> → <b>${dateTo}</b> | Dias com dados: <b>${labels.length}</b>`;
   }
 
   async function refresh() {
     try {
-      kpiTotal.innerHTML = `Total no período: <b>Carregando...</b>`;
-      kpiRange.innerHTML = `Período: <b>-</b>`;
+      if (kpiTotal) kpiTotal.innerHTML = `Total no período: <b>Carregando...</b>`;
+      if (kpiRange) kpiRange.innerHTML = `Período: <b>-</b>`;
 
       const { data, dateFrom, dateTo } = await fetchData();
 
@@ -203,10 +279,9 @@
       chart.update();
 
       updateKpis(labels, values, dateFrom, dateTo);
-
     } catch (e) {
-      kpiTotal.innerHTML = `Total no período: <b>Erro</b>`;
-      kpiRange.innerHTML = `<b>${String(e)}</b>`;
+      if (kpiTotal) kpiTotal.innerHTML = `Total no período: <b>Erro</b>`;
+      if (kpiRange) kpiRange.innerHTML = `<b>${String(e)}</b>`;
 
       chart.data.labels = [];
       chart.data.datasets[0].data = [];
