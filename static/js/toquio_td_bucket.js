@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const uf = document.querySelector('input[name="uf"]');
   if (uf) {
     uf.addEventListener("input", function () {
-      this.value = this.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2);
+      this.value = this.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
     });
   }
 
