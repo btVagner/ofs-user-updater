@@ -431,7 +431,7 @@ def toquio_td_bucket_inserir_mapeamento_bairro():
         regional_pbi = (request.form.get("Regional_PBI") or "").strip()
 
         # Normaliza UF
-        uf = re.sub(r"[^A-Z]", "", uf)[:2]
+        uf = re.sub(r"[^A-Z]", "", uf)[:3]
 
         # =========================
         # Validação enxuta
