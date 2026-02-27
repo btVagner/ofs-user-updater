@@ -77,6 +77,20 @@
                 </div>
             </div>
         </div>
+        <!-- Card do gráfico 2 (Criticadas x Produzidas) -->
+        <div class="tabela-card" style="padding:16px; margin-top:18px;">
+            <div
+                style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+                <div class="kpi" id="kpiTotal2">Total no período: <b>-</b></div>
+                <div class="kpi" id="kpiRange2">Período: <b>-</b></div>
+            </div>
+
+            <div style="background:#1f1f1f; border-radius:10px;">
+                <div class="chart-wrap">
+                    <canvas id="chartCriticasProd"></canvas>
+                </div>
+            </div>
+        </div>
 
     </div>
 
@@ -122,7 +136,8 @@
 
     <!-- ✅ URL correta (respeita APP_ROOT) -->
     <script>
-      window.DASH_DATA_URL = "{{ url_for('sap_dashboard_critica_data') }}";
+        window.DASH_DATA_URL = "{{ url_for('sap_dashboard_critica_data') }}";
+        window.DASH_DATA2_URL = "{{ url_for('sap_dashboard_critica_data2') }}";
     </script>
 
     <script src="{{ url_for('static', filename='criticas_sap/criticas_sap.js') }}"></script>

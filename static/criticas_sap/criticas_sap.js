@@ -23,7 +23,6 @@
   ldgClose?.addEventListener("click", closeLdgModal);
   ldgBackdrop?.addEventListener("click", closeLdgModal);
 
-  // Delegação: captura clique em qualquer botão "Ver texto"
   document.addEventListener("click", async (ev) => {
     const btn = ev.target.closest(".js-open-ldg");
     if (!btn) return;
@@ -33,14 +32,11 @@
     const activityId = (btn.getAttribute("data-activity-id") || "").trim();
     if (!activityId) return;
 
-    // feedback imediato
     if (ldgTitle) ldgTitle.textContent = `Detalhe da crítica (${activityId})`;
     if (ldgContent) ldgContent.value = "Carregando...";
     openLdgModal();
 
     try {
-      // ✅ importante: use uma rota JSON (exata) no backend
-      // default: /sap/acompanhamento-critica/<activity_id>
       const tpl = window.LDG_DETAIL_URL_TEMPLATE || "/sap/acompanhamento-critica/__ID__";
       const url = tpl.replace("__ID__", encodeURIComponent(activityId));
 
@@ -62,7 +58,6 @@
 
       const item = data.item || {};
       const txt = item.XA_SAP_CRT_LDG ?? item.xa_sap_crt_ldg ?? item.sap_crt_ldg ?? "";
-
       if (ldgContent) ldgContent.value = txt ? String(txt) : "(vazio)";
     } catch (e) {
       if (ldgContent) ldgContent.value = `Erro ao carregar: ${String(e)}`;
@@ -74,7 +69,7 @@
   // Só roda se existir o canvas do gráfico
   // =========================================================
   const canvas = document.getElementById("chartCriticas");
-  if (!canvas) return; // não é dashboard → encerra aqui sem quebrar tabela
+  if (!canvas) return;
 
   const form = document.getElementById("dashFilters");
   const dateFromEl = document.getElementById("dateFrom");
@@ -84,10 +79,12 @@
   const kpiTotal = document.getElementById("kpiTotal");
   const kpiRange = document.getElementById("kpiRange");
 
-  const ctx = canvas.getContext("2d");
+  const kpiTotal2 = document.getElementById("kpiTotal2");
+  const kpiRange2 = document.getElementById("kpiRange2");
 
-  // Endpoint vindo do template (respeita APP_ROOT)
+  // Endpoints (respeitam APP_ROOT via template)
   const DATA_URL = window.DASH_DATA_URL || "/sap/acompanhamento-critica/dashboard/data";
+  const DATA2_URL = window.DASH_DATA2_URL || "/sap/acompanhamento-critica/dashboard/data2";
 
   // ===== Buckets modal state =====
   const btnOpenBuckets = document.getElementById("btnOpenBuckets");
@@ -106,10 +103,14 @@
   let selectedBuckets = [];
   let snapshotBuckets = [];
 
+  // ✅ Precisa existir antes de criar os charts (usado nos ticks callback)
   function computeTickStep(dayCount) {
     if (dayCount <= 10) return 1;
     return Math.ceil((dayCount - 9) / 5) + 1;
   }
+
+  // ===== Chart 1 (existente) =====
+  const ctx = canvas.getContext("2d");
 
   let chart = new Chart(ctx, {
     type: "line",
@@ -148,14 +149,72 @@
             minRotation: 0
           }
         },
-        y: {
-          beginAtZero: true,
-          ticks: { precision: 0 }
-        }
+        y: { beginAtZero: true, ticks: { precision: 0 } }
       }
     }
   });
 
+  // ===== Chart 2 (novo) =====
+  const canvas2 = document.getElementById("chartCriticasProd");
+  const ctx2 = canvas2 ? canvas2.getContext("2d") : null;
+
+  let chart2 = null;
+  if (ctx2) {
+    chart2 = new Chart(ctx2, {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Criticadas (qtd)",
+            data: [],
+            tension: 0.25,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            borderWidth: 2
+          },
+          {
+            label: "Produzidas (completed)",
+            data: [],
+            tension: 0.25,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            borderWidth: 2,
+            spanGaps: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true },
+          tooltip: { enabled: true }
+        },
+        scales: {
+          x: {
+            ticks: {
+              autoSkip: false,
+              callback: function (_, index) {
+                const labels = this.getLabels();
+                const n = labels.length;
+                if (!n) return "";
+
+                const step = computeTickStep(n);
+                if (index === 0 || index === n - 1) return labels[index];
+                return (index % step === 0) ? labels[index] : "";
+              },
+              maxRotation: 0,
+              minRotation: 0
+            }
+          },
+          y: { beginAtZero: true, ticks: { precision: 0 } }
+        }
+      }
+    });
+  }
+
+  // ===== Buckets modal helpers =====
   function filterBucketList(q) {
     const needle = (q || "").trim().toLowerCase();
     bucketChecks.forEach(ch => {
@@ -215,12 +274,14 @@
     selectedBuckets = bucketChecks.filter(ch => ch.checked).map(ch => ch.value);
     updateBucketSummary();
     closeBucketModal();
-    refresh();
+    refresh();   // gráfico 1
+    refresh2();  // gráfico 2
   });
 
   updateBucketSummary();
 
-  async function fetchData() {
+  // ===== Fetch helpers =====
+  function buildParams() {
     const dateFrom = (dateFromEl?.value || "").trim();
     const dateTo = (dateToEl?.value || "").trim();
     const activityType = (activityTypeEl?.value || "").trim();
@@ -237,8 +298,10 @@
       for (const b of selectedBuckets) params.append("buckets", b);
     }
 
-    const url = `${DATA_URL}?${params.toString()}`;
+    return { params, dateFrom, dateTo };
+  }
 
+  async function fetchJson(url) {
     const resp = await fetch(url, {
       headers: { "Accept": "application/json" },
       credentials: "same-origin"
@@ -255,21 +318,45 @@
       throw new Error((data && data.error) ? data.error : `Erro HTTP ${resp.status}`);
     }
 
-    return { data, dateFrom, dateTo };
+    return data;
   }
 
+  // ===== KPI updaters =====
   function updateKpis(labels, values, dateFrom, dateTo) {
-    const total = values.reduce((acc, v) => acc + (Number(v) || 0), 0);
+    const total = (values || []).reduce((acc, v) => acc + (Number(v) || 0), 0);
     if (kpiTotal) kpiTotal.innerHTML = `Total no período: <b>${total}</b>`;
     if (kpiRange) kpiRange.innerHTML = `Período: <b>${dateFrom}</b> → <b>${dateTo}</b> | Dias com dados: <b>${labels.length}</b>`;
   }
 
+  function updateKpis2(labels, criticadas, produzidas, dateFrom, dateTo) {
+    const tCrit = (criticadas || []).reduce((a, v) => a + (Number(v) || 0), 0);
+    const tProd = (produzidas || []).reduce((a, v) => a + (Number(v) || 0), 0);
+
+    const pct = (tProd > 0) ? ((tCrit / tProd) * 100) : null;
+    const pctTxt = (pct === null) ? "-" : `${pct.toFixed(1)}%`;
+
+    if (kpiTotal2) {
+      kpiTotal2.innerHTML =
+        `Total no período: <b>Criticadas ${tCrit}</b> | ` +
+        `<b>Produzidas ${tProd}</b> <span style="opacity:.85">(${pctTxt} criticadas)</span>`;
+    }
+
+    if (kpiRange2) {
+      kpiRange2.innerHTML =
+        `Período: <b>${dateFrom}</b> → <b>${dateTo}</b> | ` +
+        `Dias (base críticas): <b>${labels.length}</b>`;
+    }
+  }
+
+  // ===== Refresh 1 (existente) =====
   async function refresh() {
     try {
       if (kpiTotal) kpiTotal.innerHTML = `Total no período: <b>Carregando...</b>`;
       if (kpiRange) kpiRange.innerHTML = `Período: <b>-</b>`;
 
-      const { data, dateFrom, dateTo } = await fetchData();
+      const { params, dateFrom, dateTo } = buildParams();
+      const url = `${DATA_URL}?${params.toString()}`;
+      const data = await fetchJson(url);
 
       const labels = data.labels || [];
       const values = data.values || [];
@@ -289,10 +376,47 @@
     }
   }
 
+  // ===== Refresh 2 (novo) =====
+  async function refresh2() {
+    if (!chart2) return;
+
+    try {
+      if (kpiTotal2) kpiTotal2.innerHTML = `Total no período: <b>Carregando...</b>`;
+      if (kpiRange2) kpiRange2.innerHTML = `Período: <b>-</b>`;
+
+      const { params, dateFrom, dateTo } = buildParams();
+      const url = `${DATA2_URL}?${params.toString()}`;
+      const data = await fetchJson(url);
+
+      const labels = data.labels || [];
+      const criticadas = data.criticadas || [];
+      const produzidas = data.produzidas || [];
+
+      chart2.data.labels = labels;
+      chart2.data.datasets[0].data = criticadas;
+      chart2.data.datasets[1].data = produzidas;
+      chart2.update();
+
+      updateKpis2(labels, criticadas, produzidas, dateFrom, dateTo);
+    } catch (e) {
+      if (kpiTotal2) kpiTotal2.innerHTML = `Total no período: <b>Erro</b>`;
+      if (kpiRange2) kpiRange2.innerHTML = `<b>${String(e)}</b>`;
+
+      chart2.data.labels = [];
+      chart2.data.datasets[0].data = [];
+      chart2.data.datasets[1].data = [];
+      chart2.update();
+    }
+  }
+
+  // ===== Eventos =====
   form?.addEventListener("submit", function (ev) {
     ev.preventDefault();
     refresh();
+    refresh2();
   });
 
+  // Load inicial
   refresh();
+  refresh2();
 })();

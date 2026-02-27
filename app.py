@@ -2398,6 +2398,102 @@ def sap_dashboard_critica_data():
         cur.close()
         conn.close()
 
+@app.route("/sap/acompanhamento-critica/dashboard/data2", methods=["GET"])
+@login_required
+@perm_required("sap.acompanhamento_critica")
+def sap_dashboard_critica_data2():
+    date_from = (request.args.get("dateFrom") or "").strip()
+    date_to = (request.args.get("dateTo") or "").strip()
+    activity_type = (request.args.get("activityType") or "").strip()
+
+    buckets = [b.strip() for b in request.args.getlist("buckets") if (b or "").strip()]
+
+    if not date_from or not date_to:
+        return jsonify({"ok": False, "error": "Informe dateFrom e dateTo."}), 400
+    if date_to < date_from:
+        return jsonify({"ok": False, "error": "dateTo não pode ser menor que dateFrom."}), 400
+
+    produced_types = [
+        "INS_DEV", "SOL_SER", "MIG_PLA", "MUD_END", "RET",
+        "INS", "SUP", "SUP_REP", "SUP_QUA", "MIG_TEC", "QUA",
+    ]
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        # 1) Criticadas -> labels base (como você pediu)
+        sql_c = """
+            SELECT `date` AS d, COUNT(*) AS total
+            FROM sap_criticas_atividades
+            WHERE `date` BETWEEN %s AND %s
+        """
+        params_c = [date_from, date_to]
+
+        if activity_type:
+            sql_c += " AND activity_type = %s"
+            params_c.append(activity_type)
+
+        if buckets:
+            ph = ",".join(["%s"] * len(buckets))
+            sql_c += f" AND origin_bucket IN ({ph})"
+            params_c.extend(buckets)
+
+        sql_c += " GROUP BY `date` ORDER BY `date` ASC"
+
+        cur.execute(sql_c, tuple(params_c))
+        rows_c = cur.fetchall()
+
+        labels = [r["d"] for r in rows_c]
+        criticadas = [int(r["total"] or 0) for r in rows_c]
+
+        if not labels:
+            return jsonify({"ok": True, "labels": [], "criticadas": [], "produzidas": []}), 200
+
+        # 2) Produzidas (completed + whitelist + mesmos filtros)
+        sql_p = """
+            SELECT b.`date` AS d, COUNT(*) AS total
+            FROM ofs_atividades_base b
+            WHERE b.`date` BETWEEN %s AND %s
+              AND b.status = 'completed'
+        """
+        params_p = [date_from, date_to]
+
+        ph = ",".join(["%s"] * len(produced_types))
+        sql_p += f" AND b.activity_type IN ({ph})"
+        params_p.extend(produced_types)
+
+        if activity_type:
+            sql_p += " AND b.activity_type = %s"
+            params_p.append(activity_type)
+
+        if buckets:
+            ph = ",".join(["%s"] * len(buckets))
+            sql_p += f" AND b.origin_bucket IN ({ph})"
+            params_p.extend(buckets)
+
+        sql_p += " GROUP BY b.`date` ORDER BY b.`date` ASC"
+
+        cur.execute(sql_p, tuple(params_p))
+        rows_p = cur.fetchall()
+
+        prod_map = {r["d"]: int(r["total"] or 0) for r in rows_p}
+        # null quando não há produção no dia (pra “linha só aparecer quando houver”)
+        produzidas = [prod_map.get(d, None) for d in labels]
+
+        return jsonify({
+            "ok": True,
+            "labels": labels,
+            "criticadas": criticadas,
+            "produzidas": produzidas,
+        }), 200
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Erro no dashboard/data2: {e}"}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 @app.route("/ofs/atividades-base", methods=["GET"])
 @login_required
 @perm_required("ofs.atividades_base")
