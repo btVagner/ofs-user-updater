@@ -1,0 +1,209 @@
+/* ================================
+   Toquio - Inserir Mapeamento Bairro (td_bucket)
+================================ */
+
+.page-atividades {
+    width: 100%;
+    max-width: none;
+    margin: 0 auto;
+    padding: 20px;
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+    box-sizing: border-box;
+}
+
+.page-atividades h2 {
+    margin-bottom: 0;
+}
+
+/* ================================
+   Header + ações
+================================ */
+.page-header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.kpis{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+/* ================================
+   Mensagens
+================================ */
+.success-msg{
+  background:#173b27;
+  border:1px solid #1f4d33;
+  color:#d6ffe4;
+  padding:10px 12px;
+  border-radius:10px;
+  margin: 0 0 14px 0;
+}
+
+.error-msg{
+  background:#3b1717;
+  border:1px solid #4d1f1f;
+  color:#ffd6d6;
+  padding:10px 12px;
+  border-radius:10px;
+  margin: 0 0 14px 0;
+}
+
+/* ================================
+   Cards (mesmo estilo do seu padrão)
+================================ */
+.filtro-card {
+    background: #1f1f1f;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 25px;
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+    align-items:flex-end;
+}
+
+/* ================================
+   Formulários
+================================ */
+.filtro-form {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.form-grid{
+  width:100%;
+  display:grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 15px;
+}
+
+.form-insert .form-actions{
+  grid-column: 1 / -1;
+  display:flex;
+  justify-content:flex-end;
+  margin-top: 6px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 5px;
+    color: #ccc;
+    font-weight: 600;
+}
+
+.form-group input,
+.form-group select {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #444;
+    background: #2c2c2c;
+    color: #fff;
+    outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus{
+  border-color:#0d6efd;
+}
+
+/* ================================
+   Botões (padrão)
+================================ */
+.btn-primary{
+  background:#0d6efd;
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  color:#fff;
+  cursor:pointer;
+  text-decoration:none;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+.btn-primary:hover{ background:#0b5ed7; }
+
+.btn-secondary{
+  background:#6c757d;
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  color:#fff;
+  cursor:pointer;
+  text-decoration:none;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+.btn-secondary:hover{ background:#5a6268; }
+
+/* ================================
+   Tabela (mesmo padrão)
+================================ */
+.tabela-card {
+    background: #1f1f1f;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.tabela-container {
+    overflow-x: auto;
+    border-radius: 5px;
+}
+
+.tabela-atividades {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tabela-atividades thead {
+    background: #2a2a2a;
+}
+
+.tabela-atividades th,
+.tabela-atividades td {
+    padding: 12px;
+    text-align: left;
+}
+
+.tabela-atividades th {
+    font-weight: 600;
+    border-bottom: 1px solid #444;
+    font-size: 12.5px;
+    white-space: nowrap;
+}
+
+.tabela-atividades td {
+    font-size: 12.5px;
+    border-bottom: 1px solid #333;
+}
+
+.tabela-atividades tr:hover {
+    background: #2c2c2c;
+}
+
+.empty-row{
+  text-align:center;
+  padding:20px;
+  color:#aaa;
+}
+
+/* ================================
+   Responsivo
+================================ */
+@media (max-width: 992px) {
+  .page-atividades {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}

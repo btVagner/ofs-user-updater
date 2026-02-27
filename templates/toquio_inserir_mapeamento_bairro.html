@@ -1,0 +1,148 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+  {% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/toquio_td_bucket.css') }}">
+
+<body>
+  <div class="page-atividades">
+
+    <div class="page-header">
+      <h2>Inserir mapeamento de bairro no banco</h2>
+
+      <div class="kpis">
+        <a class="btn-secondary" href="{{ url_for('home') }}">Voltar</a>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+      {% endfor %}
+    {% endwith %}
+
+    <!-- =========================
+         INSERÇÃO
+    ========================== -->
+    <div class="filtro-card">
+      <form method="POST" class="form-grid form-insert">
+
+        <div class="form-group">
+          <label>Bucket *</label>
+          <input name="bucket" required>
+        </div>
+
+        <div class="form-group">
+          <label>Sistema de origem *</label>
+          <select name="sistema" required>
+            <option value="">Selecione</option>
+            <option value="NG">NG</option>
+            <option value="Adapter">Adapter</option>
+            <option value="Helix">Helix</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>idCidade *</label>
+          <input name="idCidade" required>
+        </div>
+
+        <div class="form-group">
+          <label>Nome da cidade *</label>
+          <input name="nomeCidade" required>
+        </div>
+
+        <div class="form-group">
+          <label>UF *</label>
+          <input name="uf" maxlength="2" required>
+        </div>
+
+        <div class="form-group">
+          <label>Nome do bairro</label>
+          <input name="nomeBairro" placeholder="Vazio = DEFAULT">
+        </div>
+
+        <div class="form-group">
+          <label>Região (areaBucket)*</label>
+          <input name="areaBucket" required>
+        </div>
+
+        <div class="form-group">
+          <label>filialCidade (int) *</label>
+          <input name="filialCidade" required>
+        </div>
+
+        <div class="form-group">
+          <label>Regional_PBI *</label>
+          <input name="Regional_PBI" required>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Inserir</button>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- =========================
+         CONSULTA
+    ========================== -->
+    <div class="filtro-card">
+      <form method="GET" class="filtro-form">
+
+        <div class="form-group">
+          <label>nomeCidade *</label>
+          <input name="nomeCidade" value="{{ nomeCidade_q }}" required>
+        </div>
+
+        <div class="form-group">
+          <label>chave (LIKE)</label>
+          <input name="chave" value="{{ chave_q }}">
+        </div>
+
+        <button type="submit" class="btn-secondary">Buscar</button>
+
+      </form>
+    </div>
+
+    <!-- =========================
+         TABELA
+    ========================== -->
+    <div class="tabela-card">
+      <div class="tabela-container">
+        <table class="tabela-atividades">
+          <thead>
+            <tr>
+              {% if resultados and resultados|length > 0 %}
+                {% for k in resultados[0].keys() %}
+                  <th>{{ k }}</th>
+                {% endfor %}
+              {% else %}
+                <th>Resultado</th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% if resultados and resultados|length > 0 %}
+              {% for row in resultados %}
+                <tr>
+                  {% for v in row.values() %}
+                    <td>{{ v }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td class="empty-row">Sem resultados para exibir.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='js/toquio_td_bucket.js') }}"></script>
+</body>

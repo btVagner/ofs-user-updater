@@ -132,6 +132,16 @@
         </div>
       </a>
       {% endif %}
+      {% if has_perm('toquio.td_bucket_insert') %}
+      <a href="{{ url_for('toquio_td_bucket_inserir_mapeamento_bairro') }}" class="card">
+        <h3>Insert de mapeamento de bairro</h3>
+        <div class="card-description">
+          <p>
+            ➤ Insere um novo mapeamento de bairro no banco de dados.<br>
+          </p>
+        </div>
+      </a>
+      {% endif %}
     </div>
   </div>
 
