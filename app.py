@@ -2400,7 +2400,7 @@ def sap_dashboard_critica_data():
 
 @app.route("/ofs/atividades-base", methods=["GET"])
 @login_required
-@perm_required("sap.acompanhamento_critica")
+@perm_required("ofs.atividades_base")
 def ofs_atividades_base():
     # filtros (agora server-side)
     date_from = (request.args.get("dateFrom") or "").strip()
@@ -2549,7 +2549,7 @@ def ofs_atividades_base():
 
 @app.route("/ofs/atividades-base/exportar", methods=["POST"])
 @login_required
-@perm_required("sap.acompanhamento_critica")
+@perm_required("ofs.atividades_base")
 def ofs_atividades_base_exportar():
     activity_types = [t.strip() for t in request.form.getlist("activityType") if (t or "").strip()]
     statuses = [s.strip() for s in request.form.getlist("status") if (s or "").strip()]
@@ -2665,7 +2665,7 @@ def ofs_atividades_base_exportar():
     )
 @app.route("/ofs/atividades-base/importar", methods=["POST"])
 @login_required
-@perm_required("sap.acompanhamento_critica")
+@perm_required("ofs.atividades_base")
 def ofs_atividades_base_importar():
     today = datetime.now().strftime("%Y-%m-%d")
     date_from = (request.form.get("dateFrom") or today).strip()
