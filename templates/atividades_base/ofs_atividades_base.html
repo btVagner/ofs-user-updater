@@ -1,0 +1,402 @@
+{% include 'includes/head.html' %}
+{% include 'includes/navbar.html' %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='criticas_sap/criticas_sap.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ofs_atividades_base.css') }}">
+
+<body>
+  <div class="page-atividades">
+
+    <div class="page-header">
+      <div>
+        <h2>Atividades (Base)</h2>
+        <div class="kpis">
+          <div class="kpi">Total: <b>{{ total }}</b></div>
+        </div>
+      </div>
+
+      <a class="btn-secondary" href="{{ url_for('home') }}">Voltar</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+    {% endfor %}
+    {% endwith %}
+
+    <!-- FILTROS + IMPORTAÇÃO (mantido como antes, adicionando filtros server-side) -->
+    <div class="filtro-card">
+
+      <form method="GET" action="{{ url_for('ofs_atividades_base') }}" class="filtro-form">
+        <div>
+          <label>De</label>
+          <input type="date" name="dateFrom" value="{{ date_from }}">
+        </div>
+
+        <div>
+          <label>Até</label>
+          <input type="date" name="dateTo" value="{{ date_to }}">
+        </div>
+
+        <div>
+          <label>Resources</label>
+          <input type="text" name="resources" value="{{ resources }}" placeholder="02">
+        </div>
+
+        <!-- activityType (server-side multi) -->
+        <div>
+          <label>Tipo de atividade (opt)</label>
+
+          <div class="ms-wrap ms-inline" id="fltTypes">
+            <button type="button" class="ms-btn" id="fltTypesBtn">
+              <span class="ms-placeholder" id="fltTypesLabel">(Todos)</span>
+              <span>▾</span>
+            </button>
+
+            <div class="ms-panel" id="fltTypesPanel">
+              <input type="text" class="ms-search" id="fltTypesSearch" placeholder="Buscar...">
+
+              <div class="ms-list" id="fltTypesList">
+                {% for t in activity_types %}
+                <label class="ms-item">
+                  <input
+                    type="checkbox"
+                    class="ms-check"
+                    value="{{ t }}"
+                    {% if selected_types and (t in selected_types) %}checked{% endif %}
+                  >
+                  <span>{{ t }}</span>
+                </label>
+                {% endfor %}
+              </div>
+
+              <div class="ms-footer">
+                <button type="button" class="ms-mini" id="fltTypesClear">Limpar</button>
+                <button type="button" class="ms-mini" id="fltTypesAll">Selecionar tudo</button>
+              </div>
+
+              <div class="ms-hint">Se não selecionar nada, filtra todos.</div>
+            </div>
+
+            <!-- hidden inputs name="activityType" -->
+            <div id="fltTypesHidden"></div>
+          </div>
+        </div>
+
+        <!-- status (server-side multi) -->
+        <div>
+          <label>Status (opt)</label>
+
+          <div class="ms-wrap ms-inline" id="fltStatus">
+            <button type="button" class="ms-btn" id="fltStatusBtn">
+              <span class="ms-placeholder" id="fltStatusLabel">(Todos)</span>
+              <span>▾</span>
+            </button>
+
+            <div class="ms-panel" id="fltStatusPanel">
+              <input type="text" class="ms-search" id="fltStatusSearch" placeholder="Buscar...">
+
+              <div class="ms-list" id="fltStatusList">
+                {% for s in statuses %}
+                <label class="ms-item">
+                  <input
+                    type="checkbox"
+                    class="ms-check"
+                    value="{{ s }}"
+                    {% if selected_statuses and (s in selected_statuses) %}checked{% endif %}
+                  >
+                  <span>{{ s }}</span>
+                </label>
+                {% endfor %}
+              </div>
+
+              <div class="ms-footer">
+                <button type="button" class="ms-mini" id="fltStatusClear">Limpar</button>
+                <button type="button" class="ms-mini" id="fltStatusAll">Selecionar tudo</button>
+              </div>
+
+              <div class="ms-hint">Se não selecionar nada, filtra todos.</div>
+            </div>
+
+            <!-- hidden inputs name="status" -->
+            <div id="fltStatusHidden"></div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-secondary">Filtrar</button>
+      </form>
+
+      <!-- AQUI: Atualizar da API + Exportar ao lado (não muda) -->
+      <div class="import-form" style="display:flex; gap:10px; align-items:flex-end; margin-left:auto;">
+        <form method="POST" action="{{ url_for('ofs_atividades_base_importar') }}">
+          <input type="hidden" name="dateFrom" value="{{ date_from }}">
+          <input type="hidden" name="dateTo" value="{{ date_to }}">
+          <input type="hidden" name="resources" value="{{ resources }}">
+
+          <button type="submit" class="btn-primary">
+            Atualizar da API
+          </button>
+        </form>
+
+        <button type="button" id="btnExportXlsx" class="btn-secondary">
+          Exportar XLSX
+        </button>
+      </div>
+
+    </div>
+
+    <!-- TABELA -->
+    <div class="tabela-card">
+      <div class="tabela-container">
+        <table class="tabela-atividades">
+          <thead>
+            <tr>
+              <th data-col="activityId">
+                activityId
+                <button type="button" class="th-filter-btn" data-col="activityId">▾</button>
+              </th>
+
+              <th data-col="city">
+                Cidade
+                <button type="button" class="th-filter-btn" data-col="city">▾</button>
+              </th>
+
+              <th data-col="activityType">
+                activityType
+                <button type="button" class="th-filter-btn" data-col="activityType">▾</button>
+              </th>
+
+              <th data-col="apptNumber">
+                apptNumber
+                <button type="button" class="th-filter-btn" data-col="apptNumber">▾</button>
+              </th>
+
+              <th data-col="originBucket">
+                Bucket
+                <button type="button" class="th-filter-btn" data-col="originBucket">▾</button>
+              </th>
+
+              <th data-col="resourceId">
+                resourceId
+                <button type="button" class="th-filter-btn" data-col="resourceId">▾</button>
+              </th>
+
+              <th data-col="status">
+                status
+                <button type="button" class="th-filter-btn" data-col="status">▾</button>
+              </th>
+
+              <th data-col="xaOrgSys">
+                XA_ORG_SYS
+                <button type="button" class="th-filter-btn" data-col="xaOrgSys">▾</button>
+              </th>
+
+              <th data-col="date">
+                Data
+                <button type="button" class="th-filter-btn" data-col="date">▾</button>
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% if items and items|length > 0 %}
+              {% for it in items %}
+              <tr>
+                <td data-col="activityId">{{ it.activityId }}</td>
+                <td data-col="city">{{ it.city or '-' }}</td>
+                <td data-col="activityType">{{ it.activityType_pt or it.activityType or '-' }}</td>
+                <td data-col="apptNumber">{{ it.apptNumber or '-' }}</td>
+                <td data-col="originBucket">{{ it.XA_ORIGIN_BUCKET or '-' }}</td>
+                <td data-col="resourceId">{{ it.resourceId or '-' }}</td>
+                <td data-col="status">{{ it.status_pt or it.status or '-' }}</td>
+                <td data-col="xaOrgSys">{{ it.XA_ORG_SYS or '-' }}</td>
+                <td data-col="date">{{ it.date or '-' }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="9" class="empty-row">Nenhum registro encontrado.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Paginação (preserva filtros server-side) -->
+    <div class="pagination">
+      <div class="page-info">
+        Página <b>{{ page }}</b> de <b>{{ total_pages }}</b> — exibindo até <b>{{ per_page }}</b> por página
+      </div>
+
+      <div class="pager">
+        <a class="btn-secondary {% if page <= 1 %}btn-disabled{% endif %}"
+           href="{{ url_for('ofs_atividades_base',
+                dateFrom=date_from, dateTo=date_to, resources=resources,
+                page=page-1, activityType=selected_types, status=selected_statuses) }}">
+          ◀ Anterior
+        </a>
+
+        <a class="btn-secondary {% if page >= total_pages %}btn-disabled{% endif %}"
+           href="{{ url_for('ofs_atividades_base',
+                dateFrom=date_from, dateTo=date_to, resources=resources,
+                page=page+1, activityType=selected_types, status=selected_statuses) }}">
+          Próxima ▶
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MENU DE FILTRO (local/Excel) -->
+  <div id="thFilterMenu" class="th-filter-menu" style="display:none;">
+    <div class="th-filter-actions">
+      <button type="button" class="th-filter-action" data-action="asc">Ordenar A → Z</button>
+      <button type="button" class="th-filter-action" data-action="desc">Ordenar Z → A</button>
+    </div>
+
+    <div class="th-filter-search">
+      <label>Filtro (contém)</label>
+      <input type="text" id="thFilterInput" placeholder="Digite para filtrar...">
+    </div>
+
+    <div class="th-filter-footer">
+      <button type="button" id="thFilterClear" class="btn-secondary">Limpar</button>
+      <button type="button" id="thFilterApply" class="btn-primary">Aplicar</button>
+    </div>
+  </div>
+
+  <!-- MODAL EXPORTAÇÃO XLSX -->
+  <div id="modalExportBackdrop" class="modal-backdrop-custom"></div>
+
+  <div id="modalExport" class="modal-custom modal-small">
+    <div class="modal-top">
+      <h3>Exportar XLSX</h3>
+      <div class="modal-top-actions">
+        <button type="button" id="btnFecharExport" class="modal-close">Fechar</button>
+      </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('ofs_atividades_base_exportar') }}">
+      <div class="modal-grid modal-grid-1">
+
+        <div>
+          <label>Tipo de atividade (opt)</label>
+
+          <div class="ms-wrap" id="msTypes">
+            <button type="button" class="ms-btn" id="msTypesBtn">
+              <span class="ms-placeholder" id="msTypesLabel">(Todos)</span>
+              <span>▾</span>
+            </button>
+
+            <div class="ms-panel" id="msTypesPanel">
+              <input type="text" class="ms-search" id="msTypesSearch" placeholder="Buscar...">
+
+              <div class="ms-list" id="msTypesList">
+                {% for t in activity_types %}
+                <label class="ms-item">
+                  <input type="checkbox" class="ms-check" value="{{ t }}">
+                  <span>{{ t }}</span>
+                </label>
+                {% endfor %}
+              </div>
+
+              <div class="ms-footer">
+                <button type="button" class="ms-mini" id="msTypesClear">Limpar</button>
+                <button type="button" class="ms-mini" id="msTypesAll">Selecionar tudo</button>
+              </div>
+
+              <div class="ms-hint">Se não selecionar nada, exporta todos.</div>
+            </div>
+
+            <div id="msTypesHidden"></div>
+          </div>
+        </div>
+
+        <div>
+          <label>De</label>
+          <input type="date" name="dateFrom" class="form-control" value="{{ date_from }}" required>
+        </div>
+
+        <div>
+          <label>Até</label>
+          <input type="date" name="dateTo" class="form-control" value="{{ date_to }}" required>
+        </div>
+
+        <div>
+          <label>Status (opt)</label>
+
+          <div class="ms-wrap" id="msStatus">
+            <button type="button" class="ms-btn" id="msStatusBtn">
+              <span class="ms-placeholder" id="msStatusLabel">(Todos)</span>
+              <span>▾</span>
+            </button>
+
+            <div class="ms-panel" id="msStatusPanel">
+              <input type="text" class="ms-search" id="msStatusSearch" placeholder="Buscar...">
+
+              <div class="ms-list" id="msStatusList">
+                {% for s in statuses %}
+                <label class="ms-item">
+                  <input type="checkbox" class="ms-check" value="{{ s }}">
+                  <span>{{ s }}</span>
+                </label>
+                {% endfor %}
+              </div>
+
+              <div class="ms-footer">
+                <button type="button" class="ms-mini" id="msStatusClear">Limpar</button>
+                <button type="button" class="ms-mini" id="msStatusAll">Selecionar tudo</button>
+              </div>
+
+              <div class="ms-hint">Se não selecionar nada, exporta todos.</div>
+            </div>
+
+            <div id="msStatusHidden"></div>
+          </div>
+        </div>
+
+        <div>
+          <label>Recursos (opt)</label>
+
+          <div class="ms-wrap" id="msBuckets">
+            <button type="button" class="ms-btn" id="msBtn">
+              <span class="ms-placeholder" id="msLabel">(Todos)</span>
+              <span>▾</span>
+            </button>
+
+            <div class="ms-panel" id="msPanel">
+              <input type="text" class="ms-search" id="msSearch" placeholder="Buscar...">
+
+              <div class="ms-list" id="msList">
+                {% for b in buckets %}
+                <label class="ms-item">
+                  <input type="checkbox" class="ms-check" value="{{ b }}">
+                  <span>{{ b }}</span>
+                </label>
+                {% endfor %}
+              </div>
+
+              <div class="ms-footer">
+                <button type="button" class="ms-mini" id="msClear">Limpar</button>
+                <button type="button" class="ms-mini" id="msAll">Selecionar tudo</button>
+              </div>
+
+              <div class="ms-hint">Se não selecionar nada, exporta todos.</div>
+            </div>
+
+            <div id="msHidden"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-actions" style="margin-top:12px;">
+        <button type="submit" class="btn-primary">Gerar XLSX</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/ofs_atividades_base.js') }}"></script>
+  {% include 'includes/footer.html' %}
+</body>

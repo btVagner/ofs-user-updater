@@ -1,0 +1,317 @@
+/* ================================
+   Atividades Base - Filtro + Paginação
+================================ */
+
+/* Botão de filtro pequeno e discreto */
+.th-filter-btn{
+  margin-left:6px;
+  width:22px;
+  height:20px;
+  border-radius:4px;
+  border:1px solid #444;
+  background:#2c2c2c;
+  color:#fff;
+  cursor:pointer;
+  font-size:11px;
+  line-height:1;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.th-filter-btn:hover{ background:#333; }
+
+/* Menu do filtro (FIXED pra não teleportar) */
+.th-filter-menu{
+  position: fixed;
+  z-index: 99999;
+  width: 320px;
+  background: #1f1f1f;
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.35);
+}
+
+.th-filter-actions{
+  display:flex;
+  gap:8px;
+  margin-bottom:10px;
+}
+.th-filter-action{
+  background:#2c2c2c;
+  border:1px solid #444;
+  color:#fff;
+  padding:7px 10px;
+  border-radius:8px;
+  cursor:pointer;
+  font-size:12px;
+}
+.th-filter-action:hover{ background:#333; }
+
+.th-filter-search label{
+  display:block;
+  font-size:12px;
+  color:#ccc;
+  margin-bottom:6px;
+}
+#thFilterInput{
+  width:100%;
+  padding:8px 10px;
+  border-radius:8px;
+  border:1px solid #444;
+  background:#2c2c2c;
+  color:#fff;
+}
+.th-filter-footer{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:10px;
+}
+
+/* Paginação */
+.pagination{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:14px;
+  flex-wrap:wrap;
+}
+.pagination .pager{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.pagination .page-info{
+  color:#ccc;
+  font-size:13px;
+}
+.btn-disabled{
+  opacity:.5;
+  pointer-events:none;
+}
+
+/* ================================
+   Modal Export - clean UI
+================================ */
+
+#modalExport.modal-custom{
+  padding: 18px 18px 14px 18px;
+}
+
+#modalExport .modal-top{
+  margin-bottom: 14px;
+}
+
+#modalExport .modal-top h3{
+  font-size: 16px;
+  font-weight: 600;
+}
+
+#modalExport .modal-grid.modal-grid-1{
+  gap: 12px;
+}
+
+#modalExport label{
+  display:block;
+  font-size: 12px;
+  color:#bfbfbf;
+  margin-bottom: 6px;
+}
+
+#modalExport .form-control{
+  width:100%;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid #3a3a3a;
+  background:#262626;
+  color:#fff;
+  outline:none;
+}
+#modalExport .form-control:focus{
+  border-color:#4a4a4a;
+  box-shadow: 0 0 0 3px rgba(13,110,253,.15);
+}
+
+#modalExport .modal-actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top: 14px;
+}
+
+/* Botão do modal um pouco mais “sistema” */
+#modalExport .btn-primary{
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+#modalExport .modal-close{
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+/* ================================
+   Multi-select dropdown (checkbox)
+================================ */
+
+.ms-wrap{
+  position: relative;
+}
+
+.ms-btn{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid #3a3a3a;
+  background:#262626;
+  color:#fff;
+  cursor:pointer;
+  user-select:none;
+}
+.ms-btn:hover{ background:#2a2a2a; }
+.ms-btn .ms-placeholder{
+  color:#cfcfcf;
+  font-size: 13px;
+}
+
+.ms-panel{
+  position:absolute;
+  left:0;
+  right:0;
+  top: calc(100% + 8px);
+  background:#1f1f1f;
+  border:1px solid #333;
+  border-radius:12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  padding:10px;
+  z-index: 100000;
+  display:none;
+}
+
+.ms-panel.open{ display:block; }
+
+.ms-search{
+  width:100%;
+  padding:9px 10px;
+  border-radius:10px;
+  border:1px solid #3a3a3a;
+  background:#262626;
+  color:#fff;
+  outline:none;
+  margin-bottom:10px;
+}
+
+.ms-list{
+  max-height: 220px;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding-right:4px;
+}
+
+.ms-item{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid transparent;
+  cursor:pointer;
+}
+.ms-item:hover{
+  background:#2c2c2c;
+  border-color:#333;
+}
+
+.ms-item input{
+  transform: scale(1.05);
+}
+
+.ms-footer{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:10px;
+}
+
+.ms-mini{
+  background:#2c2c2c;
+  border:1px solid #444;
+  color:#fff;
+  padding:8px 10px;
+  border-radius:10px;
+  cursor:pointer;
+  font-size: 12px;
+}
+.ms-mini:hover{ background:#333; }
+
+.ms-hint{
+  margin-top:6px;
+  color:#9e9e9e;
+  font-size: 12px;
+}
+
+/* ===============================
+   Multi-select dropdown (ms-*)
+   Aumenta largura do painel (dropdown)
+   =============================== */
+
+.ms-wrap{
+  position: relative; /* garante que o painel posicione certo */
+}
+
+/* botão já é pequeno — OK */
+.ms-btn{
+  width: 100%;
+}
+
+/* painel do dropdown */
+.ms-panel{
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 9999;
+
+  /* >>> aqui está o ajuste <<< */
+  width: max-content;        /* usa o conteúdo quando necessário */
+  min-width: 320px;          /* nunca menor que isso */
+  max-width: 520px;          /* evita ficar gigante */
+  box-sizing: border-box;
+
+  /* se o conteúdo for maior que max-width, quebra com rolagem */
+  overflow: hidden;
+}
+
+/* garante que o conteúdo interno respeite o max-width */
+.ms-panel .ms-search,
+.ms-panel .ms-list,
+.ms-panel .ms-footer,
+.ms-panel .ms-hint{
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* lista rolável com altura boa */
+.ms-list{
+  max-height: 260px;
+  overflow: auto;
+}
+
+/* itens quebram linha quando o texto do bucket for grande */
+.ms-item{
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  white-space: normal;     /* permite quebrar */
+  line-height: 1.2;
+}
+
+.ms-item span{
+  word-break: break-word;  /* evita estourar */
+}
