@@ -1,6 +1,6 @@
 {% include 'includes/head.html' %}
 {% if session.usuario_logado %}
-  {% include 'includes/navbar.html' %}
+{% include 'includes/navbar.html' %}
 {% endif %}
 
 <link rel="stylesheet" href="{{ url_for('static', filename='css/toquio_td_bucket.css') }}">
@@ -17,9 +17,9 @@
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% for category, message in messages %}
-        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
-      {% endfor %}
+    {% for category, message in messages %}
+    <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+    {% endfor %}
     {% endwith %}
 
     <!-- =========================
@@ -92,8 +92,13 @@
       <form method="GET" class="filtro-form">
 
         <div class="form-group">
-          <label>nomeCidade *</label>
-          <input name="nomeCidade" value="{{ nomeCidade_q }}" required>
+          <label>idCidade</label>
+          <input name="idCidade" value="{{ idCidade_q }}">
+        </div>
+
+        <div class="form-group">
+          <label>nomeCidade (LIKE)</label>
+          <input name="nomeCidade" value="{{ nomeCidade_q }}">
         </div>
 
         <div class="form-group">
@@ -102,7 +107,6 @@
         </div>
 
         <button type="submit" class="btn-secondary">Buscar</button>
-
       </form>
     </div>
 
@@ -115,27 +119,27 @@
           <thead>
             <tr>
               {% if resultados and resultados|length > 0 %}
-                {% for k in resultados[0].keys() %}
-                  <th>{{ k }}</th>
-                {% endfor %}
+              {% for k in resultados[0].keys() %}
+              <th>{{ k }}</th>
+              {% endfor %}
               {% else %}
-                <th>Resultado</th>
+              <th>Resultado</th>
               {% endif %}
             </tr>
           </thead>
           <tbody>
             {% if resultados and resultados|length > 0 %}
-              {% for row in resultados %}
-                <tr>
-                  {% for v in row.values() %}
-                    <td>{{ v }}</td>
-                  {% endfor %}
-                </tr>
+            {% for row in resultados %}
+            <tr>
+              {% for v in row.values() %}
+              <td>{{ v }}</td>
               {% endfor %}
+            </tr>
+            {% endfor %}
             {% else %}
-              <tr>
-                <td class="empty-row">Sem resultados para exibir.</td>
-              </tr>
+            <tr>
+              <td class="empty-row">Sem resultados para exibir.</td>
+            </tr>
             {% endif %}
           </tbody>
         </table>

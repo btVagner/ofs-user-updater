@@ -383,38 +383,60 @@ def atividades_notdone_exportar():
 @login_required
 @perm_required("toquio.td_bucket_insert")
 def toquio_td_bucket_inserir_mapeamento_bairro():
-
     # =========================
     # CONSULTA (GET)
     # =========================
+    id_cidade_q_raw = (request.args.get("idCidade") or "").strip()
     nome_cidade_q = (request.args.get("nomeCidade") or "").strip()
     chave_like_q = (request.args.get("chave") or "").strip()
 
+    # Para manter o valor no input do template
+    idCidade_q = id_cidade_q_raw
+
     resultados = []
 
+    # Monta WHERE dinamicamente
+    where = []
+    params = []
+
+    # idCidade (igualdade)
+    if id_cidade_q_raw:
+        if not id_cidade_q_raw.isdigit():
+            # se preferir, pode retornar mensagem de erro ao invés de ignorar
+            # flash("idCidade deve ser numérico", "warning")
+            pass
+        else:
+            where.append("idCidade = %s")
+            params.append(int(id_cidade_q_raw))
+
+    # nomeCidade (LIKE)
     if nome_cidade_q:
+        where.append("nomeCidade LIKE %s")
+        params.append(f"%{nome_cidade_q}%")
+
+    # chave (LIKE)
+    if chave_like_q:
+        where.append("chave LIKE %s")
+        params.append(f"%{chave_like_q}%")
+
+    # Só consulta se tiver pelo menos 1 filtro
+    if where:
         conn = get_connection()
         cur = conn.cursor(dictionary=True)
 
         sql = """
             SELECT *
             FROM projToquio.td_bucket
-            WHERE nomeCidade = %s
         """
-        params = [nome_cidade_q]
 
-        if chave_like_q:
-            sql += " AND chave LIKE %s"
-            params.append(f"%{chave_like_q}%")
-
-        sql += " LIMIT 20"
+        sql += " WHERE " + " AND ".join(where)
+        sql += " LIMIT 200"
 
         cur.execute(sql, params)
         resultados = cur.fetchall() or []
 
         cur.close()
         conn.close()
-
     # =========================
     # INSERT (POST)
     # =========================
@@ -487,7 +509,7 @@ def toquio_td_bucket_inserir_mapeamento_bairro():
         rows_to_insert = []
 
         if not variants:
-            bairro_key = "DEFAULT"
+            bairro_key = "0000000"
             chave = f"{sistema}{id_cidade}DEFAULT"
             workzone = _workzone(id_cidade, bairro_key)
 
@@ -571,6 +593,7 @@ def toquio_td_bucket_inserir_mapeamento_bairro():
     return render_template(
         "toquio_inserir_mapeamento_bairro.html",
         resultados=resultados,
+        idCidade_q=idCidade_q,
         nomeCidade_q=nome_cidade_q,
         chave_q=chave_like_q
     )
