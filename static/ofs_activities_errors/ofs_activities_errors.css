@@ -1,0 +1,400 @@
+/* ================================
+   OFS Activities Status - Layout (igual notdone)
+================================ */
+
+.page-atividades {
+  width:100%;
+  max-width: none;
+  margin: 0 auto;
+  padding: 20px;
+  padding-left: 28px !important;
+  padding-right: 28px !important;
+  box-sizing: border-box;
+}
+
+.page-atividades h2 { margin-bottom: 10px; }
+
+/* Cabeçalho + KPIs */
+.page-header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.kpis{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.kpi{
+  background:#1f1f1f;
+  border:1px solid #333;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:13px;
+  color:#ddd;
+}
+
+/* ---------- Filtro (card) ---------- */
+
+.filtro-card {
+  background: #1f1f1f;
+  padding: 20px;
+  border-radius: 10px;
+  margin-bottom: 25px;
+
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:flex-end;
+}
+
+.filtro-form {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.filtro-form label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 5px;
+  color: #ccc;
+}
+
+.filtro-form input {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2c2c2c;
+  color: #fff;
+}
+
+.import-form{
+  margin-left:auto;
+}
+
+/* ---------- Tabela ---------- */
+
+.tabela-card {
+  background: #1f1f1f;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tabela-container {
+  overflow-x: auto;
+  border-radius: 5px;
+}
+
+.tabela-atividades {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabela-atividades thead {
+  background: #2a2a2a;
+}
+
+.tabela-atividades th,
+.tabela-atividades td {
+  padding: 14px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.tabela-atividades th {
+  font-weight: 600;
+  border-bottom: 1px solid #444;
+  white-space: nowrap;
+}
+
+.tabela-atividades tr {
+  border-bottom: 1px solid #333;
+}
+
+.tabela-atividades tr:hover {
+  background: #2c2c2c;
+}
+
+.tabela-atividades td[data-col="date"] {
+  white-space: nowrap;
+  min-width: 110px;
+}
+
+/* células longas */
+.cell-ellipsis{
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Botões ---------- */
+
+.btn-primary{
+  background:#0d6efd;
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  color:#fff;
+  cursor:pointer;
+}
+.btn-primary:hover{ background:#0b5ed7; }
+
+.btn-secondary{
+  background:#6c757d;
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  color:#fff;
+  cursor:pointer;
+  text-decoration:none;
+  display:inline-block;
+}
+.btn-secondary:hover{ background:#5a6268; }
+
+.btn-tratar {
+  background: #0d6efd;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+}
+.btn-tratar:hover { background: #0b5ed7; }
+
+.empty-row{
+  text-align:center;
+  padding:20px;
+  color:#aaa;
+}
+
+/* ---------- Modal ---------- */
+
+.modal-backdrop-custom {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9998;
+}
+
+.modal-custom {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(900px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #1f1f1f;
+  padding: 20px;
+  border-radius: 12px;
+  z-index: 9999;
+}
+
+.modal-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:12px;
+}
+
+.modal-top-actions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.modal-close {
+  background: #6c757d;
+  border: none;
+  padding: 7px 14px;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+}
+.modal-close:hover { background: #5a6268; }
+
+.modal-small {
+  width: min(780px, 95vw);
+  max-height: 80vh;
+}
+
+.modal-grid-1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.modal-grid-1 textarea{
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2c2c2c;
+  color: #fff;
+  resize: vertical;
+}
+
+/* Responsivo lateral */
+@media (max-width: 992px) {
+  .page-atividades {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+/* compacta tabela */
+.tabela-atividades th {
+  font-size: 12px;
+  padding: 9px 10px;
+}
+
+.tabela-atividades td {
+  font-size: 12px;
+  padding: 9px 10px;
+}
+
+.btn-tratar {
+  font-size: 11.5px;
+  padding: 5px 10px;
+}
+/* ================================
+   Import Job UI
+================================ */
+
+#jobStatus{
+  width: 100%;
+  min-width: 260px;
+  flex: 1;
+}
+
+.job-card{
+  background:#151515;
+  border:1px solid #333;
+  padding:12px 12px;
+  border-radius:10px;
+  color:#ddd;
+  min-height: 64px;
+}
+
+.job-card.running{ border-color:#2f5fbd; }
+.job-card.done{ border-color:#2b8a3e; }
+.job-card.error{ border-color:#b02a37; }
+.job-card.canceled{ border-color:#6c757d; }
+.job-card.idle{ border-color:#444; }
+
+.job-line{
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.job-label{
+  color:#aaa;
+  margin-right:6px;
+}
+
+.job-msg{
+  font-size: 12px;
+  color:#cfcfcf;
+  margin-top: 6px;
+  word-break: break-word;
+}
+
+.job-progress{
+  height: 8px;
+  background:#2a2a2a;
+  border-radius: 999px;
+  overflow:hidden;
+  border:1px solid #333;
+}
+
+.job-progress-bar{
+  height: 100%;
+  background:#0d6efd;
+  width: 0%;
+}
+
+.job-next-run{
+  margin-top: 8px;
+  font-size: 12px;
+  color:#aaa;
+}
+
+.job-countdown{
+  color:#fff;
+}
+
+/* ================================
+   Botão Danger (Cancelar)
+================================ */
+
+.btn-danger{
+  background:#dc3545;
+  border:none;
+  padding:9px 14px;
+  border-radius:8px;
+  color:#fff;
+  cursor:pointer;
+}
+.btn-danger:hover{ background:#bb2d3b; }
+
+/* ================================
+   Modal textareas (melhor UX)
+================================ */
+
+.modal-grid-1 textarea,
+#detailModal textarea{
+  min-height: 120px;
+}
+
+/* ===== Modal fields (melhor UI) ===== */
+
+.field label{
+  display:block;
+  font-size:12px;
+  color:#bbb;
+  margin-bottom:6px;
+}
+
+.modal-grid-2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:12px;
+}
+
+@media (max-width: 900px){
+  .modal-grid-2{
+    grid-template-columns: 1fr;
+  }
+}
+
+#detailModal textarea{
+  width:100%;
+  min-height:140px;
+  padding:10px 12px;
+  border-radius:8px;
+  border:1px solid #3b3b3b;
+  background:#141414;
+  color:#eaeaea;
+  resize: vertical;
+  line-height: 1.35;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+}
+
+#detailModal textarea:focus{
+  outline:none;
+  border-color:#0d6efd;
+  box-shadow: 0 0 0 2px rgba(13,110,253,.15);
+}

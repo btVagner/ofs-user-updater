@@ -1,0 +1,126 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors.css') }}">
+
+<body>
+  <div class="page-atividades">
+
+    <div class="page-header">
+      <h2>Dashboard - Erros NG</h2>
+
+      <div class="kpis">
+        <a class="btn-secondary" href="{{ url_for('ofs_activities_errors', dateFrom=date_from, dateTo=date_to, resources=resources) }}">Voltar</a>
+        <div class="kpi">Total linhas: <b>{{ total }}</b></div>
+        <div class="kpi">Total com erro NG: <b>{{ total_ng }}</b></div>
+      </div>
+    </div>
+
+    <div class="filtro-card">
+      <form class="filtro-form" method="GET" action="{{ url_for('ofs_activities_errors_dashboard') }}">
+        <div>
+          <label>De</label>
+          <input type="date" name="dateFrom" value="{{ date_from }}">
+        </div>
+
+        <div>
+          <label>Até</label>
+          <input type="date" name="dateTo" value="{{ date_to }}">
+        </div>
+
+        <div>
+          <label>Resources</label>
+          <input type="text" name="resources" value="{{ resources }}">
+        </div>
+
+        <button type="submit" class="btn-secondary">Atualizar</button>
+      </form>
+    </div>
+
+    <div class="tabela-card" style="margin-bottom:16px;">
+      <div class="tabela-container">
+        <table class="tabela-atividades">
+          <thead>
+            <tr>
+              <th colspan="2">Top mensagens (NG)</th>
+            </tr>
+            <tr>
+              <th>Mensagem</th>
+              <th>Qtd</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in top_messages %}
+            <tr>
+              <td class="cell-ellipsis" title="{{ r.msg }}">{{ r.msg }}</td>
+              <td><b>{{ r.qtd }}</b></td>
+            </tr>
+            {% endfor %}
+            {% if top_messages|length == 0 %}
+            <tr><td colspan="2" class="empty-row">Sem dados no período.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tabela-card" style="margin-bottom:16px;">
+      <div class="tabela-container">
+        <table class="tabela-atividades">
+          <thead>
+            <tr>
+              <th colspan="2">Erros por dia</th>
+            </tr>
+            <tr>
+              <th>Data</th>
+              <th>Qtd</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in by_day %}
+            <tr>
+              <td>{{ r.date }}</td>
+              <td><b>{{ r.qtd }}</b></td>
+            </tr>
+            {% endfor %}
+            {% if by_day|length == 0 %}
+            <tr><td colspan="2" class="empty-row">Sem dados no período.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tabela-card">
+      <div class="tabela-container">
+        <table class="tabela-atividades">
+          <thead>
+            <tr>
+              <th colspan="2">Erros por tipo de atividade</th>
+            </tr>
+            <tr>
+              <th>activityType</th>
+              <th>Qtd</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in by_type %}
+            <tr>
+              <td class="cell-ellipsis" title="{{ r.activityType }}">{{ r.activityType }}</td>
+              <td><b>{{ r.qtd }}</b></td>
+            </tr>
+            {% endfor %}
+            {% if by_type|length == 0 %}
+            <tr><td colspan="2" class="empty-row">Sem dados no período.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  {% include 'includes/footer.html' %}
+</body>

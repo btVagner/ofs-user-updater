@@ -51,6 +51,17 @@
       </a>
       {% endif %}
 
+      {% if has_perm('ofs.activities_errors') %}
+      <a href="{{ url_for('ofs_activities_errors') }}" class="card">
+        <h3>Erro de fim de OS</h3>
+        <div class="card-description">
+          <p>
+            ➤ Analisa OS com crítica na API de retorno do NG e SAP
+          </p>
+        </div>
+      </a>
+      {% endif %}
+
       {% if has_perm('ofs.criar_tecnicos') %}
       <a href="{{ url_for('criar_tecnicos') }}" class="card">
         <h3>Criar técnicos</h3>

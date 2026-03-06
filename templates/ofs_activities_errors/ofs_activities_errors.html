@@ -1,0 +1,161 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors.css') }}">
+
+<body>
+
+    <div class="page-atividades">
+
+        <div class="page-header">
+            <h2>Erro de Finalização de OS</h2>
+
+            <div class="kpis">
+                <div class="kpi">Total: <b>{{ total }}</b></div>
+                <a class="btn-secondary" href="{{ url_for('ofs_activities_errors_dashboard', dateFrom=date_from, dateTo=date_to, resources=resources) }}">Dashboard</a>
+            </div>
+            
+        </div>
+
+        <div class="filtro-card">
+
+            <form class="filtro-form" method="GET" action="{{ url_for('ofs_activities_errors') }}">
+
+                <div>
+                    <label>De</label>
+                    <input type="date" name="dateFrom" value="{{ date_from }}">
+                </div>
+
+                <div>
+                    <label>Até</label>
+                    <input type="date" name="dateTo" value="{{ date_to }}">
+                </div>
+
+                <div>
+                    <label>Resources</label>
+                    <input type="text" name="resources" value="{{ resources }}">
+                </div>
+
+                <button type="submit" class="btn-secondary">Atualizar filtros</button>
+                
+
+            </form>
+
+            <form id="importForm" class="import-form">
+                <input type="hidden" id="hidDateFrom" name="dateFrom" value="{{ date_from }}">
+                <input type="hidden" id="hidDateTo" name="dateTo" value="{{ date_to }}">
+                <input type="hidden" id="hidResources" name="resources" value="{{ resources }}">
+
+                <button type="submit" class="btn-primary" id="btnImport">
+                    Atualizar agora
+                </button>
+
+                <button type="button" class="btn-danger" id="btnCancel" style="display:none;">
+                    Cancelar
+                </button>
+            </form>
+
+            <div id="jobStatus"></div>
+
+        </div>
+
+        <div class="tabela-card">
+            <div class="tabela-container">
+
+                <table class="tabela-atividades">
+
+                    <thead>
+                        <tr>
+                            <th>activityId</th>
+                            <th>date</th>
+                            <th>city</th>
+                            <th>activityType</th>
+                            <th>apptNumber</th>
+                            <th>status</th>
+                            <th>Erro</th>
+                            <th>Detalhe</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for i in items %}
+                        <tr>
+
+                            <td>{{ i.activityId }}</td>
+                            <td>{{ i.date }}</td>
+                            <td>{{ i.city or '-' }}</td>
+                            <td>{{ i.activityType or '-' }}</td>
+                            <td>{{ i.apptNumber or '-' }}</td>
+                            <td>{{ i.status or '-' }}</td>
+
+                            <td>
+                                <b>{{ i.erro_tipo }}</b>
+                            </td>
+
+                            <td>
+                                <button class="btn-tratar js-open-detail" data-id="{{ i.activityId }}">
+                                    Ver detalhe
+                                </button>
+                            </td>
+
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+
+                </table>
+
+            </div>
+        </div>
+
+        <div class="pagination">
+
+            {% if page > 1 %}
+            <a
+                href="{{ url_for('ofs_activities_errors', page=page-1, dateFrom=date_from, dateTo=date_to, resources=resources) }}">
+                Anterior
+            </a>
+            {% endif %}
+
+            <span>Página {{ page }} / {{ total_pages }}</span>
+
+            {% if page < total_pages %} <a
+                href="{{ url_for('ofs_activities_errors', page=page+1, dateFrom=date_from, dateTo=date_to, resources=resources) }}">
+                Próxima
+                </a>
+                {% endif %}
+
+        </div>
+
+    </div>
+
+    <div class="modal-backdrop-custom" id="detailBackdrop"></div>
+    <div class="modal-custom modal-small" id="detailModal">
+
+        <div class="modal-top">
+            <h3>Detalhe do erro</h3>
+            <button id="detailClose" class="modal-close">Fechar</button>
+        </div>
+
+        <div class="field">
+            <label>NG Dispatch</label>
+            <textarea id="ngDispatch" rows="4" readonly></textarea>
+        </div>
+
+        <div class="field">
+            <label>NG Response</label>
+            <textarea id="ngResponse" rows="4" readonly></textarea>
+        </div>
+
+        <div class="field">
+            <label>SAP CRT LDG (só relevante se XA_SAP_CRT = 1)</label>
+            <textarea id="sapLdg" rows="4" readonly></textarea>
+        </div>
+
+    </div>
+    <script src="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors.js') }}"></script>
+
+    {% include 'includes/footer.html' %}
+
+</body>

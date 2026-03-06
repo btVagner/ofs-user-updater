@@ -17,7 +17,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from urllib.parse import urlencode
 import re
 import unicodedata
-
+import threading
 
 load_dotenv()
 
@@ -248,6 +248,188 @@ def _workzone(id_cidade_int: int, bairro_key: str) -> str:
     bairro40 = (bairro_key + ("0" * 40))[:40]  # completa e corta em 40
     return f"{id8}{bairro40}"
 
+def _validate_max_range_7_days(date_from: str, date_to: str):
+    try:
+        df = datetime.strptime(date_from, "%Y-%m-%d").date()
+        dt = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except Exception:
+        raise ValueError("Informe um período válido (De / Até).")
+
+    if dt < df:
+        raise ValueError("O campo 'Até' não pode ser menor que 'De'.")
+
+    if (dt - df).days > 6:  # 7 dias = 0..6
+        raise ValueError("Limite máximo: 7 dias por atualização.")
+
+    return df, dt
+def _job_should_cancel(job_id: int) -> bool:
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT cancel_requested, status FROM ofs_import_jobs WHERE id=%s", (job_id,))
+    row = cur.fetchone() or {}
+    cur.close(); conn.close()
+    return int(row.get("cancel_requested") or 0) == 1 or (row.get("status") == "canceled")
+
+def _job_update(job_id: int, **fields):
+    if not fields:
+        return
+    sets = []
+    params = []
+    for k, v in fields.items():
+        sets.append(f"{k}=%s")
+        params.append(v)
+    params.append(job_id)
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(f"UPDATE ofs_import_jobs SET {', '.join(sets)} WHERE id=%s", tuple(params))
+    conn.commit()
+    cur.close(); conn.close()
+
+def _run_import_job(job_id: int, date_from: str, date_to: str, resources: str, actor_username: str):
+    try:
+        client = OFSClient()
+
+        fields = [
+            "activityId","city","activityType","apptNumber","date","status",
+            "XA_RES_API_NG_RESPONSE","XA_API_NG_DISPATCH","XA_SAP_CRT_LDG","XA_SAP_CRT"
+        ]
+
+        base_params = {
+            "dateFrom": date_from,
+            "dateTo": date_to,
+            "resources": resources,
+            "q": "status == 'notdone' OR status == 'completed'",
+            "fields": ",".join(fields),
+            "limit": 2000,
+            "offset": 0,
+        }
+
+        items = []
+        has_more = True
+        page = 0
+        max_pages = 30
+
+        _job_update(job_id, message="Buscando dados na API...", progress=5)
+
+        while has_more and page < max_pages:
+            if _job_should_cancel(job_id):
+                _job_update(job_id, status="canceled", message="Operação cancelada pelo usuário.", progress=0)
+                return
+
+            qs = urlencode(base_params, safe="=,'")
+            url = f"{client.base_url}/activities/?{qs}"
+            data = client.authenticated_get(url)
+
+            batch = data.get("items") or []
+            items.extend(batch)
+
+            has_more = bool(data.get("hasMore"))
+            if has_more:
+                base_params["offset"] = len(items)
+            page += 1
+
+            # progresso “aproximado”
+            _job_update(job_id, progress=min(70, 5 + page * 10), message=f"API: página {page} / {max_pages}")
+
+        if _job_should_cancel(job_id):
+            _job_update(job_id, status="canceled", message="Operação cancelada pelo usuário.", progress=0)
+            return
+
+        _job_update(job_id, message=f"Gravando no banco ({len(items)} itens)...", progress=80)
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        inserted = 0
+        updated = 0
+
+        sql = """
+            INSERT INTO ofs_activities_errors
+            (activity_id, `date`, city, activity_type, appt_number, status,
+            xa_res_api_ng_response, xa_api_ng_dispatch, xa_sap_crt_ldg, xa_sap_crt,
+            ng_dispatch_message, ng_response_message)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON DUPLICATE KEY UPDATE
+                `date`=VALUES(`date`),
+                city=VALUES(city),
+                activity_type=VALUES(activity_type),
+                appt_number=VALUES(appt_number),
+                status=VALUES(status),
+                xa_res_api_ng_response=VALUES(xa_res_api_ng_response),
+                xa_api_ng_dispatch=VALUES(xa_api_ng_dispatch),
+                xa_sap_crt_ldg=VALUES(xa_sap_crt_ldg),
+                xa_sap_crt=VALUES(xa_sap_crt),
+                ng_dispatch_message=VALUES(ng_dispatch_message),
+                ng_response_message=VALUES(ng_response_message),
+                last_seen_at=NOW()
+        """
+
+        for idx, a in enumerate(items, start=1):
+            if _job_should_cancel(job_id):
+                _job_update(job_id, status="canceled", message="Operação cancelada pelo usuário.", progress=0)
+                cur.close(); conn.close()
+                return
+
+            activity_id = str(a.get("activityId") or "").strip()
+            if not activity_id:
+                continue
+            ng_dispatch_raw = a.get("XA_API_NG_DISPATCH")
+            ng_response_raw = a.get("XA_RES_API_NG_RESPONSE")
+
+            ng_dispatch_msg = _extract_message(ng_dispatch_raw)
+            ng_response_msg = _extract_message(ng_response_raw)
+            cur.execute(sql, (
+                activity_id,
+                str(a.get("date") or "") or None,
+                str(a.get("city") or "") or None,
+                str(a.get("activityType") or "") or None,
+                str(a.get("apptNumber") or "") or None,
+                str(a.get("status") or "") or None,
+                ng_response_raw,
+                ng_dispatch_raw,
+                a.get("XA_SAP_CRT_LDG"),
+                str(a.get("XA_SAP_CRT") or "") or None,
+                ng_dispatch_msg,
+                ng_response_msg,
+            ))
+
+            if cur.rowcount == 1:
+                inserted += 1
+            elif cur.rowcount == 2:
+                updated += 1
+
+            if idx % 250 == 0:
+                pct = 80 + int((idx / max(1, len(items))) * 15)
+                _job_update(job_id, progress=min(95, pct), message=f"Gravando... {idx}/{len(items)}")
+
+        conn.commit()
+        cur.close(); conn.close()
+
+        _job_update(job_id, status="done", progress=100,
+                    message=f"Concluído. Novos: {inserted} | Atualizados: {updated} | Total API: {len(items)}")
+
+    except Exception as e:
+        _job_update(job_id, status="error", message=f"Erro: {str(e)[:240]}", progress=0)
+
+_MSG_RE = re.compile(r'"message"\s*:\s*"([^"]+)"')
+
+def _extract_message(val):
+    """
+    Extrai SOMENTE o campo JSON "message":"..."
+    Funciona mesmo quando vem JSON + texto depois.
+    """
+    if val is None:
+        return None
+
+    s = str(val)
+    m = _MSG_RE.search(s)
+    if not m:
+        return None
+
+    msg = (m.group(1) or "").strip()
+    return msg or None
+
+    return None
 @app.route("/atividades-notdone/exportar", methods=["POST"])
 @login_required
 @perm_required("ofs.atividades_notdone")
@@ -596,6 +778,294 @@ def toquio_td_bucket_inserir_mapeamento_bairro():
         idCidade_q=idCidade_q,
         nomeCidade_q=nome_cidade_q,
         chave_q=chave_like_q
+    )
+
+# =============================
+# OFS - Activities Errors
+# =============================
+
+@app.route("/ofs/activities-errors", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors():
+    today = datetime.now().strftime("%Y-%m-%d")
+    date_from = (request.args.get("dateFrom") or today).strip()
+    date_to = (request.args.get("dateTo") or today).strip()
+    resources = (request.args.get("resources") or "02").strip()
+
+    per_page = 50
+    page = request.args.get("page", default=1, type=int)
+    offset = (page - 1) * per_page
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT COUNT(*) AS total
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+    """, (date_from, date_to))
+    total = (cur.fetchone() or {}).get("total", 0)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    cur.execute("""
+    SELECT
+        activity_id AS activityId,
+        `date` AS date,
+        city,
+        activity_type AS activityType,
+        appt_number AS apptNumber,
+        status,
+        xa_sap_crt AS XA_SAP_CRT,
+        xa_sap_crt_ldg AS XA_SAP_CRT_LDG,
+        xa_res_api_ng_response AS XA_RES_API_NG_RESPONSE,
+        CASE
+            -- SAP/NG: SAP=1 e NG vem com CDATA em pelo menos 1 campo
+            WHEN COALESCE(TRIM(xa_sap_crt), '') = '1'
+            AND (
+                    TRIM(COALESCE(xa_res_api_ng_response, '')) LIKE '<![CDATA[%'
+                OR TRIM(COALESCE(xa_api_ng_dispatch, ''))     LIKE '<![CDATA[%'
+            )
+                THEN 'Erro SAP/NG'
+
+            -- SAP: SAP=1 e NÃO tem CDATA nas props NG
+            WHEN COALESCE(TRIM(xa_sap_crt), '') = '1'
+                THEN 'Erro SAP'
+
+            -- NG: SAP vazio e NG vem com CDATA
+            WHEN COALESCE(TRIM(xa_sap_crt), '') <> '1'
+            AND (
+                    TRIM(COALESCE(xa_res_api_ng_response, '')) LIKE '<![CDATA[%'
+                OR TRIM(COALESCE(xa_api_ng_dispatch, ''))     LIKE '<![CDATA[%'
+            )
+                THEN 'Erro NG'
+
+            ELSE '-'
+            END AS erro_tipo,
+        last_seen_at
+    FROM ofs_activities_errors
+    WHERE `date` BETWEEN %s AND %s
+    ORDER BY `date` DESC, last_seen_at DESC
+    LIMIT %s OFFSET %s
+""", (date_from, date_to, per_page, offset))
+
+    items = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "ofs_activities_errors/ofs_activities_errors.html",
+        items=items,
+        total=total,
+        page=page,
+        total_pages=total_pages,
+        date_from=date_from,
+        date_to=date_to,
+        resources=resources
+    )
+
+
+# -----------------------------
+# IMPORT (start/status/cancel)
+# -----------------------------
+@app.route("/ofs/activities-errors/importar/start", methods=["POST"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors_importar_start():
+    today = datetime.now().strftime("%Y-%m-%d")
+    date_from = (request.form.get("dateFrom") or today).strip()
+    date_to = (request.form.get("dateTo") or today).strip()
+    resources = (request.form.get("resources") or "02").strip()
+
+    try:
+        _validate_max_range_7_days(date_from, date_to)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    actor = current_actor()
+    username = actor.get("username")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO ofs_import_jobs (module, status, progress, message, created_by)
+        VALUES ('ofs.activities_errors', 'running', 0, 'Iniciando...', %s)
+    """, (username,))
+    job_id = cur.lastrowid
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    t = threading.Thread(
+        target=_run_import_job,
+        args=(job_id, date_from, date_to, resources, username),
+        daemon=True
+    )
+    t.start()
+
+    return jsonify({"ok": True, "jobId": job_id}), 200
+
+
+@app.route("/ofs/activities-errors/importar/status/<int:job_id>", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors_importar_status(job_id):
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+    cur.execute("""
+        SELECT id, status, progress, message, created_at, updated_at
+        FROM ofs_import_jobs
+        WHERE id=%s AND module='ofs.activities_errors'
+        LIMIT 1
+    """, (job_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row:
+        return jsonify({"ok": False, "error": "Job não encontrado"}), 404
+
+    return jsonify({"ok": True, "job": row}), 200
+
+
+@app.route("/ofs/activities-errors/importar/cancel/<int:job_id>", methods=["POST"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors_importar_cancel(job_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE ofs_import_jobs
+        SET cancel_requested=1, message='Cancelamento solicitado...'
+        WHERE id=%s AND module='ofs.activities_errors' AND status='running'
+    """, (job_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"ok": True}), 200
+
+
+# -----------------------------
+# DETALHE (modal)
+# -----------------------------
+@app.route("/ofs/activities-errors/<activity_id>", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors_get(activity_id):
+    activity_id = str(activity_id or "").strip()
+    if not activity_id:
+        return jsonify({"ok": False, "error": "activityId inválido"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT
+            activity_id AS activityId,
+            xa_api_ng_dispatch AS XA_API_NG_DISPATCH,
+            xa_res_api_ng_response AS XA_RES_API_NG_RESPONSE,
+            xa_sap_crt_ldg AS XA_SAP_CRT_LDG,
+            xa_sap_crt AS XA_SAP_CRT
+        FROM ofs_activities_errors
+        WHERE activity_id = %s
+        LIMIT 1
+    """, (activity_id,))
+
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row:
+        return jsonify({"ok": False, "error": "Não encontrado"}), 404
+
+    return jsonify({"ok": True, "item": row}), 200
+
+
+@app.route("/ofs/activities-errors/dashboard", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors_dashboard():
+    today = datetime.now().strftime("%Y-%m-%d")
+    date_from = (request.args.get("dateFrom") or today).strip()
+    date_to = (request.args.get("dateTo") or today).strip()
+    resources = (request.args.get("resources") or "02").strip()
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    # KPI: total linhas no período
+    cur.execute("""
+        SELECT COUNT(*) AS total
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+    """, (date_from, date_to))
+    total = (cur.fetchone() or {}).get("total", 0)
+
+    # KPI: total com erro NG (dispatch OR response)
+    cur.execute("""
+        SELECT COUNT(*) AS total_ng
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+          AND (ng_dispatch_message IS NOT NULL OR ng_response_message IS NOT NULL)
+    """, (date_from, date_to))
+    total_ng = (cur.fetchone() or {}).get("total_ng", 0)
+
+    # Top mensagens (considerando dispatch e response juntos)
+    cur.execute("""
+        SELECT msg, COUNT(*) AS qtd
+        FROM (
+            SELECT ng_dispatch_message AS msg
+            FROM ofs_activities_errors
+            WHERE `date` BETWEEN %s AND %s AND ng_dispatch_message IS NOT NULL
+            UNION ALL
+            SELECT ng_response_message AS msg
+            FROM ofs_activities_errors
+            WHERE `date` BETWEEN %s AND %s AND ng_response_message IS NOT NULL
+        ) x
+        GROUP BY msg
+        ORDER BY qtd DESC
+        LIMIT 15
+    """, (date_from, date_to, date_from, date_to))
+    top_messages = cur.fetchall()
+
+    # Erros por dia
+    cur.execute("""
+        SELECT `date`, COUNT(*) AS qtd
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+          AND (ng_dispatch_message IS NOT NULL OR ng_response_message IS NOT NULL)
+        GROUP BY `date`
+        ORDER BY `date` DESC
+        LIMIT 31
+    """, (date_from, date_to))
+    by_day = cur.fetchall()
+
+    # Erros por activityType
+    cur.execute("""
+        SELECT COALESCE(activity_type,'-') AS activityType, COUNT(*) AS qtd
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+          AND (ng_dispatch_message IS NOT NULL OR ng_response_message IS NOT NULL)
+        GROUP BY COALESCE(activity_type,'-')
+        ORDER BY qtd DESC
+        LIMIT 20
+    """, (date_from, date_to))
+    by_type = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "ofs_activities_errors/ofs_activities_errors_dashboard.html",
+        total=total,
+        total_ng=total_ng,
+        top_messages=top_messages,
+        by_day=by_day,
+        by_type=by_type,
+        date_from=date_from,
+        date_to=date_to,
+        resources=resources
     )
 # =====
 # Login
