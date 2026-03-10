@@ -1301,6 +1301,9 @@ def ofs_activities_errors_export_xlsx():
             row.get("status"),
             row.get("ng_dispatch_message"),
             row.get("ng_response_message"),
+            row.get("sap_error_raw_extracted"),
+            row.get("sap_response_message"),
+            row.get("sap_error_category"),
             row.get("xa_sap_crt_ldg"),
             row.get("date"),
         ])
