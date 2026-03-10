@@ -1,3 +1,5 @@
+import traceback
+
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session, jsonify, send_file
 import requests
 from datetime import datetime, timedelta
@@ -511,10 +513,11 @@ def _run_import_job(job_id: int, date_from: str, date_to: str, resources: str, a
         )
 
     except Exception as e:
+        print(traceback.format_exc(), flush=True)
         _job_update(
             job_id,
             status="error",
-            message=f"Erro: {str(e)[:240]}",
+            message=f"{type(e).__name__}: {str(e)[:220]}",
             progress=0
         )
 
