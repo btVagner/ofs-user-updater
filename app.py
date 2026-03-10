@@ -1375,7 +1375,7 @@ def ofs_activities_errors_dashboard_data():
         WHERE `date` BETWEEN %s AND %s
           AND (ng_dispatch_message IS NOT NULL OR ng_response_message IS NOT NULL)
         GROUP BY `date`
-        ORDER BY `date` DESC
+        ORDER BY `date` ASC
         LIMIT 31
     """, (date_from, date_to))
     by_day = cur.fetchall()
