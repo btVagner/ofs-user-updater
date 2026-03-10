@@ -216,7 +216,15 @@
                 }
 
                 if (job.status === "canceled") {
-                    setStatusUI(renderJob(job, loadNextRun()));
+                    stopPolling();
+                    clearActiveJobId();
+                    setRunningUI(false);
+
+                    const newNext = Date.now() + TWO_HOURS_MS;
+                    saveNextRun(newNext);
+
+                    setStatusUI(renderJob(job, newNext));
+                    startCountdown();
                     return;
                 }
 
@@ -356,18 +364,24 @@
 
             try {
                 setStatusUI(`
-          <div class="job-card running">
-            <div class="job-line"><b>Solicitando cancelamento...</b></div>
-          </div>
-        `);
+                <div class="job-card running">
+                    <div class="job-line"><b>Solicitando cancelamento...</b></div>
+                </div>
+            `);
+
                 await cancelJob(jobId);
+
+                const nextRun = Date.now() + TWO_HOURS_MS;
+                saveNextRun(nextRun);
+                startCountdown();
+
             } catch (e) {
                 setStatusUI(`
-          <div class="job-card error">
-            <div class="job-line"><b>Falha ao cancelar</b></div>
-            <div class="job-msg">${String(e.message || e)}</div>
-          </div>
-        `);
+                <div class="job-card error">
+                    <div class="job-line"><b>Falha ao cancelar</b></div>
+                    <div class="job-msg">${String(e.message || e)}</div>
+                </div>
+            `);
             }
         });
     }
@@ -437,9 +451,17 @@
             document.getElementById("ngResponse").value =
                 data.item.XA_RES_API_NG_RESPONSE || "";
 
+            document.getElementById("sapResponseMessage").value =
+                data.item.sapResponseMessage || "";
+
+            document.getElementById("sapErrorCategory").value =
+                data.item.sapErrorCategory || "";
+
+            document.getElementById("sapErrorRawExtracted").value =
+                data.item.sapErrorRawExtracted || "";
+
             document.getElementById("sapLdg").value =
                 data.item.XA_SAP_CRT_LDG || "";
-
             openDetailModal();
 
         } catch (e) {

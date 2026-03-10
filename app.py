@@ -3,6 +3,7 @@ import requests
 from datetime import datetime, timedelta
 import csv
 from dotenv import load_dotenv
+import xlsxwriter
 from database.connection import get_connection
 import bcrypt
 import os
@@ -285,70 +286,42 @@ def _job_update(job_id: int, **fields):
     conn.commit()
     cur.close(); conn.close()
 
+def _iter_days(date_from: str, date_to: str):
+    start = datetime.strptime(date_from, "%Y-%m-%d").date()
+    end = datetime.strptime(date_to, "%Y-%m-%d").date()
+
+    current = start
+    while current <= end:
+        yield current.strftime("%Y-%m-%d")
+        current += timedelta(days=1)
+
 def _run_import_job(job_id: int, date_from: str, date_to: str, resources: str, actor_username: str):
     try:
         client = OFSClient()
 
         fields = [
-            "activityId","city","activityType","apptNumber","date","status",
-            "XA_RES_API_NG_RESPONSE","XA_API_NG_DISPATCH","XA_SAP_CRT_LDG","XA_SAP_CRT"
+            "activityId", "city", "activityType", "apptNumber", "date", "status",
+            "XA_RES_API_NG_RESPONSE", "XA_API_NG_DISPATCH", "XA_SAP_CRT_LDG", "XA_SAP_CRT"
         ]
 
-        base_params = {
-            "dateFrom": date_from,
-            "dateTo": date_to,
-            "resources": resources,
-            "q": "status == 'notdone' OR status == 'completed'",
-            "fields": ",".join(fields),
-            "limit": 2000,
-            "offset": 0,
-        }
+        days = list(_iter_days(date_from, date_to))
+        total_days = len(days)
 
-        items = []
-        has_more = True
-        page = 0
-        max_pages = 30
+        total_inserted = 0
+        total_updated = 0
+        total_api_items = 0
 
-        _job_update(job_id, message="Buscando dados na API...", progress=5)
-
-        while has_more and page < max_pages:
-            if _job_should_cancel(job_id):
-                _job_update(job_id, status="canceled", message="Operação cancelada pelo usuário.", progress=0)
-                return
-
-            qs = urlencode(base_params, safe="=,'")
-            url = f"{client.base_url}/activities/?{qs}"
-            data = client.authenticated_get(url)
-
-            batch = data.get("items") or []
-            items.extend(batch)
-
-            has_more = bool(data.get("hasMore"))
-            if has_more:
-                base_params["offset"] = len(items)
-            page += 1
-
-            # progresso “aproximado”
-            _job_update(job_id, progress=min(70, 5 + page * 10), message=f"API: página {page} / {max_pages}")
-
-        if _job_should_cancel(job_id):
-            _job_update(job_id, status="canceled", message="Operação cancelada pelo usuário.", progress=0)
-            return
-
-        _job_update(job_id, message=f"Gravando no banco ({len(items)} itens)...", progress=80)
-
-        conn = get_connection()
-        cur = conn.cursor()
-
-        inserted = 0
-        updated = 0
+        _job_update(job_id, message="Iniciando importação...", progress=1)
 
         sql = """
             INSERT INTO ofs_activities_errors
-            (activity_id, `date`, city, activity_type, appt_number, status,
-            xa_res_api_ng_response, xa_api_ng_dispatch, xa_sap_crt_ldg, xa_sap_crt,
-            ng_dispatch_message, ng_response_message)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (
+                activity_id, `date`, city, activity_type, appt_number, status,
+                xa_res_api_ng_response, xa_api_ng_dispatch, xa_sap_crt_ldg, xa_sap_crt,
+                sap_error_raw_extracted, ng_dispatch_message, ng_response_message,
+                sap_response_message, sap_error_category, last_seen_at
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
             ON DUPLICATE KEY UPDATE
                 `date`=VALUES(`date`),
                 city=VALUES(city),
@@ -359,57 +332,191 @@ def _run_import_job(job_id: int, date_from: str, date_to: str, resources: str, a
                 xa_api_ng_dispatch=VALUES(xa_api_ng_dispatch),
                 xa_sap_crt_ldg=VALUES(xa_sap_crt_ldg),
                 xa_sap_crt=VALUES(xa_sap_crt),
+                sap_error_raw_extracted=VALUES(sap_error_raw_extracted),
                 ng_dispatch_message=VALUES(ng_dispatch_message),
                 ng_response_message=VALUES(ng_response_message),
+                sap_response_message=VALUES(sap_response_message),
+                sap_error_category=VALUES(sap_error_category),
                 last_seen_at=NOW()
         """
-
-        for idx, a in enumerate(items, start=1):
+        for day_index, day in enumerate(days, start=1):
             if _job_should_cancel(job_id):
-                _job_update(job_id, status="canceled", message="Operação cancelada pelo usuário.", progress=0)
-                cur.close(); conn.close()
+                _job_update(
+                    job_id,
+                    status="canceled",
+                    message="Operação cancelada pelo usuário.",
+                    progress=0
+                )
                 return
 
-            activity_id = str(a.get("activityId") or "").strip()
-            if not activity_id:
-                continue
-            ng_dispatch_raw = a.get("XA_API_NG_DISPATCH")
-            ng_response_raw = a.get("XA_RES_API_NG_RESPONSE")
+            items = []
+            has_more = True
+            page = 0
+            max_pages = 30
+            offset = 0
 
-            ng_dispatch_msg = _extract_message(ng_dispatch_raw)
-            ng_response_msg = _extract_message(ng_response_raw)
-            cur.execute(sql, (
-                activity_id,
-                str(a.get("date") or "") or None,
-                str(a.get("city") or "") or None,
-                str(a.get("activityType") or "") or None,
-                str(a.get("apptNumber") or "") or None,
-                str(a.get("status") or "") or None,
-                ng_response_raw,
-                ng_dispatch_raw,
-                a.get("XA_SAP_CRT_LDG"),
-                str(a.get("XA_SAP_CRT") or "") or None,
-                ng_dispatch_msg,
-                ng_response_msg,
-            ))
+            while has_more and page < max_pages:
+                if _job_should_cancel(job_id):
+                    _job_update(
+                        job_id,
+                        status="canceled",
+                        message="Operação cancelada pelo usuário.",
+                        progress=0
+                    )
+                    return
 
-            if cur.rowcount == 1:
-                inserted += 1
-            elif cur.rowcount == 2:
-                updated += 1
+                base_params = {
+                    "dateFrom": day,
+                    "dateTo": day,
+                    "resources": resources,
+                    "q": "status == 'notdone' OR status == 'completed'",
+                    "fields": ",".join(fields),
+                    "limit": 2000,
+                    "offset": offset,
+                }
 
-            if idx % 250 == 0:
-                pct = 80 + int((idx / max(1, len(items))) * 15)
-                _job_update(job_id, progress=min(95, pct), message=f"Gravando... {idx}/{len(items)}")
+                qs = urlencode(base_params, safe="=,'")
+                url = f"{client.base_url}/activities/?{qs}"
+                data = client.authenticated_get(url)
 
-        conn.commit()
-        cur.close(); conn.close()
+                batch = data.get("items") or []
+                items.extend(batch)
 
-        _job_update(job_id, status="done", progress=100,
-                    message=f"Concluído. Novos: {inserted} | Atualizados: {updated} | Total API: {len(items)}")
+                has_more = bool(data.get("hasMore"))
+                offset = len(items)
+                page += 1
+
+                pct_base = int(((day_index - 1) / max(1, total_days)) * 80)
+                pct_page = int((page / max(1, max_pages)) * (80 / max(1, total_days)))
+                progress = min(75, pct_base + pct_page + 5)
+
+                _job_update(
+                    job_id,
+                    progress=progress,
+                    message=f"API: dia {day} | página {page}/{max_pages}"
+                )
+
+            total_api_items += len(items)
+
+            if _job_should_cancel(job_id):
+                _job_update(
+                    job_id,
+                    status="canceled",
+                    message="Operação cancelada pelo usuário.",
+                    progress=0
+                )
+                return
+
+            _job_update(
+                job_id,
+                message=f"Gravando dia {day} no banco ({len(items)} itens)...",
+                progress=min(85, 5 + int((day_index / max(1, total_days)) * 80))
+            )
+
+            conn = get_connection()
+            cur = conn.cursor()
+
+            try:
+                # limpa SOMENTE o dia que está sendo reprocessado
+                cur.execute("""
+                    DELETE FROM ofs_activities_errors
+                    WHERE `date` = %s
+                """, (day,))
+
+                inserted_day = 0
+                updated_day = 0
+
+                for idx, a in enumerate(items, start=1):
+                    if _job_should_cancel(job_id):
+                        conn.rollback()
+                        cur.close()
+                        conn.close()
+
+                        _job_update(
+                            job_id,
+                            status="canceled",
+                            message="Operação cancelada pelo usuário.",
+                            progress=0
+                        )
+                        return
+
+                    activity_id = str(a.get("activityId") or "").strip()
+                    if not activity_id:
+                        continue
+
+                    ng_dispatch_raw = a.get("XA_API_NG_DISPATCH")
+                    ng_response_raw = a.get("XA_RES_API_NG_RESPONSE")
+
+                    ng_dispatch_msg = _extract_message(ng_dispatch_raw)
+                    ng_response_msg = _extract_message(ng_response_raw)
+                    sap_raw = a.get("XA_SAP_CRT_LDG")
+                    xa_sap_crt = str(a.get("XA_SAP_CRT") or "").strip() or None
+
+                    sap_info = parse_sap_error(
+                        raw_value=sap_raw,
+                        xa_sap_crt=xa_sap_crt
+                    )
+                    cur.execute(sql, (
+                        activity_id,
+                        str(a.get("date") or "") or None,
+                        str(a.get("city") or "") or None,
+                        str(a.get("activityType") or "") or None,
+                        str(a.get("apptNumber") or "") or None,
+                        str(a.get("status") or "") or None,
+                        ng_response_raw,
+                        ng_dispatch_raw,
+                        sap_raw,
+                        xa_sap_crt,
+                        sap_info["sap_error_raw_extracted"],
+                        ng_dispatch_msg,
+                        ng_response_msg,
+                        sap_info["sap_response_message"],
+                        sap_info["sap_error_category"],
+                    ))
+
+                    if cur.rowcount == 1:
+                        inserted_day += 1
+                    elif cur.rowcount == 2:
+                        updated_day += 1
+
+                    if idx % 250 == 0:
+                        progress = 85 + int((day_index / max(1, total_days)) * 10)
+                        _job_update(
+                            job_id,
+                            progress=min(95, progress),
+                            message=f"Gravando dia {day}... {idx}/{len(items)}"
+                        )
+
+                conn.commit()
+
+                total_inserted += inserted_day
+                total_updated += updated_day
+
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                cur.close()
+                conn.close()
+
+        _job_update(
+            job_id,
+            status="done",
+            progress=100,
+            message=(
+                f"Concluído. Novos: {total_inserted} | "
+                f"Atualizados: {total_updated} | "
+                f"Total API: {total_api_items}"
+            )
+        )
 
     except Exception as e:
-        _job_update(job_id, status="error", message=f"Erro: {str(e)[:240]}", progress=0)
+        _job_update(
+            job_id,
+            status="error",
+            message=f"Erro: {str(e)[:240]}",
+            progress=0
+        )
 
 _MSG_RE = re.compile(r'"message"\s*:\s*"([^"]+)"')
 
@@ -429,7 +536,333 @@ def _extract_message(val):
     msg = (m.group(1) or "").strip()
     return msg or None
 
+_SAP_HTTP_SUFFIX_RE = re.compile(
+    r'\.The 500 Internal Server Error.*$',
+    re.IGNORECASE | re.DOTALL
+)
+
+_SAP_CDATA_START_RE = re.compile(r'^\s*<!\[CDATA\[',
+    re.IGNORECASE)
+_SAP_CDATA_END_RE = re.compile(r'\]\]>\s*$',
+    re.IGNORECASE)
+
+
+def _normalize_space(value):
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _strip_sap_wrapper(value):
+    """
+    Remove CDATA e o sufixo padrão de HTTP 500 do texto bruto do SAP.
+    """
+    if value is None:
+        return None
+
+    s = str(value).strip()
+    if not s:
+        return None
+
+    s = _SAP_CDATA_START_RE.sub("", s)
+    s = _SAP_CDATA_END_RE.sub("", s)
+    s = _SAP_HTTP_SUFFIX_RE.sub("", s)
+    s = s.strip()
+
+    return s or None
+
+
+def _extract_first_json_object(text):
+    """
+    Extrai o primeiro JSON {...} válido do texto.
+    Não depende do conteúdo terminar exatamente no JSON.
+    """
+    if not text:
+        return None
+
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escape = False
+
+    for i in range(start, len(text)):
+        ch = text[i]
+
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                candidate = text[start:i + 1]
+                try:
+                    return json.loads(candidate)
+                except Exception:
+                    return None
+
     return None
+
+
+def _try_parse_json_string(value):
+    """
+    Tenta parsear string JSON pura.
+    """
+    if value is None:
+        return None
+
+    s = str(value).strip()
+    if not s:
+        return None
+
+    try:
+        return json.loads(s)
+    except Exception:
+        return None
+
+
+def _extract_best_text_from_obj(obj):
+    """
+    Prioriza os campos mais úteis para causa raiz.
+    """
+    if not isinstance(obj, dict):
+        return None
+
+    for key in ("data", "Documento", "Resposta", "message"):
+        raw = obj.get(key)
+        if raw is None:
+            continue
+
+        raw_str = str(raw).strip()
+        if not raw_str:
+            continue
+
+        nested_obj = _try_parse_json_string(raw_str)
+        if isinstance(nested_obj, dict):
+            nested_best = _extract_best_text_from_obj(nested_obj)
+            if nested_best:
+                return nested_best
+
+        return raw_str
+
+    return None
+SAP_ERROR_RULES = [
+    {
+        "category": "mac_duplicado",
+        "patterns": [
+            r"não é possivel inserir mac duplicado",
+            r"nao e possivel inserir mac duplicado",
+            r"mac duplicado",
+        ],
+        "message": "MAC duplicado"
+    },
+    {
+        "category": "tecnico_filial_inexistente",
+        "patterns": [
+            r"o tecnico \d+ nao existe na filial \d+",
+        ],
+        "message": "Técnico não existe na filial"
+    },
+    {
+        "category": "localizacao_tecnico_inexistente",
+        "patterns": [
+            r"localizacao do tecnico \d+ nao existe no deposito",
+            r"localizacao \d+ no deposito .* nao existe",
+        ],
+        "message": "Localização do técnico não existe no depósito"
+    },
+    {
+        "category": "warehouse_filial_invalida",
+        "patterns": [
+            r"warehouse is not assigned to the same branch as the document",
+        ],
+        "message": "Warehouse não pertence à mesma filial do documento"
+    },
+    {
+        "category": "item_nao_encontrado_warehouse",
+        "patterns": [
+            r"item .* not found in warehouse",
+        ],
+        "message": "Item não encontrado no warehouse"
+    },
+    {
+        "category": "bin_sem_saldo",
+        "patterns": [
+            r"allocated quantity exceeds available quantity",
+        ],
+        "message": "Quantidade alocada excede o saldo disponível"
+    },
+    {
+        "category": "bin_inativo",
+        "patterns": [
+            r"inactive bin location",
+        ],
+        "message": "Bin location inativo"
+    },
+    {
+        "category": "row_without_tax",
+        "patterns": [
+            r"row without tax was found",
+        ],
+        "message": "Linha sem imposto"
+    },
+    {
+        "category": "protocolo_duplicado",
+        "patterns": [
+            r"protocolo adapter já existe no documento",
+            r"protocolo já existe no documento",
+            r"protocolo .* ja existe no documento",
+        ],
+        "message": "Protocolo já existe no documento"
+    },
+    {
+        "category": "timeout_integracao",
+        "patterns": [
+            r"timeoutexception",
+            r"read timeout",
+            r"stream closed: read timeout",
+        ],
+        "message": "Timeout na integração SAP"
+    },
+    {
+        "category": "connection_reset",
+        "patterns": [
+            r"connection reset",
+            r"socketexception",
+        ],
+        "message": "Falha de conexão com o SAP"
+    },
+    {
+        "category": "erro_interno_index_out_of_bounds",
+        "patterns": [
+            r"index was outside the bounds of the array",
+        ],
+        "message": "Erro interno SAP - índice fora do limite"
+    },
+    {
+        "category": "erro_parse_json",
+        "patterns": [
+            r"after parsing a value an unexpected character was encountered",
+        ],
+        "message": "Erro ao interpretar retorno do SAP"
+    },
+    {
+        "category": "string_too_long",
+        "patterns": [
+            r"string is too long",
+            r"input string is longer than the maximum length",
+        ],
+        "message": "Valor maior que o tamanho permitido no SAP"
+    },
+    {
+        "category": "serie_sem_custodia",
+        "patterns": [
+            r"numero de serie .* nao existe na custodia",
+        ],
+        "message": "Número de série não está na custódia do técnico"
+    },
+    {
+        "category": "quantidade_maior_documento_base",
+        "patterns": [
+            r"quantity cannot exceed the quantity in the base document",
+        ],
+        "message": "Quantidade maior que a permitida no documento base"
+    },
+    {
+        "category": "sequencia_nf_nao_definida",
+        "patterns": [
+            r"default sequence not defined or locked",
+        ],
+        "message": "Sequência padrão de nota fiscal não definida ou bloqueada"
+    },
+    {
+        "category": "erro_localizacao_cliente",
+        "patterns": [
+            r"erro ao criar localizacao do cliente",
+            r"g2_get_whs_id",
+            r"no data found",
+        ],
+        "message": "Erro ao criar localização do cliente"
+    },
+    {
+        "category": "erro_geral_hana",
+        "patterns": [
+            r"hdbodbc",
+            r"transaction rolled back by an internal error",
+            r"trexcolumnupdate failed",
+        ],
+        "message": "Erro interno de banco no SAP"
+    },
+    {
+        "category": "erro_generico_sap",
+        "patterns": [],
+        "message": "Erro genérico no SAP"
+    },
+]
+def parse_sap_error(raw_value, xa_sap_crt):
+    """
+    Retorna:
+        {
+            "sap_response_message": ...,
+            "sap_error_category": ...,
+            "sap_error_raw_extracted": ...
+        }
+    """
+    if str(xa_sap_crt or "").strip() != "1":
+        return {
+            "sap_response_message": None,
+            "sap_error_category": None,
+            "sap_error_raw_extracted": None,
+        }
+
+    cleaned = _strip_sap_wrapper(raw_value)
+    if not cleaned:
+        return {
+            "sap_response_message": "Erro SAP sem detalhe",
+            "sap_error_category": "erro_sem_detalhe",
+            "sap_error_raw_extracted": None,
+        }
+
+    obj = _extract_first_json_object(cleaned)
+
+    if isinstance(obj, dict):
+        best_text = _extract_best_text_from_obj(obj) or cleaned
+    else:
+        best_text = cleaned
+
+    best_text = _normalize_space(best_text)
+    for rule in SAP_ERROR_RULES:
+        for pattern in rule["patterns"]:
+            if re.search(pattern, best_text, re.IGNORECASE):
+                return {
+                    "sap_response_message": rule["message"],
+                    "sap_error_category": rule["category"],
+                    "sap_error_raw_extracted": best_text,
+                }
+
+    if best_text == '"null"' or best_text.lower() == "null":
+        return {
+            "sap_response_message": "Erro SAP sem detalhe",
+            "sap_error_category": "erro_sem_detalhe",
+            "sap_error_raw_extracted": best_text,
+        }
+
+    return {
+        "sap_response_message": "Erro genérico no SAP",
+        "sap_error_category": "erro_generico_sap",
+        "sap_error_raw_extracted": best_text,
+    }
+
 @app.route("/atividades-notdone/exportar", methods=["POST"])
 @login_required
 @perm_required("ofs.atividades_notdone")
@@ -783,6 +1216,546 @@ def toquio_td_bucket_inserir_mapeamento_bairro():
 # =============================
 # OFS - Activities Errors
 # =============================
+@app.route("/ofs/activities-errors/export/xlsx", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors_export_xlsx():
+    today = datetime.now().strftime("%Y-%m-%d")
+    date_from = (request.args.get("dateFrom") or today).strip()
+    date_to = (request.args.get("dateTo") or today).strip()
+    resources = (request.args.get("resources") or "02").strip()
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT
+            activity_id,
+            city,
+            activity_type,
+            appt_number,
+            status,
+            ng_dispatch_message,
+            ng_response_message,
+            sap_error_raw_extracted,
+            sap_response_message,
+            sap_error_category,
+            xa_sap_crt_ldg,
+            `date`
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+        AND activity_type IN (
+                'INS',
+                'SUP_QUA',
+                'SUP_REP',
+                'SOL_SER',
+                'INS_DEV',
+                'SUP',
+                'MIG_PLA',
+                'QUA',
+                'MIG_TEC'
+        )
+        AND (
+                NULLIF(TRIM(ng_dispatch_message), '') IS NOT NULL
+                OR NULLIF(TRIM(ng_response_message), '') IS NOT NULL
+                OR NULLIF(TRIM(sap_response_message), '') IS NOT NULL
+                OR NULLIF(TRIM(xa_sap_crt_ldg), '') IS NOT NULL
+        )
+        ORDER BY `date` DESC, activity_type, city, appt_number
+    """, (date_from, date_to))
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Atividades com erro"
+
+    headers = [
+        "activity_id",
+        "city",
+        "activity_type",
+        "appt_number",
+        "status",
+        "ng_dispatch_message",
+        "ng_response_message",
+        "sap_error_raw_extracted",
+        "sap_response_message",
+        "sap_error_category",
+        "xa_sap_crt_ldg",
+        "date",
+    ]
+    ws.append(headers)
+
+    for row in rows:
+        ws.append([
+            row.get("activity_id"),
+            row.get("city"),
+            row.get("activity_type"),
+            row.get("appt_number"),
+            row.get("status"),
+            row.get("ng_dispatch_message"),
+            row.get("ng_response_message"),
+            row.get("xa_sap_crt_ldg"),
+            row.get("date"),
+        ])
+    # Ajuste simples de largura
+    for col_idx, col_name in enumerate(headers, start=1):
+        max_len = len(col_name)
+        for row_idx in range(2, ws.max_row + 1):
+            value = ws.cell(row=row_idx, column=col_idx).value
+            if value is not None:
+                max_len = max(max_len, len(str(value)))
+        ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 60)
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"ofs_activities_errors_{date_from}_a_{date_to}.xlsx"
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+@app.route("/ofs/activities-errors/dashboard/data", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors_dashboard_data():
+    today = datetime.now().strftime("%Y-%m-%d")
+    date_from = (request.args.get("dateFrom") or today).strip()
+    date_to = (request.args.get("dateTo") or today).strip()
+    resources = (request.args.get("resources") or "02").strip()
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT COUNT(*) AS total
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+    """, (date_from, date_to))
+    total = (cur.fetchone() or {}).get("total", 0)
+
+    cur.execute("""
+        SELECT COUNT(*) AS total_ng
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+          AND (ng_dispatch_message IS NOT NULL OR ng_response_message IS NOT NULL)
+    """, (date_from, date_to))
+    total_ng = (cur.fetchone() or {}).get("total_ng", 0)
+
+    cur.execute("""
+        SELECT msg, COUNT(*) AS qtd
+        FROM (
+            SELECT ng_dispatch_message AS msg
+            FROM ofs_activities_errors
+            WHERE `date` BETWEEN %s AND %s AND ng_dispatch_message IS NOT NULL
+            UNION ALL
+            SELECT ng_response_message AS msg
+            FROM ofs_activities_errors
+            WHERE `date` BETWEEN %s AND %s AND ng_response_message IS NOT NULL
+        ) x
+        GROUP BY msg
+        ORDER BY qtd DESC
+        LIMIT 15
+    """, (date_from, date_to, date_from, date_to))
+    top_messages = cur.fetchall()
+
+    cur.execute("""
+        SELECT `date`, COUNT(*) AS qtd
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+          AND (ng_dispatch_message IS NOT NULL OR ng_response_message IS NOT NULL)
+        GROUP BY `date`
+        ORDER BY `date` DESC
+        LIMIT 31
+    """, (date_from, date_to))
+    by_day = cur.fetchall()
+    cur.execute("""
+        SELECT
+            `date`,
+            COALESCE(e.activity_type, '-') AS activityType,
+            COALESCE(c.descricao, COALESCE(e.activity_type, '-')) AS activityTypeLabel,
+            COUNT(*) AS qtd
+        FROM ofs_activities_errors e
+        LEFT JOIN ofs_activity_type_config c
+            ON c.activity_type = e.activity_type
+           AND c.ativo = 1
+        WHERE e.`date` BETWEEN %s AND %s
+          AND (
+                e.ng_dispatch_message IS NOT NULL
+                OR e.ng_response_message IS NOT NULL
+              )
+          AND (
+                c.mostrar_dashboard = 1
+                OR c.id IS NULL
+              )
+        GROUP BY
+            `date`,
+            COALESCE(e.activity_type, '-'),
+            COALESCE(c.descricao, COALESCE(e.activity_type, '-'))
+        ORDER BY `date` ASC
+    """, (date_from, date_to))
+    by_day_type = cur.fetchall()
+    cur.execute("""
+        SELECT
+            COALESCE(e.activity_type, '-') AS activityType,
+            COALESCE(c.descricao, COALESCE(e.activity_type, '-')) AS activityTypeLabel,
+            COUNT(*) AS qtd
+        FROM ofs_activities_errors e
+        LEFT JOIN ofs_activity_type_config c
+            ON c.activity_type = e.activity_type
+        AND c.ativo = 1
+        WHERE e.`date` BETWEEN %s AND %s
+        AND (
+                e.ng_dispatch_message IS NOT NULL
+                OR e.ng_response_message IS NOT NULL
+            )
+        AND (
+                c.mostrar_dashboard = 1
+                OR c.id IS NULL
+            )
+        GROUP BY
+            COALESCE(e.activity_type, '-'),
+            COALESCE(c.descricao, COALESCE(e.activity_type, '-'))
+        ORDER BY qtd DESC
+        LIMIT 20
+    """, (date_from, date_to))
+    by_type = cur.fetchall()
+    cur.execute("""
+        SELECT
+            sap_response_message AS msg,
+            COUNT(*) AS qtd
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+          AND sap_response_message IS NOT NULL
+          AND NULLIF(TRIM(sap_response_message), '') IS NOT NULL
+        GROUP BY sap_response_message
+        ORDER BY qtd DESC
+        LIMIT 15
+    """, (date_from, date_to))
+    top_sap_messages = cur.fetchall()
+
+    cur.execute("""
+        SELECT
+            sap_error_category AS category,
+            COUNT(*) AS qtd
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+          AND sap_error_category IS NOT NULL
+          AND NULLIF(TRIM(sap_error_category), '') IS NOT NULL
+        GROUP BY sap_error_category
+        ORDER BY qtd DESC
+        LIMIT 15
+    """, (date_from, date_to))
+    sap_by_category = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        "ok": True,
+        "total": total,
+        "total_ng": total_ng,
+        "top_messages": top_messages,
+        "by_day": by_day,
+        "by_day_type": by_day_type,
+        "by_type": by_type,
+        "date_from": date_from,
+        "date_to": date_to,
+        "top_sap_messages": top_sap_messages,
+        "sap_by_category": sap_by_category,
+        "debug_marker": "ROTA_NOVA_SAP",
+        "resources": resources
+    }), 200
+
+@app.route("/ofs/config/error-owners", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_error_owners_config():
+    q = str(request.args.get("q") or "").strip()
+    status = str(request.args.get("status") or "all").strip().lower()
+    page = request.args.get("page", default=1, type=int)
+    per_page = 50
+    offset = (page - 1) * per_page
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    # Base sem filtro de status, usada para os cards de resumo
+    summary_where_filters = []
+    summary_params = []
+
+    if q:
+        like = f"%{q}%"
+        summary_where_filters.append("(base.error_message LIKE %s OR base.origem LIKE %s)")
+        summary_params.extend([like, like])
+
+    summary_where_sql = ""
+    if summary_where_filters:
+        summary_where_sql = "WHERE " + " AND ".join(summary_where_filters)
+
+    summary_base_sql = f"""
+        FROM (
+            SELECT
+                'NG_DISPATCH' AS origem,
+                TRIM(ng_dispatch_message) AS error_message,
+                COUNT(*) AS qtd
+            FROM ofs_activities_errors
+            WHERE ng_dispatch_message IS NOT NULL
+              AND NULLIF(TRIM(ng_dispatch_message), '') IS NOT NULL
+            GROUP BY TRIM(ng_dispatch_message)
+
+            UNION ALL
+
+            SELECT
+                'NG_RESPONSE' AS origem,
+                TRIM(ng_response_message) AS error_message,
+                COUNT(*) AS qtd
+            FROM ofs_activities_errors
+            WHERE ng_response_message IS NOT NULL
+              AND NULLIF(TRIM(ng_response_message), '') IS NOT NULL
+            GROUP BY TRIM(ng_response_message)
+        ) base
+        LEFT JOIN ofs_error_owner_config cfg
+            ON cfg.origem = base.origem
+           AND TRIM(cfg.error_message) = base.error_message
+           AND cfg.ativo = 1
+        {summary_where_sql}
+    """
+
+    cur.execute(f"""
+        SELECT COUNT(*) AS total
+        {summary_base_sql}
+    """, tuple(summary_params))
+    total = (cur.fetchone() or {}).get("total", 0)
+
+    cur.execute(f"""
+        SELECT COUNT(*) AS total_configured
+        {summary_base_sql}
+        {"AND" if summary_where_sql else "WHERE"} cfg.id IS NOT NULL
+    """, tuple(summary_params))
+    total_configured = (cur.fetchone() or {}).get("total_configured", 0)
+
+    cur.execute(f"""
+        SELECT COUNT(*) AS total_pending
+        {summary_base_sql}
+        {"AND" if summary_where_sql else "WHERE"} cfg.id IS NULL
+    """, tuple(summary_params))
+    total_pending = (cur.fetchone() or {}).get("total_pending", 0)
+
+    # Base paginada, com filtro de status
+    where_filters = []
+    params = []
+
+    if q:
+        like = f"%{q}%"
+        where_filters.append("(base.error_message LIKE %s OR base.origem LIKE %s)")
+        params.extend([like, like])
+
+    if status == "configured":
+        where_filters.append("cfg.id IS NOT NULL")
+    elif status == "pending":
+        where_filters.append("cfg.id IS NULL")
+
+    where_sql = ""
+    if where_filters:
+        where_sql = "WHERE " + " AND ".join(where_filters)
+
+    base_sql = f"""
+        FROM (
+            SELECT
+                'NG_DISPATCH' AS origem,
+                TRIM(ng_dispatch_message) AS error_message,
+                COUNT(*) AS qtd
+            FROM ofs_activities_errors
+            WHERE ng_dispatch_message IS NOT NULL
+              AND NULLIF(TRIM(ng_dispatch_message), '') IS NOT NULL
+            GROUP BY TRIM(ng_dispatch_message)
+
+            UNION ALL
+
+            SELECT
+                'NG_RESPONSE' AS origem,
+                TRIM(ng_response_message) AS error_message,
+                COUNT(*) AS qtd
+            FROM ofs_activities_errors
+            WHERE ng_response_message IS NOT NULL
+              AND NULLIF(TRIM(ng_response_message), '') IS NOT NULL
+            GROUP BY TRIM(ng_response_message)
+        ) base
+        LEFT JOIN ofs_error_owner_config cfg
+            ON cfg.origem = base.origem
+           AND TRIM(cfg.error_message) = base.error_message
+           AND cfg.ativo = 1
+        {where_sql}
+    """
+
+    cur.execute(f"""
+        SELECT COUNT(*) AS total_filtered
+        {base_sql}
+    """, tuple(params))
+    total_filtered = (cur.fetchone() or {}).get("total_filtered", 0)
+    total_pages = max(1, (total_filtered + per_page - 1) // per_page)
+
+    cur.execute(f"""
+        SELECT
+            base.origem,
+            base.error_message,
+            cfg.responsavel,
+            CASE
+                WHEN cfg.id IS NULL THEN 0
+                ELSE 1
+            END AS configurado,
+            base.qtd
+        {base_sql}
+        ORDER BY
+            base.qtd DESC,
+            base.origem ASC
+        LIMIT %s OFFSET %s
+    """, tuple(params + [per_page, offset]))
+
+    items = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "ofs_error_owner_config/ofs_error_owner_config.html",
+        items=items,
+        q=q,
+        status=status,
+        page=page,
+        total=total,
+        total_pages=total_pages,
+        total_configured=total_configured,
+        total_pending=total_pending,
+        total_filtered=total_filtered
+    )
+
+@app.route("/ofs/config/error-owners/save", methods=["POST"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_error_owners_config_save():
+    origem = str(request.form.get("origem") or "").strip()
+    error_message = request.form.get("error_message") or ""
+    responsavel = str(request.form.get("responsavel") or "").strip()
+
+    allowed = {"WFM", "NG", "Desconsiderar"}
+
+    if not origem:
+        flash("Origem obrigatória.", "error")
+        return redirect(url_for("ofs_error_owners_config"))
+
+    if not error_message:
+        flash("Mensagem obrigatória.", "error")
+        return redirect(url_for("ofs_error_owners_config"))
+
+    if responsavel not in allowed:
+        flash("Responsável inválido.", "error")
+        return redirect(url_for("ofs_error_owners_config"))
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO ofs_error_owner_config (origem, error_message, responsavel, ativo)
+        VALUES (%s, %s, %s, 1)
+        ON DUPLICATE KEY UPDATE
+            responsavel = VALUES(responsavel),
+            ativo = 1,
+            atualizado_em = CURRENT_TIMESTAMP
+    """, (origem, error_message, responsavel))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    flash("Responsável salvo com sucesso.", "success")
+    return redirect(url_for("ofs_error_owners_config"))
+
+@app.route("/ofs/config/activity-types", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activity_types_config():
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT
+            base.activity_type,
+            cfg.descricao,
+            CASE
+                WHEN cfg.id IS NULL THEN 0
+                ELSE 1
+            END AS configurado,
+            base.qtd
+        FROM (
+            SELECT
+                COALESCE(activity_type, '-') AS activity_type,
+                COUNT(*) AS qtd
+            FROM ofs_activities_errors
+            GROUP BY COALESCE(activity_type, '-')
+        ) base
+        LEFT JOIN ofs_activity_type_config cfg
+            ON cfg.activity_type = base.activity_type
+           AND cfg.ativo = 1
+        ORDER BY
+            configurado ASC,
+            base.qtd DESC,
+            base.activity_type ASC
+    """)
+    items = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "ofs_activity_type_config/ofs_activity_type_config.html",
+        items=items
+    )
+
+
+@app.route("/ofs/config/activity-types/save", methods=["POST"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activity_types_config_save():
+    activity_type = str(request.form.get("activity_type") or "").strip()
+    descricao = str(request.form.get("descricao") or "").strip()
+
+    if not activity_type:
+        flash("activity_type obrigatório.", "error")
+        return redirect(url_for("ofs_activity_types_config"))
+
+    if activity_type == "-":
+        flash("Não é permitido configurar o tipo '-'.", "error")
+        return redirect(url_for("ofs_activity_types_config"))
+
+    if not descricao:
+        flash("Descrição obrigatória.", "error")
+        return redirect(url_for("ofs_activity_types_config"))
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        INSERT INTO ofs_activity_type_config (activity_type, descricao, ativo)
+        VALUES (%s, %s, 1)
+        ON DUPLICATE KEY UPDATE
+            descricao = VALUES(descricao),
+            ativo = 1,
+            atualizado_em = CURRENT_TIMESTAMP
+    """, (activity_type, descricao))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    flash(f"Tipo '{activity_type}' salvo com sucesso.", "success")
+    return redirect(url_for("ofs_activity_types_config"))
 
 @app.route("/ofs/activities-errors", methods=["GET"])
 @login_required
@@ -819,8 +1792,12 @@ def ofs_activities_errors():
         xa_sap_crt AS XA_SAP_CRT,
         xa_sap_crt_ldg AS XA_SAP_CRT_LDG,
         xa_res_api_ng_response AS XA_RES_API_NG_RESPONSE,
+        ng_dispatch_message AS ngDispatchMessage,
+        ng_response_message AS ngResponseMessage,
+        sap_error_raw_extracted AS sapErrorRawExtracted,
+        sap_response_message AS sapResponseMessage,
+        sap_error_category AS sapErrorCategory,
         CASE
-            -- SAP/NG: SAP=1 e NG vem com CDATA em pelo menos 1 campo
             WHEN COALESCE(TRIM(xa_sap_crt), '') = '1'
             AND (
                     TRIM(COALESCE(xa_res_api_ng_response, '')) LIKE '<![CDATA[%'
@@ -828,11 +1805,9 @@ def ofs_activities_errors():
             )
                 THEN 'Erro SAP/NG'
 
-            -- SAP: SAP=1 e NÃO tem CDATA nas props NG
             WHEN COALESCE(TRIM(xa_sap_crt), '') = '1'
                 THEN 'Erro SAP'
 
-            -- NG: SAP vazio e NG vem com CDATA
             WHEN COALESCE(TRIM(xa_sap_crt), '') <> '1'
             AND (
                     TRIM(COALESCE(xa_res_api_ng_response, '')) LIKE '<![CDATA[%'
@@ -841,13 +1816,13 @@ def ofs_activities_errors():
                 THEN 'Erro NG'
 
             ELSE '-'
-            END AS erro_tipo,
+        END AS erro_tipo,
         last_seen_at
     FROM ofs_activities_errors
     WHERE `date` BETWEEN %s AND %s
     ORDER BY `date` DESC, last_seen_at DESC
     LIMIT %s OFFSET %s
-""", (date_from, date_to, per_page, offset))
+    """, (date_from, date_to, per_page, offset))
 
     items = cur.fetchall()
 
@@ -966,7 +1941,12 @@ def ofs_activities_errors_get(activity_id):
             xa_api_ng_dispatch AS XA_API_NG_DISPATCH,
             xa_res_api_ng_response AS XA_RES_API_NG_RESPONSE,
             xa_sap_crt_ldg AS XA_SAP_CRT_LDG,
-            xa_sap_crt AS XA_SAP_CRT
+            xa_sap_crt AS XA_SAP_CRT,
+            ng_dispatch_message AS ngDispatchMessage,
+            ng_response_message AS ngResponseMessage,
+            sap_error_raw_extracted AS sapErrorRawExtracted,
+            sap_response_message AS sapResponseMessage,
+            sap_error_category AS sapErrorCategory
         FROM ofs_activities_errors
         WHERE activity_id = %s
         LIMIT 1
@@ -981,7 +1961,78 @@ def ofs_activities_errors_get(activity_id):
 
     return jsonify({"ok": True, "item": row}), 200
 
+@app.route("/ofs/activities-errors/export/top-messages", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors_export_top_messages():
 
+    date_from = (request.args.get("dateFrom") or "").strip()
+    date_to = (request.args.get("dateTo") or "").strip()
+
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT
+            activity_id,
+            `date`,
+            city,
+            activity_type,
+            appt_number,
+            status,
+            ng_dispatch_message,
+            ng_response_message
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+          AND (
+                ng_dispatch_message IS NOT NULL
+                OR ng_response_message IS NOT NULL
+              )
+        ORDER BY `date` DESC
+    """, (date_from, date_to))
+
+    rows = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    output = BytesIO()
+
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet("erros_ng")
+
+    headers = [
+        "activity_id",
+        "date",
+        "city",
+        "activity_type",
+        "appt_number",
+        "status",
+        "ng_dispatch_message",
+        "ng_response_message"
+    ]
+
+    # escreve header
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header)
+
+    # escreve dados
+    for row_idx, row in enumerate(rows, start=1):
+        for col_idx, header in enumerate(headers):
+            worksheet.write(row_idx, col_idx, row.get(header))
+
+    workbook.close()
+
+    output.seek(0)
+
+    filename = f"ofs_erros_ng_{date_from}_a_{date_to}.xlsx"
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 @app.route("/ofs/activities-errors/dashboard", methods=["GET"])
 @login_required
 @perm_required("ofs.activities_errors")
@@ -1052,7 +2103,42 @@ def ofs_activities_errors_dashboard():
         LIMIT 20
     """, (date_from, date_to))
     by_type = cur.fetchall()
+    cur.execute("""
+    SELECT
+        COALESCE(cfg.responsavel, 'Não mapeado') AS responsavel,
+        COUNT(*) AS qtd
+    FROM (
 
+        SELECT
+            'NG_DISPATCH' AS origem,
+            TRIM(ng_dispatch_message) AS error_message
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+        AND ng_dispatch_message IS NOT NULL
+        AND NULLIF(TRIM(ng_dispatch_message),'') IS NOT NULL
+
+        UNION ALL
+
+        SELECT
+            'NG_RESPONSE' AS origem,
+            TRIM(ng_response_message) AS error_message
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+        AND ng_response_message IS NOT NULL
+        AND NULLIF(TRIM(ng_response_message),'') IS NOT NULL
+
+    ) base
+
+    LEFT JOIN ofs_error_owner_config cfg
+        ON cfg.origem = base.origem
+    AND TRIM(cfg.error_message) = base.error_message
+    AND cfg.ativo = 1
+
+    GROUP BY COALESCE(cfg.responsavel, 'Não mapeado')
+    ORDER BY qtd DESC
+    """, (date_from, date_to, date_from, date_to))
+
+    by_owner = cur.fetchall()
     cur.close()
     conn.close()
 
@@ -1065,6 +2151,7 @@ def ofs_activities_errors_dashboard():
         by_type=by_type,
         date_from=date_from,
         date_to=date_to,
+        by_owner=by_owner,
         resources=resources
     )
 # =====

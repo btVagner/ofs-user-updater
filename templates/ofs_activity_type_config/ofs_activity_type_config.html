@@ -1,0 +1,176 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ofs_config_shared.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ofs_error_owner_config/ofs_error_owner_config.css') }}">
+
+<body>
+  <div class="page-activity-types">
+
+    <div class="page-header">
+      <div>
+        <h2>Configurar tipos de atividade</h2>
+        <p class="page-subtitle">Defina o nome amigável exibido no dashboard e nos gráficos.</p>
+      </div>
+
+      <div class="page-actions">
+        <a class="btn-secondary" href="{{ url_for('ofs_activities_errors_dashboard') }}">
+          Voltar ao dashboard
+        </a>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-area">
+          {% for category, message in messages %}
+            <div class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="summary-grid">
+      <div class="summary-card">
+        <span class="summary-label">Total de tipos</span>
+        <strong class="summary-value">{{ items|length }}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Configurados</span>
+        <strong class="summary-value">
+          {{ items | selectattr('configurado') | list | length }}
+        </strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Não configurados</span>
+        <strong class="summary-value">
+          {{ items | rejectattr('configurado') | list | length }}
+        </strong>
+      </div>
+    </div>
+
+    <div class="filter-card">
+      <div class="filter-grid">
+        <div class="filter-field filter-field-grow">
+          <label for="searchType">Buscar</label>
+          <input
+            type="text"
+            id="searchType"
+            placeholder="Buscar por código ou descrição..."
+          >
+        </div>
+
+        <div class="filter-field">
+          <label for="statusFilter">Status</label>
+          <select id="statusFilter">
+            <option value="all">Todos</option>
+            <option value="configured">Configurados</option>
+            <option value="pending">Não configurados</option>
+          </select>
+        </div>
+
+        <div class="filter-field">
+          <label for="sortFilter">Ordenar por</label>
+          <select id="sortFilter">
+            <option value="volume_desc">Maior volume</option>
+            <option value="code_asc">Código A-Z</option>
+            <option value="status_first">Não configurados primeiro</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-toolbar">
+        <div class="table-title">Tipos encontrados no histórico</div>
+        <div class="table-counter" id="tableCounter">{{ items|length }} registros</div>
+      </div>
+
+      <div class="table-container">
+        <table class="activity-types-table">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Descrição atual</th>
+              <th>Status</th>
+              <th>Qtd histórico</th>
+              <th>Nova descrição</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+
+          <tbody id="activityTypesTableBody">
+            {% for i in items %}
+            <tr
+              class="table-row {{ 'row-pending' if not i.configurado else '' }}"
+              data-code="{{ i.activity_type }}"
+              data-description="{{ i.descricao or '' }}"
+              data-status="{{ 'configured' if i.configurado else 'pending' }}"
+              data-qtd="{{ i.qtd }}"
+            >
+              <td>
+                <div class="code-pill">{{ i.activity_type }}</div>
+              </td>
+
+              <td>
+                <div class="current-description">{{ i.descricao or '-' }}</div>
+              </td>
+
+              <td>
+                {% if i.configurado %}
+                  <span class="badge badge-ok">Configurado</span>
+                {% else %}
+                  <span class="badge badge-pending">Não configurado</span>
+                {% endif %}
+              </td>
+
+              <td>
+                <span class="history-count">{{ i.qtd }}</span>
+              </td>
+
+              <td>
+                {% if i.activity_type != '-' %}
+                <form method="POST"
+                      action="{{ url_for('ofs_activity_types_config_save') }}"
+                      class="inline-form">
+                  <input type="hidden" name="activity_type" value="{{ i.activity_type }}">
+                  <input
+                    type="text"
+                    name="descricao"
+                    value="{{ i.descricao or '' }}"
+                    placeholder="Ex.: Suporte Reparo"
+                    maxlength="150"
+                    required
+                  >
+              </td>
+
+              <td>
+                  <button type="submit" class="btn-primary">
+                    Salvar
+                  </button>
+                </form>
+                {% else %}
+                  <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+
+            <tr id="emptyStateRow" style="display:none;">
+              <td colspan="6" class="empty-row">Nenhum tipo encontrado com os filtros atuais.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="{{ url_for('static', filename='ofs_activity_type_config/ofs_activity_type_config.js') }}"></script>
+
+  {% include 'includes/footer.html' %}
+</body>

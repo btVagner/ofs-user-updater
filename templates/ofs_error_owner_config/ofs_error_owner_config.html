@@ -1,0 +1,155 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ofs_config_shared.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='ofs_error_owner_config/ofs_error_owner_config.css') }}">
+
+<body>
+    <div class="page-error-owners">
+
+        <div class="page-header">
+            <div>
+                <h2>Configurar responsáveis por erro</h2>
+                <p class="page-subtitle">
+                    Defina quem é o responsável por cada mensagem única de erro encontrada no histórico.
+                </p>
+            </div>
+
+            <div class="page-actions">
+                <a class="btn-secondary" href="{{ url_for('ofs_activities_errors_dashboard') }}">
+                    Voltar ao dashboard
+                </a>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-area">
+            {% for category, message in messages %}
+            <div class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="summary-grid">
+            <div class="summary-card">
+                <span class="summary-label">Total de mensagens únicas</span>
+                <strong class="summary-value">{{ total }}</strong>
+            </div>
+
+            <div class="summary-card">
+                <span class="summary-label">Configuradas</span>
+                <strong class="summary-value">{{ total_configured }}</strong>
+            </div>
+
+            <div class="summary-card">
+                <span class="summary-label">Não configuradas</span>
+                <strong class="summary-value">{{ total_pending }}</strong>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-toolbar">
+                <div class="table-title">Mensagens únicas encontradas no histórico</div>
+                <div class="table-counter">{{ items|length }} registros</div>
+            </div>
+
+            <div class="table-container">
+                <table class="error-owners-table">
+                    <thead>
+                        <tr>
+                            <th>Origem</th>
+                            <th>Mensagem</th>
+                            <th class="sortable" data-sort="status">Status</th>
+                            <th class="sortable" data-sort="qtd">Qtd histórico</th>
+                            <th>Responsável</th>
+                            <th>Ação</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for i in items %}
+                        <tr class="{{ 'row-pending' if not i.configurado else '' }}">
+
+                            <td>
+                                <span class="origin-badge">{{ i.origem }}</span>
+                            </td>
+
+                            <td>
+                                <div class="message-box" title="{{ i.error_message }}">
+                                    {{ i.error_message }}
+                                </div>
+                            </td>
+
+                            <td data-status="{{ 1 if i.configurado else 0 }}">
+                                {% if i.configurado %}
+                                <span class="badge badge-ok">Configurado</span>
+                                {% else %}
+                                <span class="badge badge-pending">Não configurado</span>
+                                {% endif %}
+                            </td>
+
+                            <td data-qtd="{{ i.qtd }}">
+                                <span class="history-count">{{ i.qtd }}</span>
+                            </td>
+
+                            <td>
+                                <form method="POST" action="{{ url_for('ofs_error_owners_config_save') }}" class="inline-form">
+                                    <input type="hidden" name="origem" value="{{ i.origem }}">
+                                    <input type="hidden" name="error_message" value="{{ i.error_message }}">
+
+                                    <select name="responsavel" required>
+                                        <option value="">Selecione</option>
+
+                                        <option value="WFM"
+                                            {{ 'selected' if i.responsavel == 'WFM' else '' }}>
+                                            WFM
+                                        </option>
+
+                                        <option value="NG"
+                                            {{ 'selected' if i.responsavel == 'NG' else '' }}>
+                                            NG
+                                        </option>
+
+                                        <option value="Desconsiderar"
+                                            {{ 'selected' if i.responsavel == 'Desconsiderar' else '' }}>
+                                            Desconsiderar
+                                        </option>
+
+                                    </select>
+                            </td>
+
+                            <td>
+                                <button type="submit" class="btn-primary">
+                                    Salvar
+                                </button>
+                                </form>
+                            </td>
+
+                        </tr>
+                        {% endfor %}
+
+                        {% if items|length == 0 %}
+                        <tr>
+                            <td colspan="6" class="empty-row">
+                                Nenhuma mensagem encontrada.
+                            </td>
+                        </tr>
+                        {% endif %}
+
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="{{ url_for('static', filename='ofs_error_owner_config/ofs_error_owner_config.js') }}"></script>
+
+    {% include 'includes/footer.html' %}
+</body>

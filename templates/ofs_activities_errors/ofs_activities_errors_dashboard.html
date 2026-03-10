@@ -6,20 +6,32 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors.css') }}">
 
 <body>
-  <div class="page-atividades">
+
+  <div class="page-atividades" id="dashboardPage" data-date-from="{{ date_from }}" data-date-to="{{ date_to }}"
+    data-resources="{{ resources }}" data-owner='{{ by_owner | tojson }}'>
 
     <div class="page-header">
       <h2>Dashboard - Erros NG</h2>
 
       <div class="kpis">
-        <a class="btn-secondary" href="{{ url_for('ofs_activities_errors', dateFrom=date_from, dateTo=date_to, resources=resources) }}">Voltar</a>
-        <div class="kpi">Total linhas: <b>{{ total }}</b></div>
-        <div class="kpi">Total com erro NG: <b>{{ total_ng }}</b></div>
+        <a class="btn-secondary"
+          href="{{ url_for('ofs_activities_errors', dateFrom=date_from, dateTo=date_to, resources=resources) }}">
+          Voltar
+        </a>
+
+        <div class="kpi">
+          Total linhas: <b id="kpiTotal">{{ total }}</b>
+        </div>
+
+        <div class="kpi">
+          Total com erro NG: <b id="kpiTotalNg">{{ total_ng }}</b>
+        </div>
       </div>
     </div>
 
     <div class="filtro-card">
       <form class="filtro-form" method="GET" action="{{ url_for('ofs_activities_errors_dashboard') }}">
+
         <div>
           <label>De</label>
           <input type="date" name="dateFrom" value="{{ date_from }}">
@@ -35,92 +47,250 @@
           <input type="text" name="resources" value="{{ resources }}">
         </div>
 
-        <button type="submit" class="btn-secondary">Atualizar</button>
+        <button type="submit" class="btn-secondary">
+          Atualizar
+        </button>
+
+        <button type="button" class="btn-secondary" id="btnOpenTypeFilter">
+          Filtrar tipos de atividade
+        </button>
+
+        <div class="dashboard-dropdown">
+          <button type="button" class="btn-secondary dashboard-dropdown-btn" id="btnConfigMenu">
+            Configurações
+          </button>
+
+          <div class="dashboard-dropdown-menu" id="configMenu">
+            <a href="{{ url_for('ofs_activity_types_config') }}">
+              Tipos de atividade
+            </a>
+            <a href="{{ url_for('ofs_error_owners_config') }}">
+              Responsáveis por erro
+            </a>
+          </div>
+        </div>
+
       </form>
-    </div>
 
-    <div class="tabela-card" style="margin-bottom:16px;">
-      <div class="tabela-container">
-        <table class="tabela-atividades">
-          <thead>
-            <tr>
-              <th colspan="2">Top mensagens (NG)</th>
-            </tr>
-            <tr>
-              <th>Mensagem</th>
-              <th>Qtd</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in top_messages %}
-            <tr>
-              <td class="cell-ellipsis" title="{{ r.msg }}">{{ r.msg }}</td>
-              <td><b>{{ r.qtd }}</b></td>
-            </tr>
-            {% endfor %}
-            {% if top_messages|length == 0 %}
-            <tr><td colspan="2" class="empty-row">Sem dados no período.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
+      <div class="dashboard-filter-help">
+        <span class="dashboard-filter-help-title">Como funciona o filtro de tipos:</span>
+        <span class="dashboard-filter-help-text">
+          o filtro de tipos de atividade afeta apenas os gráficos
+          <b>Erros por dia</b> e <b>Erros por tipo de atividade</b>.
+          Os cards de resumo e o gráfico <b>Top mensagens</b> continuam representando o período completo.
+        </span>
       </div>
     </div>
 
-    <div class="tabela-card" style="margin-bottom:16px;">
-      <div class="tabela-container">
-        <table class="tabela-atividades">
-          <thead>
-            <tr>
-              <th colspan="2">Erros por dia</th>
-            </tr>
-            <tr>
-              <th>Data</th>
-              <th>Qtd</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in by_day %}
-            <tr>
-              <td>{{ r.date }}</td>
-              <td><b>{{ r.qtd }}</b></td>
-            </tr>
-            {% endfor %}
-            {% if by_day|length == 0 %}
-            <tr><td colspan="2" class="empty-row">Sem dados no período.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <div class="dashboard-grid">
 
-    <div class="tabela-card">
-      <div class="tabela-container">
-        <table class="tabela-atividades">
-          <thead>
-            <tr>
-              <th colspan="2">Erros por tipo de atividade</th>
-            </tr>
-            <tr>
-              <th>activityType</th>
-              <th>Qtd</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in by_type %}
-            <tr>
-              <td class="cell-ellipsis" title="{{ r.activityType }}">{{ r.activityType }}</td>
-              <td><b>{{ r.qtd }}</b></td>
-            </tr>
-            {% endfor %}
-            {% if by_type|length == 0 %}
-            <tr><td colspan="2" class="empty-row">Sem dados no período.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
+      <div class="dashboard-card dashboard-card-wide">
+        <div class="dashboard-card-header">
+          <div class="dashboard-card-title-wrap">
+            <h3>Erros por dia</h3>
+            <span class="dashboard-subtitle">
+              Volume diário de erros NG no período selecionado.
+            </span>
+            <span class="dashboard-note">
+              Este gráfico é afetado pelo filtro de tipos de atividade.
+            </span>
+          </div>
+        </div>
+
+        <div class="chart-wrap chart-wrap-lg">
+          <canvas id="chartByDay"></canvas>
+        </div>
       </div>
+
+      <div class="dashboard-card">
+        <div class="dashboard-card-header">
+          <div class="dashboard-card-title-wrap">
+            <h3>Erros por tipo de atividade</h3>
+            <span class="dashboard-subtitle">
+              Distribuição dos erros NG por tipo de atividade.
+            </span>
+            <span class="dashboard-note">
+              Este gráfico é afetado pelo filtro de tipos de atividade.
+            </span>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chartByType"></canvas>
+        </div>
+      </div>
+
+            <div class="dashboard-card">
+        <div class="dashboard-card-header">
+          <div class="dashboard-card-title-wrap">
+            <h3>Top mensagens</h3>
+            <span class="dashboard-subtitle">
+              Principais mensagens de erro NG encontradas no período.
+            </span>
+            <span class="dashboard-note">
+              Este gráfico mostra a visão geral do período e não é afetado pelo filtro de tipos.
+            </span>
+          </div>
+          <div class="dashboard-card-actions">
+            <button class="btn-secondary" id="btnExportTopMessages">
+              Exportar
+            </button>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chartTopMessages"></canvas>
+        </div>
+      </div>
+
+      <div class="dashboard-card">
+        <div class="dashboard-card-header">
+          <div class="dashboard-card-title-wrap">
+            <h3>Top erros SAP</h3>
+            <span class="dashboard-subtitle">
+              Principais mensagens tratadas de erro SAP encontradas no período.
+            </span>
+            <span class="dashboard-note">
+              Esta visão considera o campo sap_response_message e não altera os gráficos NG já existentes.
+            </span>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chartTopSapMessages"></canvas>
+        </div>
+      </div>
+
+      <div class="dashboard-card">
+        <div class="dashboard-card-header">
+          <div class="dashboard-card-title-wrap">
+            <h3>Erros SAP por categoria</h3>
+            <span class="dashboard-subtitle">
+              Distribuição dos erros SAP por categoria técnica identificada.
+            </span>
+            <span class="dashboard-note">
+              Esta visão considera o campo sap_error_category e não altera os gráficos NG já existentes.
+            </span>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chartSapByCategory"></canvas>
+        </div>
+      </div>
+      <div class="dashboard-card">
+        <div class="dashboard-card-header">
+          <div class="dashboard-card-title-wrap">
+            <h3>Responsável pelos erros</h3>
+            <span class="dashboard-subtitle">
+              Distribuição dos erros NG por responsável configurado.
+            </span>
+            <span class="dashboard-note">
+              Erros sem configuração aparecem como "Não mapeado".
+            </span>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <canvas id="chartByOwner"></canvas>
+        </div>
+      </div>
+      <div class="dashboard-card">
+        <div class="dashboard-card-header">
+          <div class="dashboard-card-title-wrap">
+            <h3>Resumo visual</h3>
+            <span class="dashboard-subtitle">
+              Indicadores gerais do período selecionado.
+            </span>
+            <span class="dashboard-note">
+              Estes indicadores representam o total do período e não são afetados pelo filtro de tipos.
+            </span>
+          </div>
+        </div>
+
+        <div class="dashboard-metrics-grid">
+
+          <div class="metric-box">
+            <div class="metric-label">Total de linhas</div>
+            <div class="metric-value" id="metricTotal">
+              {{ total }}
+            </div>
+          </div>
+
+          <div class="metric-box">
+            <div class="metric-label">Total com erro NG</div>
+            <div class="metric-value" id="metricTotalNg">
+              {{ total_ng }}
+            </div>
+          </div>
+
+          <div class="metric-box">
+            <div class="metric-label">% com erro NG</div>
+            <div class="metric-value" id="metricPercentNg">
+              {% if total > 0 %}
+              {{ ((total_ng / total) * 100) | round(1) }}%
+              {% else %}
+              0%
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="metric-box">
+            <div class="metric-label">Tipos de atividades com ocorrência</div>
+            <div class="metric-value" id="metricTypesCount">
+              {{ by_type|length }}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </div>
 
   </div>
+
+  <div class="modal-backdrop-custom" id="typeFilterBackdrop"></div>
+
+  <div class="modal-custom modal-small" id="typeFilterModal">
+    <div class="modal-top">
+      <h3>Filtrar tipos de atividade do dashboard</h3>
+      <button type="button" class="modal-close" id="btnCloseTypeFilter">
+        Fechar
+      </button>
+    </div>
+
+    <div class="dashboard-filter-modal-help">
+      Selecione os tipos que devem aparecer nos gráficos
+      <b>Erros por dia</b> e <b>Erros por tipo de atividade</b>.
+    </div>
+
+    <div class="filter-card" style="margin-bottom: 12px;">
+      <div class="filter-field">
+        <label for="typeFilterSearch">Buscar tipo</label>
+        <input type="text" id="typeFilterSearch" placeholder="Buscar por nome amigável ou código">
+      </div>
+    </div>
+
+    <div class="type-filter-actions">
+      <button type="button" class="btn-secondary" id="btnMarkAllTypes">
+        Marcar todos
+      </button>
+
+      <button type="button" class="btn-secondary" id="btnUnmarkAllTypes">
+        Desmarcar todos
+      </button>
+
+      <button type="button" class="btn-primary" id="btnApplyTypeFilter">
+        Aplicar filtro
+      </button>
+    </div>
+
+    <div class="type-filter-list" id="typeFilterList"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script src="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors_dashboard.js') }}"></script>
 
   {% include 'includes/footer.html' %}
 </body>
