@@ -12,9 +12,15 @@
     const STORAGE_KEY_ACTIVE_JOB = "ofs_activities_errors_active_job_v1";
 
     // Rotas novas
-    const URL_START = "/ofs/activities-errors/importar/start";
-    const URL_STATUS = (jobId) => `/ofs/activities-errors/importar/status/${jobId}`;
-    const URL_CANCEL = (jobId) => `/ofs/activities-errors/importar/cancel/${jobId}`;
+    const pageEl = document.getElementById("activitiesErrorsPage");
+
+    const URL_START = pageEl?.dataset.urlStart || "";
+    const URL_STATUS = (jobId) =>
+        (pageEl?.dataset.urlStatusTemplate || "").replace("999999", String(jobId));
+    const URL_CANCEL = (jobId) =>
+        (pageEl?.dataset.urlCancelTemplate || "").replace("999999", String(jobId));
+    const URL_DETAIL = (activityId) =>
+        (pageEl?.dataset.urlDetailTemplate || "").replace("__ACTIVITY_ID__", encodeURIComponent(activityId));
 
     // -------- Elements --------
     const importForm = document.getElementById("importForm");
@@ -438,7 +444,7 @@
         btn.textContent = "Carregando...";
 
         try {
-            const resp = await fetch(`/ofs/activities-errors/${encodeURIComponent(id)}`);
+            const resp = await fetch(URL_DETAIL(id));
             const data = await resp.json().catch(() => ({}));
 
             if (!resp.ok || !data.ok) {
@@ -466,7 +472,7 @@
 
         } catch (e) {
             alert(String(e.message || e));
-            
+
         } finally {
             btn.disabled = false;
             btn.textContent = originalText;

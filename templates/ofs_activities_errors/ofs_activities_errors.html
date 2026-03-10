@@ -7,7 +7,11 @@
 
 <body>
 
-    <div class="page-atividades">
+    <div class="page-atividades" id="activitiesErrorsPage"
+        data-url-start="{{ url_for('ofs_activities_errors_importar_start') }}"
+        data-url-status-template="{{ url_for('ofs_activities_errors_importar_status', job_id=999999) }}"
+        data-url-cancel-template="{{ url_for('ofs_activities_errors_importar_cancel', job_id=999999) }}"
+        data-url-detail-template="{{ url_for('ofs_activities_errors_get', activity_id='__ACTIVITY_ID__') }}">
 
         <div class="page-header">
             <h2>Erro de Finalização de OS</h2>
@@ -163,6 +167,6 @@
     <script src="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors.js') }}"></script>
 
     {% include 'includes/footer.html' %}
-    
+
 
 </body>
