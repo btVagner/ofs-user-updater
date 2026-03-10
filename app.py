@@ -1449,17 +1449,22 @@ def ofs_activities_errors_dashboard_data():
 
     cur.execute("""
         SELECT
-            sap_error_category AS category,
+            COALESCE(e.activity_type, '-') AS activityType,
+            COALESCE(c.descricao, COALESCE(e.activity_type, '-')) AS activityTypeLabel,
             COUNT(*) AS qtd
-        FROM ofs_activities_errors
-        WHERE `date` BETWEEN %s AND %s
-          AND sap_error_category IS NOT NULL
-          AND NULLIF(TRIM(sap_error_category), '') IS NOT NULL
-        GROUP BY sap_error_category
+        FROM ofs_activities_errors e
+        LEFT JOIN ofs_activity_type_config c
+            ON c.activity_type = e.activity_type
+            AND c.ativo = 1
+        WHERE e.`date` BETWEEN %s AND %s
+            AND COALESCE(TRIM(e.xa_sap_crt), '') = '1'
+        GROUP BY
+            COALESCE(e.activity_type, '-'),
+            COALESCE(c.descricao, COALESCE(e.activity_type, '-'))
         ORDER BY qtd DESC
-        LIMIT 15
+        LIMIT 20
     """, (date_from, date_to))
-    sap_by_category = cur.fetchall()
+    sap_by_activity_type = cur.fetchall()
     cur.close()
     conn.close()
 
@@ -1474,7 +1479,7 @@ def ofs_activities_errors_dashboard_data():
         "date_from": date_from,
         "date_to": date_to,
         "top_sap_messages": top_sap_messages,
-        "sap_by_category": sap_by_category,
+        "sap_by_activity_type": sap_by_activity_type,
         "debug_marker": "ROTA_NOVA_SAP",
         "resources": resources
     }), 200
@@ -1967,7 +1972,74 @@ def ofs_activities_errors_get(activity_id):
         return jsonify({"ok": False, "error": "Não encontrado"}), 404
 
     return jsonify({"ok": True, "item": row}), 200
+@app.route("/ofs/activities-errors/export-top-sap-messages", methods=["GET"])
+@login_required
+@perm_required("ofs.activities_errors")
+def ofs_activities_errors_export_top_sap_messages():
+    today = datetime.now().strftime("%Y-%m-%d")
+    date_from = (request.args.get("dateFrom") or today).strip()
+    date_to = (request.args.get("dateTo") or today).strip()
 
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    cur.execute("""
+        SELECT
+            activity_id,
+            `date`,
+            city,
+            activity_type,
+            appt_number,
+            status,
+            sap_response_message
+        FROM ofs_activities_errors
+        WHERE `date` BETWEEN %s AND %s
+        AND sap_response_message IS NOT NULL
+        AND NULLIF(TRIM(sap_response_message), '') IS NOT NULL
+        ORDER BY `date` DESC, last_seen_at DESC
+    """, (date_from, date_to))
+
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Top erros SAP"
+
+    ws.append([
+        "activity_id",
+        "date",
+        "city",
+        "activity_type",
+        "appt_number",
+        "status",
+        "sap_response_message"
+    ])
+
+    for row in rows:
+        ws.append([
+            row.get("activity_id"),
+            row.get("date"),
+            row.get("city"),
+            row.get("activity_type"),
+            row.get("appt_number"),
+            row.get("status"),
+            row.get("sap_response_message"),
+        ])
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"top_erros_sap_{date_from}_a_{date_to}.xlsx"
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 @app.route("/ofs/activities-errors/export/top-messages", methods=["GET"])
 @login_required
 @perm_required("ofs.activities_errors")

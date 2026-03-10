@@ -10,7 +10,8 @@
   <div class="page-atividades" id="dashboardPage" data-date-from="{{ date_from }}" data-date-to="{{ date_to }}"
     data-resources="{{ resources }}" data-owner='{{ by_owner | tojson }}'
     data-url-dashboard-data="{{ url_for('ofs_activities_errors_dashboard_data') }}"
-    data-url-export-top-messages="{{ url_for('ofs_activities_errors_export_top_messages') }}">
+    data-url-export-top-messages="{{ url_for('ofs_activities_errors_export_top_messages') }}"
+    data-url-export-top-sap-messages="{{ url_for('ofs_activities_errors_export_top_sap_messages') }}">
 
     <div class="page-header">
       <h2>Dashboard - Erros NG</h2>
@@ -156,6 +157,11 @@
               Esta visão considera o campo sap_response_message e não altera os gráficos NG já existentes.
             </span>
           </div>
+          <div class="dashboard-card-actions">
+            <button class="btn-secondary" id="btnExportTopSapMessages">
+              Exportar
+            </button>
+          </div>
         </div>
 
         <div class="chart-wrap">
@@ -166,18 +172,18 @@
       <div class="dashboard-card">
         <div class="dashboard-card-header">
           <div class="dashboard-card-title-wrap">
-            <h3>Erros SAP por categoria</h3>
+            <h3>Erros SAP por tipo de OS</h3>
             <span class="dashboard-subtitle">
-              Distribuição dos erros SAP por categoria técnica identificada.
+              Distribuição dos erros SAP por tipo de atividade.
             </span>
             <span class="dashboard-note">
-              Esta visão considera o campo sap_error_category e não altera os gráficos NG já existentes.
+              Esta visão considera apenas registros com XA_SAP_CRT = 1.
             </span>
           </div>
         </div>
 
         <div class="chart-wrap">
-          <canvas id="chartSapByCategory"></canvas>
+          <canvas id="chartSapByActivityType"></canvas>
         </div>
       </div>
       <div class="dashboard-card">

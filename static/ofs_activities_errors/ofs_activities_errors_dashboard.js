@@ -2,7 +2,7 @@ let dashboardDataCache = null;
 let selectedTypeLabels = new Set();
 let chartByOwnerInstance = null;
 let chartTopSapMessagesInstance = null;
-let chartSapByCategoryInstance = null;
+let chartSapByActivityTypeInstance = null;
 (function () {
     const pageEl = document.getElementById("dashboardPage");
     if (!pageEl) return;
@@ -15,11 +15,27 @@ let chartSapByCategoryInstance = null;
 
     const dashboardDataUrl = pageEl.dataset.urlDashboardData || "";
     const exportTopMessagesUrl = pageEl.dataset.urlExportTopMessages || "";
+    const exportTopSapMessagesUrl = pageEl.dataset.urlExportTopSapMessages || "";
 
     let chartByDayInstance = null;
     let chartByTypeInstance = null;
     let chartTopMessagesInstance = null;
+    function exportTopSapMessages() {
+        const pageEl = document.getElementById("dashboardPage");
+        if (!pageEl) return;
 
+        const dateFrom = pageEl.dataset.dateFrom || "";
+        const dateTo = pageEl.dataset.dateTo || "";
+
+        const params = new URLSearchParams({
+            dateFrom,
+            dateTo
+        });
+
+        const url = `${exportTopSapMessagesUrl}?${params.toString()}`;
+
+        window.location.href = url;
+    }
     function shorten(text, max = 42) {
         const value = String(text || "");
         if (value.length <= max) return value;
@@ -160,7 +176,7 @@ let chartSapByCategoryInstance = null;
         const byType = Array.isArray(data.by_type) ? data.by_type : [];
         const topMessages = Array.isArray(data.top_messages) ? data.top_messages : [];
         const topSapMessages = Array.isArray(data.top_sap_messages) ? data.top_sap_messages : [];
-        const sapByCategory = Array.isArray(data.sap_by_category) ? data.sap_by_category : [];
+        const sapByActivityType = Array.isArray(data.sap_by_activity_type) ? data.sap_by_activity_type : [];
 
 
         const byDayLabels = byDay.map(item => item.date);
@@ -175,8 +191,8 @@ let chartSapByCategoryInstance = null;
         const topSapMessagesLabels = topSapMessages.slice(0, 10).map(item => shorten(item.msg, 55));
         const topSapMessagesValues = topSapMessages.slice(0, 10).map(item => Number(item.qtd || 0));
 
-        const sapCategoryLabels = sapByCategory.map(item => item.category || "-");
-        const sapCategoryValues = sapByCategory.map(item => Number(item.qtd || 0));
+        const sapActivityTypeLabels = sapByActivityType.map(item => item.activityTypeLabel || item.activityType || "-");
+        const sapActivityTypeValues = sapByActivityType.map(item => Number(item.qtd || 0));
         const ownerLabels = ownerData.map(i => i.responsavel);
         const ownerValues = ownerData.map(i => Number(i.qtd || 0));
 
@@ -225,7 +241,7 @@ let chartSapByCategoryInstance = null;
         if (chartByTypeInstance) chartByTypeInstance.destroy();
         if (chartTopMessagesInstance) chartTopMessagesInstance.destroy();
         if (chartTopSapMessagesInstance) chartTopSapMessagesInstance.destroy();
-        if (chartSapByCategoryInstance) chartSapByCategoryInstance.destroy();
+        if (chartSapByActivityTypeInstance) chartSapByActivityTypeInstance.destroy();
         const ctxByDay = document.getElementById("chartByDay");
         if (ctxByDay) {
             chartByDayInstance = new Chart(ctxByDay, {
@@ -349,15 +365,15 @@ let chartSapByCategoryInstance = null;
                 }
             });
         }
-        const ctxSapByCategory = document.getElementById("chartSapByCategory");
-        if (ctxSapByCategory) {
-            chartSapByCategoryInstance = new Chart(ctxSapByCategory, {
+        const ctxSapByActivityType = document.getElementById("chartSapByActivityType");
+        if (ctxSapByActivityType) {
+            chartSapByActivityTypeInstance = new Chart(ctxSapByActivityType, {
                 type: "doughnut",
                 data: {
-                    labels: sapCategoryLabels,
+                    labels: sapActivityTypeLabels,
                     datasets: [{
-                        label: "Erros SAP por categoria",
-                        data: sapCategoryValues
+                        label: "Erros SAP por tipo de OS",
+                        data: sapActivityTypeValues
                     }]
                 },
                 options: {
@@ -376,14 +392,13 @@ let chartSapByCategoryInstance = null;
                         tooltip: {
                             callbacks: {
                                 label(context) {
-                                    const total = sapCategoryValues.reduce((a, b) => a + b, 0);
+                                    const total = sapActivityTypeValues.reduce((a, b) => a + b, 0);
                                     const value = context.raw;
                                     const percent = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                                     return `${context.label}: ${value} (${percent}%)`;
                                 }
                             }
                         }
-
                     }
                 }
             });
@@ -496,7 +511,7 @@ let chartSapByCategoryInstance = null;
         if (!resp.ok || !data.ok) {
             throw new Error(data.error || "Erro ao carregar dados do dashboard");
         }
-        
+
         return data;
     }
 
@@ -602,5 +617,6 @@ let chartSapByCategoryInstance = null;
     }
 
     document.getElementById("btnExportTopMessages")?.addEventListener("click", exportTopMessages);
+    document.getElementById("btnExportTopSapMessages")?.addEventListener("click", exportTopSapMessages);
     init();
 })();
