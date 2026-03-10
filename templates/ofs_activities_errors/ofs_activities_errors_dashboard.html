@@ -8,7 +8,9 @@
 <body>
 
   <div class="page-atividades" id="dashboardPage" data-date-from="{{ date_from }}" data-date-to="{{ date_to }}"
-    data-resources="{{ resources }}" data-owner='{{ by_owner | tojson }}'>
+    data-resources="{{ resources }}" data-owner='{{ by_owner | tojson }}'
+    data-url-dashboard-data="{{ url_for('ofs_activities_errors_dashboard_data') }}"
+    data-url-export-top-messages="{{ url_for('ofs_activities_errors_export_top_messages') }}">
 
     <div class="page-header">
       <h2>Dashboard - Erros NG</h2>
@@ -120,7 +122,7 @@
         </div>
       </div>
 
-            <div class="dashboard-card">
+      <div class="dashboard-card">
         <div class="dashboard-card-header">
           <div class="dashboard-card-title-wrap">
             <h3>Top mensagens</h3>
@@ -182,7 +184,7 @@
         <div class="dashboard-card-header">
           <div class="dashboard-card-title-wrap">
             <h3>Responsável pelos erros</h3>
-            
+
             <span class="dashboard-subtitle">
               Distribuição dos erros NG por responsável configurado.
             </span>

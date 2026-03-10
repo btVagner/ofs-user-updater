@@ -13,6 +13,9 @@ let chartSapByCategoryInstance = null;
     const dateTo = pageEl.dataset.dateTo || "";
     const resources = pageEl.dataset.resources || "";
 
+    const dashboardDataUrl = pageEl.dataset.urlDashboardData || "";
+    const exportTopMessagesUrl = pageEl.dataset.urlExportTopMessages || "";
+
     let chartByDayInstance = null;
     let chartByTypeInstance = null;
     let chartTopMessagesInstance = null;
@@ -380,7 +383,7 @@ let chartSapByCategoryInstance = null;
                                 }
                             }
                         }
-                        
+
                     }
                 }
             });
@@ -484,13 +487,16 @@ let chartSapByCategoryInstance = null;
             resources
         });
 
-        const resp = await fetch(`/ofs/activities-errors/dashboard/data?${params.toString()}`);
+        console.log("dashboardDataUrl:", dashboardDataUrl);
+        console.log("params:", params.toString());
+
+        const resp = await fetch(`${dashboardDataUrl}?${params.toString()}`);
         const data = await resp.json().catch(() => ({}));
 
         if (!resp.ok || !data.ok) {
             throw new Error(data.error || "Erro ao carregar dados do dashboard");
         }
-
+        
         return data;
     }
 
@@ -509,7 +515,7 @@ let chartSapByCategoryInstance = null;
             buildCharts(data);
             renderTypeFilterList();
         } catch (e) {
-            console.error(e);
+            console.error("Erro ao carregar dashboard:", e);
         }
     }
 
@@ -590,7 +596,7 @@ let chartSapByCategoryInstance = null;
             dateTo
         });
 
-        const url = `/ofs/activities-errors/export/top-messages?${params.toString()}`;
+        const url = `${exportTopMessagesUrl}?${params.toString()}`;
 
         window.location.href = url;
     }
