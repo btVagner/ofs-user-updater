@@ -1875,7 +1875,7 @@ def ofs_activities_errors_importar_start():
     t = threading.Thread(
         target=_run_import_job,
         args=(job_id, date_from, date_to, resources, username),
-        daemon=True
+
     )
     t.start()
 
