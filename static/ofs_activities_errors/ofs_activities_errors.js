@@ -466,6 +466,7 @@
 
         } catch (e) {
             alert(String(e.message || e));
+            
         } finally {
             btn.disabled = false;
             btn.textContent = originalText;

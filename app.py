@@ -523,6 +523,7 @@ def _run_import_job(job_id: int, date_from: str, date_to: str, resources: str, a
 
 _MSG_RE = re.compile(r'"message"\s*:\s*"([^"]+)"')
 
+
 def _extract_message(val):
     """
     Extrai SOMENTE o campo JSON "message":"..."

@@ -20,6 +20,7 @@
     const term = normalize(searchInput?.value);
     const status = statusFilter?.value || "all";
 
+    
     const code = normalize(row.dataset.code);
     const description = normalize(row.dataset.description);
     const rowStatus = row.dataset.status || "";

@@ -380,6 +380,7 @@ let chartSapByCategoryInstance = null;
                                 }
                             }
                         }
+                        
                     }
                 }
             });
