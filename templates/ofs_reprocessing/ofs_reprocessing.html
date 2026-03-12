@@ -16,7 +16,7 @@
             </div>
 
             <div class="dashboard-card-actions">
-                <a href="/ofs/activities-errors" class="btn-secondary">Voltar</a>
+                <a href="{{ url_for('ofs_activities_errors') }}" class="btn-secondary">Voltar</a>
             </div>
         </div>
 
@@ -194,11 +194,12 @@
 
     <script id="reprocessingRoutesData" type="application/json">
 {
-  "previewUrl": "/ofs/reprocessamento/preview",
-  "startUrl": "/ofs/reprocessamento/start",
-  "cancelBaseUrl": "/ofs/reprocessamento/cancel",
-  "statusBaseUrl": "/ofs/reprocessamento/status",
-  "logsBaseUrl": "/ofs/reprocessamento/logs"
+  "activityTypesUrl": "{{ url_for('ofs_reprocessing_activity_types') }}",
+  "previewUrl": "{{ url_for('ofs_reprocessing_preview') }}",
+  "startUrl": "{{ url_for('ofs_reprocessing_start') }}",
+  "cancelBaseUrl": "{{ url_for('ofs_reprocessing_cancel', job_id=0)[:-1] }}",
+  "statusBaseUrl": "{{ url_for('ofs_reprocessing_status', job_id=0)[:-1] }}",
+  "logsBaseUrl": "{{ url_for('ofs_reprocessing_logs', job_id=0)[:-1] }}"
 }
 </script>
     <script src="{{ url_for('static', filename='js/ofs_reprocessing.js') }}"></script>
