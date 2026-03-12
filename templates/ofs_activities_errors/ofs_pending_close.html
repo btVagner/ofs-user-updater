@@ -146,6 +146,8 @@
                             <th>status painel</th>
                             <th>activity_id</th>
                             <th>date painel</th>
+                            <th>ng_response_message</th>
+                            <th>ng_dispatch_message</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -160,11 +162,13 @@
                             <td>{{ item.status_painel or '-' }}</td>
                             <td>{{ item.activity_id or '-' }}</td>
                             <td>{{ item.date or '-' }}</td>
+                            <td>{{ item.ng_response_message or '-' }}</td>
+                            <td>{{ item.ng_dispatch_message or '-' }}</td>
                         </tr>
                         {% endfor %}
                         {% else %}
                         <tr>
-                            <td colspan="7" class="empty-row">
+                            <td colspan="10" class="empty-row">
                                 Nenhum match encontrado ainda.
                             </td>
                         </tr>

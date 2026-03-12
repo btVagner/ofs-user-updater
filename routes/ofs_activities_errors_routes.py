@@ -194,6 +194,8 @@ def _build_pending_close_context_from_db():
                 e.status,
                 e.activity_type,
                 e.`date`,
+                e.ng_response_message,
+                e.ng_dispatch_message,
                 ng.numero_ose,
                 ng.numero_ose_norm,
                 ng.status_ose,
@@ -267,6 +269,8 @@ def _build_pending_close_context_from_db():
             "activity_id": item.get("activity_id"),
             "activity_type": item.get("activity_type") or "-",
             "date": item.get("date"),
+            "ng_response_message": item.get("ng_response_message"),
+            "ng_dispatch_message": item.get("ng_dispatch_message"),
         })
 
     integration_by_day = {
@@ -1512,6 +1516,8 @@ def init_app(app):
                 "status_painel",
                 "activity_id",
                 "date_painel",
+                "ng_response_message",
+                "ng_dispatch_message",
             ]
             ws.append(headers)
 
@@ -1525,6 +1531,8 @@ def init_app(app):
                     row.get("status_painel"),
                     row.get("activity_id"),
                     row.get("date"),
+                    row.get("ng_response_message"),
+                    row.get("ng_dispatch_message"),
                 ])
 
             for col_idx, col_name in enumerate(headers, start=1):
@@ -1533,7 +1541,7 @@ def init_app(app):
                     value = ws.cell(row=row_idx, column=col_idx).value
                     if value is not None:
                         max_len = max(max_len, len(str(value)))
-                ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 60)
+                ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 80)
 
             output = BytesIO()
             wb.save(output)
