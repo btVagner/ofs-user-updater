@@ -10,7 +10,6 @@ from services.ofs_reprocessing_service import (
     EXCLUDED_ACTIVITY_TYPES,
 )
 
-
 def init_app(app):
     @app.route("/ofs/reprocessamento/cancel/<int:job_id>", methods=["POST"])
     @login_required
