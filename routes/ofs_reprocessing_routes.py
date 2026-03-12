@@ -11,6 +11,67 @@ from services.ofs_reprocessing_service import (
 )
 
 def init_app(app):
+    @app.route("/ofs/reprocessamento/activity-types", methods=["POST"])
+    @login_required
+    @perm_required("ofs.reprocessing")
+    def ofs_reprocessing_activity_types():
+        payload = request.get_json(silent=True) or {}
+
+        date_from = str(payload.get("dateFrom") or "").strip()
+        date_to = str(payload.get("dateTo") or "").strip()
+        statuses = payload.get("statuses") or []
+
+        if not date_from or not date_to:
+            return jsonify({
+                "ok": False,
+                "error": "Informe dateFrom e dateTo."
+            }), 400
+
+        valid_statuses = [s for s in statuses if s in ("completed", "notdone")]
+        if not valid_statuses:
+            return jsonify({
+                "ok": False,
+                "error": "Selecione ao menos um status."
+            }), 400
+
+        conn = get_connection()
+        cur = conn.cursor(dictionary=True)
+
+        try:
+            placeholders_status = ", ".join(["%s"] * len(valid_statuses))
+            placeholders_excluded = ", ".join(["%s"] * len(EXCLUDED_ACTIVITY_TYPES))
+
+            sql = f"""
+                SELECT
+                    COALESCE(e.activity_type, '-') AS activity_type,
+                    COUNT(DISTINCT e.activity_id) AS qtd
+                FROM ofs_activities_errors e
+                INNER JOIN ofs_pending_close_ng ng
+                    ON e.appt_number_norm = ng.numero_ose_norm
+                WHERE e.`date` BETWEEN %s AND %s
+                  AND LOWER(COALESCE(e.status, '')) IN ({placeholders_status})
+                  AND (
+                        NULLIF(TRIM(e.ng_dispatch_message), '') IS NOT NULL
+                        OR NULLIF(TRIM(e.ng_response_message), '') IS NOT NULL
+                      )
+                  AND COALESCE(e.activity_type, '') NOT IN ({placeholders_excluded})
+                GROUP BY COALESCE(e.activity_type, '-')
+                ORDER BY qtd DESC, activity_type ASC
+            """
+
+            params = [date_from, date_to] + valid_statuses + list(EXCLUDED_ACTIVITY_TYPES)
+
+            cur.execute(sql, params)
+            items = cur.fetchall()
+
+            return jsonify({
+                "ok": True,
+                "items": items,
+            }), 200
+
+        finally:
+            cur.close()
+            conn.close()
     @app.route("/ofs/reprocessamento/cancel/<int:job_id>", methods=["POST"])
     @login_required
     @perm_required("ofs.reprocessing")
