@@ -21,6 +21,9 @@
                     href="{{ url_for('ofs_activities_errors_export_xlsx', dateFrom=date_from, dateTo=date_to, resources=resources) }}">
                     Exportar XLSX
                 </a>
+                <a class="btn-highlight" href="{{ url_for('ofs_pending_close') }}">
+                    OSES pendentes de fechamento
+                </a>
                 <a class="btn-secondary"
                     href="{{ url_for('ofs_activities_errors_dashboard', dateFrom=date_from, dateTo=date_to, resources=resources) }}">Dashboard</a>
                 <div class="kpi">Total: <b>{{ total }}</b></div>

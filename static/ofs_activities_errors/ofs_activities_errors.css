@@ -720,3 +720,46 @@
 .dashboard-dropdown-menu a:hover{
   background: #2c2c2c;
 }
+
+.btn-highlight{
+  position: relative;
+  background: linear-gradient(135deg, #ffb703 0%, #ff8800 100%);
+  border: none;
+  padding: 9px 14px;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  font-size: 13px;
+  line-height: 1;
+  box-shadow:
+    0 0 10px rgba(255, 183, 3, 0.35),
+    0 0 22px rgba(255, 136, 0, 0.18);
+  transition: all 0.2s ease;
+}
+
+.btn-highlight:hover{
+  background: linear-gradient(135deg, #ffca3a 0%, #ff9500 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 14px rgba(255, 183, 3, 0.50),
+    0 0 28px rgba(255, 136, 0, 0.28);
+}
+
+.filtro-form input[type="file"]{
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #2c2c2c;
+  color: #fff;
+}
+
+.empty-row{
+  text-align:center;
+  color:#aaa;
+  padding:20px;
+}

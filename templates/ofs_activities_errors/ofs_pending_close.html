@@ -1,0 +1,105 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors.css') }}">
+
+<body>
+
+    <div class="page-atividades">
+
+        <div class="page-header">
+            <h2>OSES pendentes de fechamento</h2>
+
+            <div class="kpis">
+                <a class="btn-secondary" href="{{ url_for('ofs_activities_errors') }}">
+                    Voltar
+                </a>
+
+                <a class="btn-secondary" href="{{ url_for('ofs_pending_close_export_xlsx') }}">
+                    Exportar visão completa
+                </a>
+
+                <div class="kpi">Matches: <b>{{ total_matches or 0 }}</b></div>
+
+                {% if total_matches and total_matches > 50 %}
+                <div class="kpi">Exibindo: <b>50 primeiros</b></div>
+                {% endif %}
+
+                {% if min_date %}
+                <div class="kpi">Data mínima usada: <b>{{ min_date }}</b></div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div style="margin-bottom: 15px;">
+            {% for category, message in messages %}
+            <div class="kpi" style="margin-bottom:8px;">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="filtro-card">
+            <form method="POST" enctype="multipart/form-data" class="filtro-form">
+                <div>
+                    <label>Arquivo XLSX do NG</label>
+                    <input type="file" name="file" accept=".xlsx" required>
+                </div>
+
+                <button type="submit" class="btn-primary">Processar arquivo</button>
+            </form>
+
+            {% if uploaded_name %}
+            <div class="kpi">Arquivo: <b>{{ uploaded_name }}</b></div>
+            {% endif %}
+        </div>
+
+        <div class="tabela-card">
+            <div class="tabela-container">
+                <table class="tabela-atividades">
+                    <thead>
+                        <tr>
+                            <th>NUMERO_OSE</th>
+                            <th>STATUS_OSE</th>
+                            <th>DATA_AGENDAMENTO</th>
+                            <th>appt_number painel</th>
+                            <th>status painel</th>
+                            <th>activity_id</th>
+                            <th>date painel</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if matched_items %}
+                        {% for item in matched_items %}
+                        <tr>
+                            <td>{{ item.numero_ose }}</td>
+                            <td>{{ item.status_ose or '-' }}</td>
+                            <td>{{ item.data_agendamento or '-' }}</td>
+                            <td>{{ item.appt_number or '-' }}</td>
+                            <td>{{ item.status_painel or '-' }}</td>
+                            <td>{{ item.activity_id or '-' }}</td>
+                            <td>{{ item.date or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="empty-row">
+                                Nenhum match encontrado ainda.
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    {% include 'includes/footer.html' %}
+</body>
