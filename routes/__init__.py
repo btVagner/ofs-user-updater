@@ -7,10 +7,9 @@ from .atividades_notdone_routes import init_app as init_atividades_notdone_route
 from .sap_acompanhamento_critica_routes import init_app as init_sap_acompanhamento_critica_routes
 from .ofs_atividades_base_routes import init_app as init_ofs_atividades_base_routes
 from .perfis_usuarios_routes import init_app as init_perfis_usuarios_routes
-
+from .ofs_reprocessing_routes import init_app as init_ofs_reprocessing_routes
 
 def register_routes(app):
-
     init_auth_routes(app)
     init_logs_routes(app)
     init_adapter_routes(app)
@@ -21,3 +20,4 @@ def register_routes(app):
     init_sap_acompanhamento_critica_routes(app)
     init_ofs_atividades_base_routes(app)
     init_perfis_usuarios_routes(app)
+    init_ofs_reprocessing_routes(app)

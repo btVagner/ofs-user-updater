@@ -1,4 +1,5 @@
 import traceback
+import re
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
@@ -6,7 +7,11 @@ from database.connection import get_connection
 from ofs.client import OFSClient
 from services.sap_error_parser import parse_sap_error, _extract_message
 
-
+def normalize_appt_number(value):
+    s = str(value or "").strip()
+    if not s:
+        return ""
+    return re.sub(r"-[^/]+(?=/)", "", s)
 def validate_max_range_7_days(date_from: str, date_to: str):
     try:
         df = datetime.strptime(date_from, "%Y-%m-%d").date()
@@ -79,11 +84,9 @@ def iter_days(date_from: str, date_to: str):
         yield current.strftime("%Y-%m-%d")
         current += timedelta(days=1)
 
-
 def run_import_job(job_id: int, date_from: str, date_to: str, resources: str, actor_username: str):
 
     try:
-
         client = OFSClient()
 
         fields = [
@@ -126,25 +129,27 @@ def run_import_job(job_id: int, date_from: str, date_to: str, resources: str, ac
                 ng_response_message,
                 sap_response_message,
                 sap_error_category,
+                appt_number_norm,
                 last_seen_at
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON DUPLICATE KEY UPDATE
-                `date`=VALUES(`date`),
-                city=VALUES(city),
-                activity_type=VALUES(activity_type),
-                appt_number=VALUES(appt_number),
-                status=VALUES(status),
-                xa_res_api_ng_response=VALUES(xa_res_api_ng_response),
-                xa_api_ng_dispatch=VALUES(xa_api_ng_dispatch),
-                xa_sap_crt_ldg=VALUES(xa_sap_crt_ldg),
-                xa_sap_crt=VALUES(xa_sap_crt),
-                sap_error_raw_extracted=VALUES(sap_error_raw_extracted),
-                ng_dispatch_message=VALUES(ng_dispatch_message),
-                ng_response_message=VALUES(ng_response_message),
-                sap_response_message=VALUES(sap_response_message),
-                sap_error_category=VALUES(sap_error_category),
-                last_seen_at=NOW()
+                `date` = VALUES(`date`),
+                city = VALUES(city),
+                activity_type = VALUES(activity_type),
+                appt_number = VALUES(appt_number),
+                status = VALUES(status),
+                xa_res_api_ng_response = VALUES(xa_res_api_ng_response),
+                xa_api_ng_dispatch = VALUES(xa_api_ng_dispatch),
+                xa_sap_crt_ldg = VALUES(xa_sap_crt_ldg),
+                xa_sap_crt = VALUES(xa_sap_crt),
+                sap_error_raw_extracted = VALUES(sap_error_raw_extracted),
+                ng_dispatch_message = VALUES(ng_dispatch_message),
+                ng_response_message = VALUES(ng_response_message),
+                sap_response_message = VALUES(sap_response_message),
+                sap_error_category = VALUES(sap_error_category),
+                appt_number_norm = VALUES(appt_number_norm),
+                last_seen_at = NOW()
         """
 
         for day_index, day in enumerate(days, start=1):
@@ -189,7 +194,6 @@ def run_import_job(job_id: int, date_from: str, date_to: str, resources: str, ac
                 url = f"{client.base_url}/activities/?{qs}"
 
                 data = client.authenticated_get(url)
-
                 batch = data.get("items") or []
 
                 items.extend(batch)
@@ -200,7 +204,6 @@ def run_import_job(job_id: int, date_from: str, date_to: str, resources: str, ac
 
                 pct_base = int(((day_index - 1) / max(1, total_days)) * 80)
                 pct_page = int((page / max(1, max_pages)) * (80 / max(1, total_days)))
-
                 progress = min(75, pct_base + pct_page + 5)
 
                 job_update(
@@ -221,7 +224,6 @@ def run_import_job(job_id: int, date_from: str, date_to: str, resources: str, ac
             cur = conn.cursor()
 
             try:
-
                 cur.execute(
                     """
                     DELETE FROM ofs_activities_errors
@@ -236,9 +238,11 @@ def run_import_job(job_id: int, date_from: str, date_to: str, resources: str, ac
                 for idx, a in enumerate(items, start=1):
 
                     activity_id = str(a.get("activityId") or "").strip()
-
                     if not activity_id:
                         continue
+
+                    appt_number = str(a.get("apptNumber") or "").strip() or None
+                    appt_number_norm = normalize_appt_number(appt_number)
 
                     ng_dispatch_raw = a.get("XA_API_NG_DISPATCH")
                     ng_response_raw = a.get("XA_RES_API_NG_RESPONSE")
@@ -258,11 +262,11 @@ def run_import_job(job_id: int, date_from: str, date_to: str, resources: str, ac
                         sql,
                         (
                             activity_id,
-                            str(a.get("date") or "") or None,
-                            str(a.get("city") or "") or None,
-                            str(a.get("activityType") or "") or None,
-                            str(a.get("apptNumber") or "") or None,
-                            str(a.get("status") or "") or None,
+                            str(a.get("date") or "").strip() or None,
+                            str(a.get("city") or "").strip() or None,
+                            str(a.get("activityType") or "").strip() or None,
+                            appt_number,
+                            str(a.get("status") or "").strip() or None,
                             ng_response_raw,
                             ng_dispatch_raw,
                             sap_raw,
@@ -272,6 +276,7 @@ def run_import_job(job_id: int, date_from: str, date_to: str, resources: str, ac
                             ng_response_msg,
                             sap_info["sap_response_message"],
                             sap_info["sap_error_category"],
+                            appt_number_norm or None,
                         ),
                     )
 
@@ -305,7 +310,6 @@ def run_import_job(job_id: int, date_from: str, date_to: str, resources: str, ac
         )
 
     except Exception as e:
-
         print(traceback.format_exc(), flush=True)
 
         job_update(

@@ -4,8 +4,6 @@ from io import BytesIO
 import threading
 import xlsxwriter
 import re
-import os
-import uuid
 
 from werkzeug.utils import secure_filename
 from openpyxl import Workbook, load_workbook
@@ -19,17 +17,10 @@ from services.ofs_activities_errors_importer import (
     run_import_job,
 )
 def _normalize_appt_number(value):
-    """
-    Ex:
-    14853478-51/3 -> 14853478/3
-    1234567-1234567887/1 -> 1234567/1
-    """
     s = str(value or "").strip()
     if not s:
         return ""
     return re.sub(r"-[^/]+(?=/)", "", s)
-
-
 def _excel_date_to_str(value):
     if value is None or value == "":
         return None
@@ -60,14 +51,8 @@ def _excel_date_to_str(value):
 
     return None
 
-
-def _build_pending_close_matches_from_xlsx(file_path):
-    """
-    Lê o XLSX salvo temporariamente, cruza com ofs_activities_errors
-    e retorna:
-      matched_items, min_date, uploaded_name
-    """
-    wb = load_workbook(file_path, data_only=True)
+def _import_pending_close_xlsx_to_db(file_storage):
+    wb = load_workbook(file_storage, data_only=True)
     ws = wb.active
 
     rows = list(ws.iter_rows(values_only=True))
@@ -86,82 +71,334 @@ def _build_pending_close_matches_from_xlsx(file_path):
     idx_status_ose = header_map["STATUS_OSE"]
     idx_data_agendamento = header_map["DATA_AGENDAMENTO"]
 
-    ng_rows = []
-    ng_dates = []
+    records = []
 
     for row in rows[1:]:
         numero_ose = row[idx_numero_ose] if idx_numero_ose < len(row) else None
         status_ose = row[idx_status_ose] if idx_status_ose < len(row) else None
         data_agendamento = row[idx_data_agendamento] if idx_data_agendamento < len(row) else None
 
+        numero_ose_str = str(numero_ose or "").strip()
         numero_ose_norm = _normalize_appt_number(numero_ose)
         data_agendamento_str = _excel_date_to_str(data_agendamento)
 
-        if not numero_ose_norm or not data_agendamento_str:
+        if not numero_ose_str or not numero_ose_norm or not data_agendamento_str:
             continue
 
-        ng_dates.append(data_agendamento_str)
-        ng_rows.append({
-            "numero_ose": str(numero_ose).strip(),
-            "numero_ose_norm": numero_ose_norm,
-            "status_ose": str(status_ose or "").strip(),
-            "data_agendamento": data_agendamento_str,
-        })
+        records.append((
+            numero_ose_str,
+            numero_ose_norm,
+            str(status_ose or "").strip(),
+            data_agendamento_str
+        ))
 
-    if not ng_rows:
+    if not records:
         raise ValueError("Nenhuma linha válida foi encontrada no XLSX.")
 
-    min_date = min(ng_dates)
+    conn = get_connection()
+    cur = conn.cursor()
 
+    try:
+        cur.execute("TRUNCATE TABLE ofs_pending_close_ng")
+
+        cur.executemany("""
+            INSERT INTO ofs_pending_close_ng (
+                numero_ose,
+                numero_ose_norm,
+                status_ose,
+                data_agendamento
+            )
+            VALUES (%s, %s, %s, %s)
+        """, records)
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+def _build_pending_close_context_from_db():
     conn = get_connection()
     cur = conn.cursor(dictionary=True)
 
     try:
         cur.execute("""
+            SELECT MIN(data_agendamento) AS min_date
+            FROM ofs_pending_close_ng
+        """)
+        row = cur.fetchone() or {}
+        min_date = row.get("min_date")
+        min_date_str = min_date.strftime("%Y-%m-%d") if min_date else None
+
+        dashboard_data = {
+            "line_default": {
+                "labels": [],
+                "integration": [],
+                "pending": [],
+                "total_integration": 0,
+                "total_pending": 0,
+            },
+            "activity_type_bar": {
+                "labels": [],
+                "integration": [],
+                "pending": [],
+            },
+            "daily_by_activity_type": {},
+        }
+
+        if not min_date_str:
+            return {
+                "matched_items": [],
+                "total_matches": 0,
+                "min_date": None,
+                "dashboard_data": dashboard_data,
+            }
+
+        # Base completa de integração:
+        # tudo que tem erro NG válido no período, independente de existir no XLSX
+        cur.execute("""
+            SELECT DISTINCT
+                e.activity_id,
+                e.appt_number,
+                e.appt_number_norm,
+                e.status,
+                e.activity_type,
+                e.`date`
+            FROM ofs_activities_errors e
+            WHERE e.`date` >= %s
+              AND (
+                    NULLIF(TRIM(e.ng_dispatch_message), '') IS NOT NULL
+                    OR NULLIF(TRIM(e.ng_response_message), '') IS NOT NULL
+                  )
+              AND COALESCE(e.activity_type, '') NOT IN (
+                    'LUNCH',
+                    'ALM',
+                    'MAN_VEIC',
+                    'EQP_DUP',
+                    'REUNIAO',
+                    'VIST_INV_TEC',
+                    'MAN',
+                    'EM ATIVIDADE B2B'
+              )
+        """, (min_date_str,))
+        integration_items = cur.fetchall()
+
+        # Base de pendentes:
+        # subconjunto da integração que também existe no XLSX
+        cur.execute("""
+            SELECT DISTINCT
+                e.activity_id,
+                e.appt_number,
+                e.appt_number_norm,
+                e.status,
+                e.activity_type,
+                e.`date`,
+                ng.numero_ose,
+                ng.numero_ose_norm,
+                ng.status_ose,
+                ng.data_agendamento
+            FROM ofs_activities_errors e
+            INNER JOIN ofs_pending_close_ng ng
+                ON e.appt_number_norm = ng.numero_ose_norm
+            WHERE e.`date` >= %s
+              AND (
+                    NULLIF(TRIM(e.ng_dispatch_message), '') IS NOT NULL
+                    OR NULLIF(TRIM(e.ng_response_message), '') IS NOT NULL
+                  )
+              AND COALESCE(e.activity_type, '') NOT IN (
+                    'LUNCH',
+                    'ALM',
+                    'MAN_VEIC',
+                    'EQP_DUP',
+                    'REUNIAO',
+                    'VIST_INV_TEC',
+                    'MAN',
+                    'EM ATIVIDADE B2B'
+              )
+        """, (min_date_str,))
+        matched_rows = cur.fetchall()
+
+        # Série diária total de integração
+        cur.execute("""
             SELECT
-                activity_id,
-                appt_number,
-                status,
-                `date`
-            FROM ofs_activities_errors
-            WHERE `date` >= %s
-        """, (min_date,))
-        db_rows = cur.fetchall()
+                e.`date` AS ref_date,
+                COUNT(DISTINCT e.activity_id) AS qtd
+            FROM ofs_activities_errors e
+            WHERE e.`date` >= %s
+              AND (
+                    NULLIF(TRIM(e.ng_dispatch_message), '') IS NOT NULL
+                    OR NULLIF(TRIM(e.ng_response_message), '') IS NOT NULL
+                  )
+              AND COALESCE(e.activity_type, '') NOT IN (
+                    'LUNCH',
+                    'ALM',
+                    'MAN_VEIC',
+                    'EQP_DUP',
+                    'REUNIAO',
+                    'VIST_INV_TEC',
+                    'MAN',
+                    'EM ATIVIDADE B2B'
+              )
+            GROUP BY e.`date`
+            ORDER BY e.`date` ASC
+        """, (min_date_str,))
+        integration_rows = cur.fetchall()
+
     finally:
         cur.close()
         conn.close()
 
-    db_map = {}
-
-    for item in db_rows:
-        appt_original = item.get("appt_number")
-        appt_norm = _normalize_appt_number(appt_original)
-
-        if not appt_norm:
-            continue
-
-        if appt_norm not in db_map:
-            db_map[appt_norm] = []
-
-        db_map[appt_norm].append(item)
+    print("DEBUG integration_items:", len(integration_items), flush=True)
+    print("DEBUG matched_rows:", len(matched_rows), flush=True)
+    print("DEBUG integration_rows:", len(integration_rows), flush=True)
+    print("DEBUG min_date helper:", min_date_str, flush=True)
 
     matched_items = []
+    for item in matched_rows:
+        matched_items.append({
+            "numero_ose": item.get("numero_ose"),
+            "numero_ose_norm": item.get("numero_ose_norm"),
+            "status_ose": item.get("status_ose"),
+            "data_agendamento": item.get("data_agendamento"),
+            "appt_number": item.get("appt_number"),
+            "appt_number_norm": item.get("appt_number_norm"),
+            "status_painel": item.get("status"),
+            "activity_id": item.get("activity_id"),
+            "activity_type": item.get("activity_type") or "-",
+            "date": item.get("date"),
+        })
 
-    for ng in ng_rows:
-        matches = db_map.get(ng["numero_ose_norm"], [])
-        for db_item in matches:
-            matched_items.append({
-                "numero_ose": ng["numero_ose"],
-                "status_ose": ng["status_ose"],
-                "data_agendamento": ng["data_agendamento"],
-                "appt_number": db_item.get("appt_number"),
-                "status_painel": db_item.get("status"),
-                "activity_id": db_item.get("activity_id"),
-                "date": db_item.get("date"),
-            })
+    integration_by_day = {
+        str(item["ref_date"]): int(item["qtd"] or 0)
+        for item in integration_rows
+    }
 
-    uploaded_name = os.path.basename(file_path)
-    return matched_items, min_date, uploaded_name
+    # Pendentes por dia usando a MESMA data da extração (e.date)
+    pending_day_oses = {}
+    for item in matched_items:
+        day = str(item.get("date") or "").strip()
+        ose = str(item.get("numero_ose_norm") or item.get("numero_ose") or "").strip()
+        if not day or not ose:
+            continue
+        pending_day_oses.setdefault(day, set()).add(ose)
+
+    pending_by_day = {
+        day: len(oses)
+        for day, oses in pending_day_oses.items()
+    }
+
+    all_dates = sorted(set(integration_by_day.keys()) | set(pending_by_day.keys()))
+
+    # Total por activity_type - integração vem da base completa
+    integration_by_activity_type_sets = {}
+    for item in integration_items:
+        activity_type = str(item.get("activity_type") or "-").strip() or "-"
+        activity_id = str(item.get("activity_id") or "").strip()
+        if not activity_id:
+            continue
+        integration_by_activity_type_sets.setdefault(activity_type, set()).add(activity_id)
+
+    integration_by_activity_type = {
+        k: len(v)
+        for k, v in integration_by_activity_type_sets.items()
+    }
+
+    # Total por activity_type - pendente vem apenas da base com match no XLSX
+    pending_by_activity_type_sets = {}
+    for item in matched_items:
+        activity_type = str(item.get("activity_type") or "-").strip() or "-"
+        ose = str(item.get("numero_ose_norm") or item.get("numero_ose") or "").strip()
+        if not ose:
+            continue
+        pending_by_activity_type_sets.setdefault(activity_type, set()).add(ose)
+
+    pending_by_activity_type = {
+        k: len(v)
+        for k, v in pending_by_activity_type_sets.items()
+    }
+
+    activity_type_labels = sorted(
+        set(integration_by_activity_type.keys()) | set(pending_by_activity_type.keys()),
+        key=lambda x: (
+            -(integration_by_activity_type.get(x, 0) + pending_by_activity_type.get(x, 0)),
+            x
+        )
+    )
+
+    # Série diária por tipo - integração vem da base completa
+    integration_by_day_and_activity = {}
+    for item in integration_items:
+        activity_type = str(item.get("activity_type") or "-").strip() or "-"
+        day = str(item.get("date") or "").strip()
+        activity_id = str(item.get("activity_id") or "").strip()
+
+        if not day or not activity_id:
+            continue
+
+        integration_by_day_and_activity \
+            .setdefault(activity_type, {}) \
+            .setdefault(day, set()) \
+            .add(activity_id)
+
+    # Série diária por tipo - pendente vem apenas da base com match no XLSX
+    pending_by_day_and_activity = {}
+    for item in matched_items:
+        activity_type = str(item.get("activity_type") or "-").strip() or "-"
+        day = str(item.get("date") or "").strip()
+        ose = str(item.get("numero_ose_norm") or item.get("numero_ose") or "").strip()
+
+        if not day or not ose:
+            continue
+
+        pending_by_day_and_activity \
+            .setdefault(activity_type, {}) \
+            .setdefault(day, set()) \
+            .add(ose)
+
+    daily_by_activity_type = {}
+    for activity_type in activity_type_labels:
+        integration_map = {
+            day: len(ids)
+            for day, ids in integration_by_day_and_activity.get(activity_type, {}).items()
+        }
+        pending_map = {
+            day: len(oses)
+            for day, oses in pending_by_day_and_activity.get(activity_type, {}).items()
+        }
+
+        dates_for_type = sorted(set(integration_map.keys()) | set(pending_map.keys()))
+
+        daily_by_activity_type[activity_type] = {
+            "labels": dates_for_type,
+            "integration": [integration_map.get(day, 0) for day in dates_for_type],
+            "pending": [pending_map.get(day, 0) for day in dates_for_type],
+            "total_integration": sum(integration_map.values()),
+            "total_pending": sum(pending_map.values()),
+        }
+
+    dashboard_data = {
+        "line_default": {
+            "labels": all_dates,
+            "integration": [integration_by_day.get(day, 0) for day in all_dates],
+            "pending": [pending_by_day.get(day, 0) for day in all_dates],
+            "total_integration": sum(integration_by_day.values()),
+            "total_pending": sum(pending_by_day.values()),
+        },
+        "activity_type_bar": {
+            "labels": activity_type_labels,
+            "integration": [integration_by_activity_type.get(label, 0) for label in activity_type_labels],
+            "pending": [pending_by_activity_type.get(label, 0) for label in activity_type_labels],
+        },
+        "daily_by_activity_type": daily_by_activity_type,
+    }
+
+    return {
+        "matched_items": matched_items,
+        "total_matches": len(matched_items),
+        "min_date": min_date_str,
+        "dashboard_data": dashboard_data,
+    }
 def init_app(app):
     @app.route("/ofs/activities-errors", methods=["GET"])
     @login_required
@@ -1170,10 +1407,26 @@ def init_app(app):
     @login_required
     @perm_required("ofs.activities_errors")
     def ofs_pending_close():
+        dashboard_data = {
+            "line_default": {
+                "labels": [],
+                "integration": [],
+                "pending": [],
+                "total_integration": 0,
+                "total_pending": 0,
+            },
+            "activity_type_bar": {
+                "labels": [],
+                "integration": [],
+                "pending": [],
+            },
+            "daily_by_activity_type": {},
+        }
+
         matched_items = []
         total_matches = 0
         min_date = None
-        uploaded_name = None
+        uploaded_name = session.get("ofs_pending_close_original_name")
 
         if request.method == "POST":
             file = request.files.get("file")
@@ -1185,10 +1438,11 @@ def init_app(app):
                     matched_items=[],
                     total_matches=0,
                     min_date=None,
-                    uploaded_name=None,
+                    uploaded_name=uploaded_name,
+                    dashboard_data=dashboard_data,
                 )
 
-            original_name = file.filename.strip()
+            original_name = (file.filename or "").strip()
 
             if not original_name.lower().endswith(".xlsx"):
                 flash("Arquivo inválido. Envie um arquivo .xlsx.", "error")
@@ -1197,53 +1451,31 @@ def init_app(app):
                     matched_items=[],
                     total_matches=0,
                     min_date=None,
-                    uploaded_name=None,
+                    uploaded_name=uploaded_name,
+                    dashboard_data=dashboard_data,
                 )
 
             try:
-                temp_dir = os.path.join(os.getcwd(), "temp_uploads", "ofs_pending_close")
-                os.makedirs(temp_dir, exist_ok=True)
-
-                safe_name = secure_filename(original_name)
-                unique_name = f"{uuid.uuid4().hex}_{safe_name}"
-                temp_path = os.path.join(temp_dir, unique_name)
-
-                file.seek(0)
-                file.save(temp_path)
-
-                session["ofs_pending_close_file_path"] = temp_path
+                _import_pending_close_xlsx_to_db(file)
                 session["ofs_pending_close_original_name"] = original_name
-
-                all_matched_items, min_date, _ = _build_pending_close_matches_from_xlsx(temp_path)
-
-                total_matches = len(all_matched_items)
-                matched_items = all_matched_items[:50]
                 uploaded_name = original_name
-
+                flash("Arquivo processado com sucesso.", "success")
             except Exception as e:
                 flash(f"Erro ao processar arquivo: {str(e)}", "error")
-                session.pop("ofs_pending_close_file_path", None)
-                session.pop("ofs_pending_close_original_name", None)
 
-                matched_items = []
-                total_matches = 0
-                min_date = None
-                uploaded_name = None
-
-        else:
-            file_path = session.get("ofs_pending_close_file_path")
-            original_name = session.get("ofs_pending_close_original_name")
-
-            if file_path and os.path.exists(file_path):
-                try:
-                    all_matched_items, min_date, _ = _build_pending_close_matches_from_xlsx(file_path)
-                    total_matches = len(all_matched_items)
-                    matched_items = all_matched_items[:50]
-                    uploaded_name = original_name
-                except Exception as e:
-                    flash(f"Erro ao recarregar último arquivo processado: {str(e)}", "error")
-                    session.pop("ofs_pending_close_file_path", None)
-                    session.pop("ofs_pending_close_original_name", None)
+        try:
+            context = _build_pending_close_context_from_db()
+            matched_items = (context["matched_items"] or [])[:50]
+            total_matches = context["total_matches"] or 0
+            min_date = context["min_date"]
+            dashboard_data = context["dashboard_data"]
+            print("DEBUG total_matches:", total_matches, flush=True)
+            print("DEBUG matched_items_len:", len(matched_items), flush=True)
+            print("DEBUG min_date:", min_date, flush=True)
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc(), flush=True)
+            flash(f"Erro ao montar visão da tela: {str(e)}", "error")
 
         return render_template(
             "ofs_activities_errors/ofs_pending_close.html",
@@ -1251,23 +1483,20 @@ def init_app(app):
             total_matches=total_matches,
             min_date=min_date,
             uploaded_name=uploaded_name,
+            dashboard_data=dashboard_data,
         )
+
+
     @app.route("/ofs/pending-close/export/xlsx", methods=["GET"])
     @login_required
     @perm_required("ofs.activities_errors")
     def ofs_pending_close_export_xlsx():
-        file_path = session.get("ofs_pending_close_file_path")
-        original_name = session.get("ofs_pending_close_original_name") or "arquivo_ng.xlsx"
-
-        if not file_path or not os.path.exists(file_path):
-            flash("Não há dados processados para exportar.", "error")
-            return redirect(url_for("ofs_pending_close"))
-
         try:
-            rows, min_date, _ = _build_pending_close_matches_from_xlsx(file_path)
+            context = _build_pending_close_context_from_db()
+            rows = context["matched_items"] or []
 
             if not rows:
-                flash("Não há matches para exportar.", "error")
+                flash("Não há dados processados para exportar.", "error")
                 return redirect(url_for("ofs_pending_close"))
 
             wb = Workbook()
@@ -1278,6 +1507,7 @@ def init_app(app):
                 "NUMERO_OSE",
                 "STATUS_OSE",
                 "DATA_AGENDAMENTO",
+                "activity_type",
                 "appt_number_painel",
                 "status_painel",
                 "activity_id",
@@ -1290,6 +1520,7 @@ def init_app(app):
                     row.get("numero_ose"),
                     row.get("status_ose"),
                     row.get("data_agendamento"),
+                    row.get("activity_type"),
                     row.get("appt_number"),
                     row.get("status_painel"),
                     row.get("activity_id"),
@@ -1308,8 +1539,7 @@ def init_app(app):
             wb.save(output)
             output.seek(0)
 
-            base_name = os.path.splitext(secure_filename(original_name))[0]
-            filename = f"oses_pendentes_fechamento_{base_name}.xlsx"
+            filename = "oses_pendentes_fechamento.xlsx"
 
             return send_file(
                 output,

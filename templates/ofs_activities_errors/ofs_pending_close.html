@@ -53,13 +53,86 @@
                 </div>
 
                 <button type="submit" class="btn-primary">Processar arquivo</button>
+                <a href="/ofs/reprocessamento" class="btn-pink">
+                    Envio de reprocessamento
+                </a>
             </form>
 
             {% if uploaded_name %}
             <div class="kpi">Arquivo: <b>{{ uploaded_name }}</b></div>
             {% endif %}
         </div>
+        <div class="dashboard-card pending-close-dashboard-card">
+            <div class="dashboard-card-header">
+                <div class="dashboard-card-title-wrap">
+                    <h3>Pendência x Erro de integração</h3>
+                    <span class="dashboard-subtitle">
+                        Evolução diária a partir da menor DATA_AGENDAMENTO do arquivo atual
+                    </span>
+                </div>
 
+                <div class="pending-close-chart-filters">
+                    <label class="pending-close-toggle">
+                        <input type="checkbox" id="toggleIntegration" checked>
+                        <span class="pending-close-toggle-dot integration"></span>
+                        Erros de integração
+                    </label>
+
+                    <label class="pending-close-toggle">
+                        <input type="checkbox" id="togglePending" checked>
+                        <span class="pending-close-toggle-dot pending"></span>
+                        Erros ainda pendentes
+                    </label>
+                </div>
+            </div>
+
+            <div class="pending-close-activity-filter-row">
+                <div class="pending-close-filter-label">Filtro por tipo de atividade:</div>
+                <div class="pending-close-activity-filter-actions" id="activityTypeFilterActions">
+                    <button type="button" class="btn-secondary pending-close-filter-btn active"
+                        data-activity-type="__ALL__">
+                        Todos
+                    </button>
+                </div>
+            </div>
+
+            <div class="dashboard-metrics-grid pending-close-metrics-grid">
+                <div class="metric-box">
+                    <div class="metric-label">Total erros de integração</div>
+                    <div class="metric-value" id="metricTotalIntegration">{{
+                        dashboard_data.line_default.total_integration or 0 }}</div>
+                </div>
+
+                <div class="metric-box">
+                    <div class="metric-label">Total erros ainda pendentes</div>
+                    <div class="metric-value" id="metricTotalPending">{{ dashboard_data.line_default.total_pending or 0
+                        }}</div>
+                </div>
+            </div>
+
+            <div class="chart-wrap chart-wrap-lg pending-close-chart-wrap">
+                <canvas id="pendingCloseChart"></canvas>
+            </div>
+        </div>
+
+        <div class="dashboard-card pending-close-dashboard-card">
+            <div class="dashboard-card-header">
+                <div class="dashboard-card-title-wrap">
+                    <h3>Erros por tipo de atividade</h3>
+                    <span class="dashboard-subtitle">
+                        Barras empilhadas com total de erros de integração e erros ainda pendentes
+                    </span>
+                </div>
+            </div>
+
+            <div class="chart-wrap chart-wrap-lg pending-close-chart-wrap">
+                <canvas id="pendingCloseActivityTypeChart"></canvas>
+            </div>
+        </div>
+
+        <script id="pendingCloseChartData" type="application/json">
+            {{ dashboard_data | tojson }}
+        </script>
         <div class="tabela-card">
             <div class="tabela-container">
                 <table class="tabela-atividades">
@@ -68,6 +141,7 @@
                             <th>NUMERO_OSE</th>
                             <th>STATUS_OSE</th>
                             <th>DATA_AGENDAMENTO</th>
+                            <th>activity_type</th>
                             <th>appt_number painel</th>
                             <th>status painel</th>
                             <th>activity_id</th>
@@ -81,6 +155,7 @@
                             <td>{{ item.numero_ose }}</td>
                             <td>{{ item.status_ose or '-' }}</td>
                             <td>{{ item.data_agendamento or '-' }}</td>
+                            <td>{{ item.activity_type or '-' }}</td>
                             <td>{{ item.appt_number or '-' }}</td>
                             <td>{{ item.status_painel or '-' }}</td>
                             <td>{{ item.activity_id or '-' }}</td>
@@ -100,6 +175,7 @@
         </div>
 
     </div>
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='ofs_activities_errors/ofs_pending_close.js') }}"></script>
     {% include 'includes/footer.html' %}
 </body>

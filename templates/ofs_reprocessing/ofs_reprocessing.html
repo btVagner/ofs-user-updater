@@ -1,0 +1,206 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors.css') }}">
+
+<body>
+    <div class="page-atividades" id="ofsReprocessingPage">
+        <div class="page-header">
+            <div>
+                <h2>Envio de reprocessamento</h2>
+                <div class="dashboard-subtitle">
+                    Selecione filtros para localizar activityIds e enviar reprocessamento.
+                </div>
+            </div>
+
+            <div class="dashboard-card-actions">
+                <a href="/ofs/activities-errors" class="btn-secondary">Voltar</a>
+            </div>
+        </div>
+
+        <div class="filtro-card">
+            <form id="reprocessingForm" class="filtro-form" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="dateFrom">Data inicial</label>
+                    <input type="date" id="dateFrom" value="{{ today }}">
+                </div>
+
+                <div class="form-group">
+                    <label for="dateTo">Data final</label>
+                    <input type="date" id="dateTo" value="{{ today }}">
+                </div>
+
+                <div class="form-group">
+                    <label>Status</label>
+                    <div class="pending-close-chart-filters">
+                        <label class="pending-close-toggle">
+                            <input type="checkbox" id="statusCompleted">
+                            <span>completed</span>
+                        </label>
+
+                        <label class="pending-close-toggle">
+                            <input type="checkbox" id="statusNotdone" checked>
+                            <span>notdone</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="dashboard-card-actions">
+                    <button type="button" class="btn-secondary" id="btnSelectAllTypes">
+                        Marcar todos
+                    </button>
+
+                    <button type="button" class="btn-secondary" id="btnClearAllTypes">
+                        Limpar tipos
+                    </button>
+
+                    <button type="button" class="btn-pink" id="btnPreviewTargets">
+                        Pré-visualizar
+                    </button>
+
+                    <button type="button" class="btn-primary" id="btnStartReprocessing">
+                        Iniciar reprocessamento
+                    </button>
+                    <button type="button" class="btn-danger" id="btnCancelReprocessing" disabled>
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="dashboard-card">
+                <div class="dashboard-card-header">
+                    <div class="dashboard-card-title-wrap">
+                        <h3>Tipos de atividade</h3>
+                        <div class="dashboard-subtitle">
+                            Selecione um ou mais tipos para localizar os activityIds.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="type-filter-list" id="activityTypeList">
+                    {% for item in activity_types %}
+                    <label class="type-filter-item">
+                        <div class="type-filter-left">
+                            <input type="checkbox" class="activity-type-checkbox" value="{{ item.activity_type }}">
+                            <div class="type-filter-labels">
+                                <span class="type-filter-name">{{ item.activity_type }}</span>
+                            </div>
+                        </div>
+                        <span class="type-filter-qtd">{{ item.qtd }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <div class="dashboard-card-header">
+                    <div class="dashboard-card-title-wrap">
+                        <h3>Prévia da seleção</h3>
+                        <div class="dashboard-subtitle">
+                            Quantidade encontrada antes do envio.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-metrics-grid pending-close-metrics-grid">
+                    <div class="metric-box">
+                        <div class="metric-label">ActivityIds encontrados</div>
+                        <div class="metric-value" id="previewTotal">0</div>
+                    </div>
+
+                    <div class="metric-box">
+                        <div class="metric-label">Job atual</div>
+                        <div class="metric-value" id="jobIdValue">-</div>
+                    </div>
+                </div>
+
+                <div class="dashboard-filter-help" style="margin-top: 14px;">
+                    <span class="dashboard-filter-help-title">Observação:</span>
+                    <span class="dashboard-filter-help-text">
+                        O eventType será definido automaticamente pelo status da atividade:
+                        completed → activityCompleted | notdone → activityNotDone.
+                    </span>
+                </div>
+
+                <div class="tabela-container reprocessing-preview-table-wrap" style="margin-top: 14px;">
+                    <table class="tabela-atividades">
+                        <thead>
+                            <tr>
+                                <th>activity_id</th>
+                                <th>activity_type</th>
+                                <th>status</th>
+                                <th>date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewTableBody">
+                            <tr>
+                                <td colspan="4" class="empty-row">Nenhuma prévia carregada.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="dashboard-card dashboard-card-wide">
+                <div class="dashboard-card-header">
+                    <div class="dashboard-card-title-wrap">
+                        <h3>Execução em tempo real</h3>
+                        <div class="dashboard-subtitle">
+                            Acompanhe o progresso e os retornos da API.
+                        </div>
+                    </div>
+                </div>
+
+                <div id="jobStatus" class="job-card idle">
+                    <div class="job-line">
+                        <span class="job-label">Status:</span>
+                        <strong id="jobStatusText">Aguardando execução</strong>
+                    </div>
+
+                    <div class="job-progress">
+                        <div class="job-progress-bar" id="jobProgressBar"></div>
+                    </div>
+
+                    <div class="job-msg" id="jobMessage">
+                        Nenhum job iniciado.
+                    </div>
+                </div>
+
+                <div class="tabela-container reprocessing-live-table-wrap" style="margin-top: 16px;">
+                    <table class="tabela-atividades">
+                        <thead>
+                            <tr>
+                                <th>data/hora</th>
+                                <th>activity_id</th>
+                                <th>event_type</th>
+                                <th>status_code</th>
+                                <th>response</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reprocessingLogsBody">
+                            <tr>
+                                <td colspan="5" class="empty-row">Nenhum log disponível.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script id="reprocessingRoutesData" type="application/json">
+{
+  "previewUrl": "/ofs/reprocessamento/preview",
+  "startUrl": "/ofs/reprocessamento/start",
+  "cancelBaseUrl": "/ofs/reprocessamento/cancel",
+  "statusBaseUrl": "/ofs/reprocessamento/status",
+  "logsBaseUrl": "/ofs/reprocessamento/logs"
+}
+</script>
+    <script src="{{ url_for('static', filename='js/ofs_reprocessing.js') }}"></script>
+    {% include 'includes/footer.html' %}
+</body>
