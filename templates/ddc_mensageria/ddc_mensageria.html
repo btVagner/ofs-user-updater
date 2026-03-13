@@ -1,0 +1,171 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ddc_mensageria.css') }}">
+
+<body>
+    <div class="page-ddc-mensageria" id="ddcMensageriaPage"
+        data-url-single-send="{{ url_for('ddc_mensageria_enviar_unico') }}"
+        data-url-massive-start="{{ url_for('ddc_mensageria_massivo_iniciar') }}"
+        data-url-massive-status-base="{{ url_for('ddc_mensageria_massivo_status', job_id='__JOB_ID__') }}">
+        <div class="page-header">
+            <div>
+                <h2>Mensageria DDC</h2>
+                <p class="page-subtitle">
+                    Envio de integrações DDC de forma unitária ou massiva.
+                </p>
+            </div>
+        </div>
+
+        <div class="flash-area" id="flashArea"></div>
+
+        <div class="ddc-options-grid">
+            <div class="ddc-option-card">
+                <div class="ddc-option-header">
+                    <h3>Envio único</h3>
+                    <p>
+                        Informe o ID da OS e faça o envio individual da integração.
+                    </p>
+                </div>
+
+                <button type="button" class="btn-primary ddc-toggle-btn" data-target="singleSendBox">
+                    Abrir envio único
+                </button>
+
+                <div class="ddc-expand-box ddc-hidden" id="singleSendBox">
+                    <form id="singleSendForm" class="ddc-form">
+                        <div class="filter-field">
+                            <label for="osId">ID da OS</label>
+                            <input type="text" id="osId" name="osId" placeholder="Digite o ID da OS" autocomplete="off">
+                        </div>
+                        <div class="filter-field">
+                            <label for="singleEvent">Evento</label>
+                            <select id="singleEvent" name="singleEvent" disabled>
+                                <option value="{{ fixed_event_option.value }}" selected>
+                                    {{ fixed_event_option.label }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="ddc-form-actions">
+                            <button type="submit" class="btn-primary" id="singleSendButton">Enviar</button>
+                        </div>
+                    </form>
+
+                    <div class="ddc-send-animation ddc-hidden" id="ddcSendAnimation" aria-hidden="true">
+                        <div class="ddc-envelope-wrap">
+                            <div class="ddc-envelope">
+                                <div class="ddc-envelope-back"></div>
+                                <div class="ddc-envelope-letter"></div>
+                                <div class="ddc-envelope-flap"></div>
+                            </div>
+                            <span class="ddc-send-text">Enviando...</span>
+                        </div>
+                    </div>
+
+                    <div id="singleSendResult" class="ddc-result-box ddc-hidden"></div>
+                </div>
+            </div>
+
+            <div class="ddc-option-card">
+                <div class="ddc-option-header">
+                    <h3>Envio massivo</h3>
+                    <p>
+                        Envie várias OS a partir de um arquivo .txt ou .csv com um ID por linha.
+                    </p>
+                </div>
+
+                <button type="button" class="btn-secondary ddc-toggle-btn" data-target="massiveSendBox">
+                    Abrir envio massivo
+                </button>
+
+                <div class="ddc-expand-box ddc-hidden" id="massiveSendBox">
+                    <form id="massiveSendForm" class="ddc-form">
+                        <div class="filter-field">
+                            <label for="massiveFile">Arquivo (.txt ou .csv)</label>
+                            <input type="file" id="massiveFile" name="massiveFile" accept=".txt,.csv">
+                        </div>
+                        <div class="filter-field">
+                            <label for="massiveEvent">Evento</label>
+                            <select id="massiveEvent" name="massiveEvent" disabled>
+                                <option value="{{ fixed_event_option.value }}" selected>
+                                    {{ fixed_event_option.label }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="massive-help-text">
+                            Formato esperado: 1 ID por linha, sem cabeçalho.
+                        </div>
+
+                        <div class="massive-summary-grid">
+                            <div class="summary-card">
+                                <span class="summary-label">Total de IDs</span>
+                                <span class="summary-value" id="massiveTotal">0</span>
+                            </div>
+
+                            <div class="summary-card">
+                                <span class="summary-label">Processados</span>
+                                <span class="summary-value" id="massiveProcessed">0</span>
+                            </div>
+
+                            <div class="summary-card">
+                                <span class="summary-label">Sucesso</span>
+                                <span class="summary-value" id="massiveSuccess">0</span>
+                            </div>
+
+                            <div class="summary-card">
+                                <span class="summary-label">Erro</span>
+                                <span class="summary-value" id="massiveError">0</span>
+                            </div>
+                        </div>
+
+                        <div class="massive-progress-card">
+                            <div class="massive-progress-header">
+                                <span class="table-title">Progresso do envio</span>
+                                <span class="table-counter" id="massivePercentLabel">0%</span>
+                            </div>
+
+                            <div class="massive-progress-bar">
+                                <div class="massive-progress-fill" id="massiveProgressFill"></div>
+                            </div>
+
+                            <div class="massive-progress-meta" id="massiveProgressMeta">
+                                Aguardando arquivo...
+                            </div>
+                        </div>
+
+                        <div class="ddc-form-actions">
+                            <button type="button" class="btn-secondary" id="massiveValidateButton">
+                                Carregar arquivo
+                            </button>
+                            <button type="submit" class="btn-primary" id="massiveStartButton" disabled>
+                                Iniciar envio
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="table-card massive-log-card">
+                        <div class="table-toolbar">
+                            <div>
+                                <div class="table-title">Log em tempo real</div>
+                                <div class="table-counter" id="massiveLogCounter">0 registros</div>
+                            </div>
+                        </div>
+
+                        <div class="massive-log-list" id="massiveLogList">
+                            <div class="massive-log-empty" id="massiveLogEmpty">
+                                Nenhum envio iniciado ainda.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% include 'includes/footer.html' %}
+    <script src="{{ url_for('static', filename='js/ddc_mensageria.js') }}"></script>
+</body>

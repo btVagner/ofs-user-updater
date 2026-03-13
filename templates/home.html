@@ -61,7 +61,17 @@
         </div>
       </a>
       {% endif %}
-
+      {% if has_perm('ddc.mensageria') %}
+      <a href="{{ url_for('ddc_mensageria') }}" class="card">
+        <h3>Mensageria DDC</h3>
+        <div class="card-description">
+          <p>
+            ➤ Envie integrações DDC de forma unitária ou massiva.<br>
+            ➤ Tela preparada para retorno de sucesso ou erro.
+          </p>
+        </div>
+      </a>
+      {% endif %}
       {% if has_perm('ofs.criar_tecnicos') %}
       <a href="{{ url_for('criar_tecnicos') }}" class="card">
         <h3>Criar técnicos</h3>

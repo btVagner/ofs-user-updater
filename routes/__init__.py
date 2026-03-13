@@ -8,6 +8,8 @@ from .sap_acompanhamento_critica_routes import init_app as init_sap_acompanhamen
 from .ofs_atividades_base_routes import init_app as init_ofs_atividades_base_routes
 from .perfis_usuarios_routes import init_app as init_perfis_usuarios_routes
 from .ofs_reprocessing_routes import init_app as init_ofs_reprocessing_routes
+from .ddc_mensageria_routes import init_app as init_ddc_mensageria_routes
+
 
 def register_routes(app):
     init_auth_routes(app)
@@ -21,3 +23,4 @@ def register_routes(app):
     init_ofs_atividades_base_routes(app)
     init_perfis_usuarios_routes(app)
     init_ofs_reprocessing_routes(app)
+    init_ddc_mensageria_routes(app)
