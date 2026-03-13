@@ -531,7 +531,7 @@ def get_job_status(job_uuid: str) -> dict:
                 status,
                 status_code,
                 message,
-                DATE_FORMAT(processed_at, '%%H:%%i:%%s') AS timestamp
+                processed_at
             FROM ddc_mensageria_job_items
             WHERE job_id = %s
               AND status IN ('success', 'error')
@@ -542,6 +542,12 @@ def get_job_status(job_uuid: str) -> dict:
         )
         logs = cur.fetchall() or []
 
+        for log in logs:
+            processed_at = log.get("processed_at")
+            log["timestamp"] = (
+                processed_at.strftime("%H:%M:%S")
+                if processed_at else None
+            )
         return {
             "job_id": job["job_uuid"],
             "status": job["status"],
