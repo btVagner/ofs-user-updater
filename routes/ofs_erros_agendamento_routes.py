@@ -295,7 +295,7 @@ def get_erros_agendamento_items(limit=50):
         conn.close()
 
 def export_erros_agendamento_xlsx():
-    items, _, _ = get_erros_agendamento_items(limit=None)
+    items, _, _, _, _ = get_erros_agendamento_items(limit=None)
 
     wb = Workbook()
     ws = wb.active
