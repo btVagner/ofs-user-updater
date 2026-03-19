@@ -50,17 +50,6 @@
         </div>
       </a>
       {% endif %}
-
-      {% if has_perm('ofs.activities_errors') %}
-      <a href="{{ url_for('ofs_activities_errors') }}" class="card">
-        <h3>Dashboard de Erros + Tratativas</h3>
-        <div class="card-description">
-          <p>
-            ➤ Analisa OS com crítica na API de retorno do NG e SAP
-          </p>
-        </div>
-      </a>
-      {% endif %}
       {% if has_perm('ddc.mensageria') %}
       <a href="{{ url_for('ddc_mensageria') }}" class="card">
         <h3>Mensageria DDC</h3>
@@ -119,24 +108,14 @@
         </div>
       </a>
       {% endif %}
-      {% if has_perm('ofs.atividades_base') %}
-      <a href="{{ url_for('ofs_atividades_base') }}" class="card">
-        <h3>Atividades (Base)</h3>
+      {% if has_perm('ofs.activities_errors') or has_perm('ofs.atividades_base') or
+      has_perm('sap.acompanhamento_critica') %}
+      <a href="{{ url_for('ofs_erros_tratativas_dashboards') }}" class="card">
+        <h3>Erros - Tratativas e Dashboards</h3>
         <div class="card-description">
           <p>
-            ➤ Importa atividades por período (sem filtro de status/crítica).<br>
-            ➤ Armazena na base para futuras rotinas.
-          </p>
-        </div>
-      </a>
-      {% endif %}
-      {% if has_perm('sap.acompanhamento_critica') %}
-      <a href="{{ url_for('sap_acompanhamento_critica') }}" class="card">
-        <h3>Acompanhamento Crítica SAP</h3>
-        <div class="card-description">
-          <p>
-            ➤ Acompanhamento e tratativa de críticas SAP.<br>
-            ➤ Visão restrita por permissão.
+            ➤ Centraliza os acessos de erros, tratativas e dashboards operacionais.<br>
+            ➤ Reúne Dashboard de Erros, Atividades Base e Crítica SAP.
           </p>
         </div>
       </a>

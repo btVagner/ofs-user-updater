@@ -1,0 +1,64 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<body>
+  <div class="menu-container">
+    <h2>Erros - Tratativas e Dashboards</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+    {% endfor %}
+    {% endwith %}
+
+    <div style="margin-bottom: 20px;">
+      <a href="{{ url_for('home') }}" class="card" style="display: inline-block; max-width: 260px;">
+        <h3>Voltar ao Painel OFS</h3>
+        <div class="card-description">
+          <p>➤ Retorna para a tela principal.</p>
+        </div>
+      </a>
+    </div>
+
+    <div class="card-grid">
+      {% if has_perm('ofs.activities_errors') %}
+      <a href="{{ url_for('ofs_activities_errors') }}" class="card">
+        <h3>Dashboard de Erros + Tratativas</h3>
+        <div class="card-description">
+          <p>
+            ➤ Analisa OS com crítica na API de retorno do NG e SAP.
+          </p>
+        </div>
+      </a>
+      {% endif %}
+
+      {% if has_perm('ofs.atividades_base') %}
+      <a href="{{ url_for('ofs_atividades_base') }}" class="card">
+        <h3>Atividades (Base)</h3>
+        <div class="card-description">
+          <p>
+            ➤ Importa atividades por período (sem filtro de status/crítica).<br>
+            ➤ Armazena na base para futuras rotinas.
+          </p>
+        </div>
+      </a>
+      {% endif %}
+
+      {% if has_perm('sap.acompanhamento_critica') %}
+      <a href="{{ url_for('sap_acompanhamento_critica') }}" class="card">
+        <h3>Acompanhamento Crítica SAP</h3>
+        <div class="card-description">
+          <p>
+            ➤ Acompanhamento e tratativa de críticas SAP.<br>
+            ➤ Visão restrita por permissão.
+          </p>
+        </div>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% include 'includes/footer.html' %}
+</body>
