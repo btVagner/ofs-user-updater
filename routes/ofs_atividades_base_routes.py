@@ -2,6 +2,7 @@ from flask import render_template, request, send_file, redirect, url_for, flash
 from datetime import datetime
 from io import BytesIO
 from urllib.parse import urlencode
+import re
 
 from openpyxl import Workbook
 
@@ -10,7 +11,11 @@ from ofs.client import OFSClient
 from core.auth import login_required, perm_required
 from core.utils import xlsx_auto_width
 
-
+def normalize_appt_number(value):
+    s = str(value or "").strip()
+    if not s:
+        return ""
+    return re.sub(r"-[^/]+(?=/)", "", s)
 def init_app(app):
 
     @app.route("/ofs/atividades-base", methods=["GET"])
@@ -323,12 +328,24 @@ def init_app(app):
 
         sql = """
             INSERT INTO ofs_atividades_base
-            (activity_id, city, activity_type, appt_number, origin_bucket, resource_id, status, xa_org_sys, `date`)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (
+                activity_id,
+                city,
+                activity_type,
+                appt_number,
+                appt_number_norm,
+                origin_bucket,
+                resource_id,
+                status,
+                xa_org_sys,
+                `date`
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON DUPLICATE KEY UPDATE
                 city = VALUES(city),
                 activity_type = VALUES(activity_type),
                 appt_number = VALUES(appt_number),
+                appt_number_norm = VALUES(appt_number_norm),
                 origin_bucket = VALUES(origin_bucket),
                 resource_id = VALUES(resource_id),
                 status = VALUES(status),
@@ -336,17 +353,20 @@ def init_app(app):
                 `date` = VALUES(`date`),
                 last_seen_at = NOW()
         """
-
         for a in items:
             activity_id = str(a.get("activityId") or "").strip()
             if not activity_id:
                 continue
 
+            appt_number = str(a.get("apptNumber") or "").strip() or None
+            appt_number_norm = normalize_appt_number(appt_number)
+
             cur.execute(sql, (
                 activity_id,
                 str(a.get("city") or "") or None,
                 str(a.get("activityType") or "") or None,
-                str(a.get("apptNumber") or "") or None,
+                appt_number,
+                appt_number_norm or None,
                 str(a.get("XA_ORIGIN_BUCKET") or "") or None,
                 str(a.get("resourceId") or "") or None,
                 str(a.get("status") or "") or None,

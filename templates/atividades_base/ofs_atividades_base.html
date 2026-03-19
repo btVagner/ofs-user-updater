@@ -15,7 +15,12 @@
         </div>
       </div>
 
-      <a class="btn-secondary" href="{{ url_for('home') }}">Voltar</a>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <a class="btn-pink" href="{{ url_for('ofs_erros_agendamento') }}">
+          Erros de agendamento
+        </a>
+        <a class="btn-secondary" href="{{ url_for('home') }}">Voltar</a>
+      </div>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -24,7 +29,6 @@
     {% endfor %}
     {% endwith %}
 
-    <!-- FILTROS + IMPORTAÇÃO (mantido como antes, adicionando filtros server-side) -->
     <div class="filtro-card">
 
       <form method="GET" action="{{ url_for('ofs_atividades_base') }}" class="filtro-form">
@@ -43,7 +47,6 @@
           <input type="text" name="resources" value="{{ resources }}" placeholder="02">
         </div>
 
-        <!-- activityType (server-side multi) -->
         <div>
           <label>Tipo de atividade (opt)</label>
 
@@ -78,12 +81,10 @@
               <div class="ms-hint">Se não selecionar nada, filtra todos.</div>
             </div>
 
-            <!-- hidden inputs name="activityType" -->
             <div id="fltTypesHidden"></div>
           </div>
         </div>
 
-        <!-- status (server-side multi) -->
         <div>
           <label>Status (opt)</label>
 
@@ -118,7 +119,6 @@
               <div class="ms-hint">Se não selecionar nada, filtra todos.</div>
             </div>
 
-            <!-- hidden inputs name="status" -->
             <div id="fltStatusHidden"></div>
           </div>
         </div>
@@ -126,7 +126,6 @@
         <button type="submit" class="btn-secondary">Filtrar</button>
       </form>
 
-      <!-- AQUI: Atualizar da API + Exportar ao lado (não muda) -->
       <div class="import-form" style="display:flex; gap:10px; align-items:flex-end; margin-left:auto;">
         <form method="POST" action="{{ url_for('ofs_atividades_base_importar') }}">
           <input type="hidden" name="dateFrom" value="{{ date_from }}">
@@ -145,7 +144,6 @@
 
     </div>
 
-    <!-- TABELA -->
     <div class="tabela-card">
       <div class="tabela-container">
         <table class="tabela-atividades">
@@ -223,7 +221,6 @@
       </div>
     </div>
 
-    <!-- Paginação (preserva filtros server-side) -->
     <div class="pagination">
       <div class="page-info">
         Página <b>{{ page }}</b> de <b>{{ total_pages }}</b> — exibindo até <b>{{ per_page }}</b> por página
@@ -248,7 +245,6 @@
 
   </div>
 
-  <!-- MENU DE FILTRO (local/Excel) -->
   <div id="thFilterMenu" class="th-filter-menu" style="display:none;">
     <div class="th-filter-actions">
       <button type="button" class="th-filter-action" data-action="asc">Ordenar A → Z</button>
@@ -266,7 +262,6 @@
     </div>
   </div>
 
-  <!-- MODAL EXPORTAÇÃO XLSX -->
   <div id="modalExportBackdrop" class="modal-backdrop-custom"></div>
 
   <div id="modalExport" class="modal-custom modal-small">

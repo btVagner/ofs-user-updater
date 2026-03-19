@@ -1,0 +1,137 @@
+{% include 'includes/head.html' %}
+{% if session.usuario_logado %}
+{% include 'includes/navbar.html' %}
+{% endif %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors.css') }}">
+
+<body>
+    <div class="page-atividades">
+
+        <div class="page-header">
+            <h2>Erros de agendamento</h2>
+
+            <div class="kpis">
+                <a class="btn-secondary" href="{{ url_for('ofs_atividades_base') }}">
+                    Voltar
+                </a>
+
+                <a class="btn-secondary" href="{{ url_for('ofs_erros_agendamento_export_xlsx') }}">
+                    Exportar visão completa
+                </a>
+
+                <div class="kpi">Importados: <b>{{ total_importados or 0 }}</b></div>
+                <div class="kpi">Erros: <b>{{ total or 0 }}</b></div>
+                <div class="kpi">Exibindo: <b>50 primeiros</b></div>
+
+                {% if min_data_agendada %}
+                <div class="kpi">Data mínima: <b>{{ min_data_agendada }}</b></div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div style="margin-bottom: 15px;">
+            {% for category, message in messages %}
+            <div class="kpi" style="margin-bottom:8px;">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="filtro-card">
+            <form method="POST" enctype="multipart/form-data" class="filtro-form">
+                <div>
+                    <label>Extração CRM</label>
+                    <input type="file" name="file" accept=".xlsx" required>
+                </div>
+
+                <button type="submit" class="btn-primary">Processar arquivo</button>
+            </form>
+        </div>
+
+        <div class="dashboard-card pending-close-dashboard-card">
+            <div class="dashboard-card-header">
+                <div class="dashboard-card-title-wrap">
+                    <h3>Erros de agendamento por data</h3>
+                    <span class="dashboard-subtitle">
+                        Quantidade de OS que deveria estar agendada no dia, mas não existe no OFS
+                    </span>
+                </div>
+            </div>
+
+            <div class="dashboard-metrics-grid pending-close-metrics-grid">
+                <div class="metric-box">
+                    <div class="metric-label">Total de erros de agendamento</div>
+                    <div class="metric-value">{{ total or 0 }}</div>
+                </div>
+
+                <div class="metric-box">
+                    <div class="metric-label">Data mínima do arquivo</div>
+                    <div class="metric-value" style="font-size:22px;">{{ min_data_agendada or '-' }}</div>
+                </div>
+            </div>
+
+            <div class="chart-wrap chart-wrap-lg pending-close-chart-wrap">
+                <canvas id="chartErrosAgendamentoByDay"></canvas>
+            </div>
+        </div>
+
+        <script id="errosAgendamentoChartData" type="application/json">
+            {{ dashboard_data | tojson }}
+        </script>
+
+        <div class="tabela-card">
+            <div class="tabela-container">
+                <table class="tabela-atividades">
+                    <thead>
+                        <tr>
+                            <th>OS CRM NORM</th>
+                            <th>STATUS</th>
+                            <th>DATA_AGENDADA</th>
+                            <th>NOME_CLIENTE</th>
+                            <th>CPF</th>
+                            <th>CIDADE</th>
+                            <th>Existe no OFS?</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if items %}
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ item.appt_number_norm or '-' }}</td>
+                            <td>{{ item.status or '-' }}</td>
+                            <td>{{ item.data_agendada_fmt or '-' }}</td>
+                            <td>{{ item.nome_cliente or '-' }}</td>
+                            <td>{{ item.cpf or '-' }}</td>
+                            <td>{{ item.cidade or '-' }}</td>
+                            <td>
+                                {% if item.existe_no_ofs == 'Sim' %}
+                                    <span style="font-weight:700;">Sim</span>
+                                {% else %}
+                                    <span style="font-weight:700;">Não</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="empty-row">
+                                Nenhum registro encontrado.
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/ofs_erros_agendamento.js') }}"></script>
+    {% include 'includes/footer.html' %}
+</body>
