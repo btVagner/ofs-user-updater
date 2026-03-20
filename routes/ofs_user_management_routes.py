@@ -336,7 +336,6 @@ def init_app(app):
 
         return render_template("criar_tecnicos.html", logs=logs)
 
-
     @app.route("/desativar_inativos", methods=["GET", "POST"])
     @login_required
     @perm_required("ofs.desativar")
@@ -345,10 +344,12 @@ def init_app(app):
         cutoff_days = int(raw_days) if raw_days.isdigit() else 80
 
         only_active = request.values.get("only_active") is not None
+        only_logged_once = request.values.get("only_logged_once") is not None
 
         vencidos, meta = find_stale_users(
             cutoff_days=cutoff_days,
-            only_active=only_active
+            only_active=only_active,
+            only_logged_once=only_logged_once
         )
 
         results = []
@@ -374,11 +375,12 @@ def init_app(app):
                 module="ofs",
                 action="cleanup" if apply else "cleanup_simulation",
                 entity_type="ofs_user",
-                summary=f"Cleanup OFS: mode={mode}, cutoff_days={cutoff_days}, only_active={only_active}, total={len(vencidos)}",
+                summary=f"Cleanup OFS: mode={mode}, cutoff_days={cutoff_days}, only_active={only_active}, only_logged_once={only_logged_once}, total={len(vencidos)}",
                 meta={
                     "mode": mode,
                     "cutoff_days": cutoff_days,
                     "only_active": only_active,
+                    "only_logged_once": only_logged_once,
                     "total": len(vencidos),
                 },
             )
@@ -419,6 +421,7 @@ def init_app(app):
             "desativar_inativos.html",
             cutoff_days=cutoff_days,
             only_active=only_active,
+            only_logged_once=only_logged_once,
             vencidos=vencidos,
             results=results,
             mode=mode,

@@ -125,37 +125,70 @@ def inactivate_resource(session: requests.Session, resource_id: Optional[str], a
     ok, code, _, _ = request_with_retries(session, "PUT", url, json={"status": "inactive"})
     return code
 
-def find_stale_users(cutoff_days: int, only_active: bool) -> Tuple[List[Dict], Dict]:
+def find_stale_users(cutoff_days: int, only_active: bool, only_logged_once: bool = False) -> Tuple[List[Dict], Dict]:
     """
     Retorna (vencidos, meta):
       meta = {
-        "ok": bool, "first_code": str, "first_count": int,
-        "total": int, "sample_keys": List[str], "error": Optional[str]
+        "ok": bool,
+        "first_code": str,
+        "first_count": int,
+        "total": int,
+        "sample_keys": List[str],
+        "error": Optional[str]
       }
+
+    Regras:
+    - only_active=True  -> considera somente status='active'
+    - only_logged_once=True -> considera somente usuários com last login preenchido/parseável
+    - only_logged_once=False -> mantém o fluxo atual
     """
     session = get_session()
-    # primeira página p/ diagnóstico
+
+    # Primeira página para diagnóstico
     first_items, first_code, first_err = get_users_page(session, 0, LIMIT)
+
     if not first_items and first_code not in ("200", "204"):
-        return [], {"ok": False, "first_code": first_code, "first_count": 0, "total": 0, "sample_keys": [], "error": first_err}
+        return [], {
+            "ok": False,
+            "first_code": first_code,
+            "first_count": 0,
+            "total": 0,
+            "sample_keys": [],
+            "error": first_err,
+        }
 
     sample_keys = list(first_items[0].keys())[:8] if first_items else []
     total = 0
     vencidos: List[Dict] = []
+    page_error = None
 
-    # processa primeira página
-    def maybe_add(u: Dict):
+    def maybe_add(u: Dict) -> None:
         nonlocal vencidos
-        login   = u.get("login")
-        status  = u.get("status")
-        lastraw = u.get("lastLoginTime") or u.get("last_login_time") or u.get("last_login")  # tolerância a nomes
-        utype   = u.get("userType") or u.get("user_type")
+
+        login = (u.get("login") or "").strip()
+        status = (u.get("status") or "").strip()
+        lastraw = (
+            u.get("lastLoginTime")
+            or u.get("last_login_time")
+            or u.get("last_login")
+        )
+        utype = u.get("userType") or u.get("user_type")
         mainres = u.get("mainResourceId") or u.get("main_resource_id")
+
         if not login:
             return
-        if only_active and status != "active":
+
+        if only_active and status.lower() != "active":
             return
-        if older_than(parse_last_login(lastraw), cutoff_days):
+
+        parsed_last_login = parse_last_login(lastraw)
+
+        # Novo comportamento:
+        # quando marcado, só considera quem já fez login de verdade
+        if only_logged_once and parsed_last_login is None:
+            return
+
+        if older_than(parsed_last_login, cutoff_days):
             vencidos.append({
                 "login": login,
                 "status": status,
@@ -164,33 +197,41 @@ def find_stale_users(cutoff_days: int, only_active: bool) -> Tuple[List[Dict], D
                 "mainResourceId": mainres,
             })
 
+    # Processa primeira página
     for u in first_items:
         total += 1
         maybe_add(u)
 
-    # demais páginas
+    # Demais páginas
     offset = len(first_items)
-    while True:
-        if offset == 0:
-            break  # já não tinha mais itens
+    while offset > 0:
         items, code, err = get_users_page(session, offset, LIMIT)
+
+        if code not in ("200", "204"):
+            page_error = err or f"Falha ao buscar página com offset={offset} (status {code})"
+            break
+
         if not items:
             break
+
         for u in items:
             total += 1
             maybe_add(u)
+
         offset += len(items)
-        time.sleep(PAUSE)
+
         if len(items) < LIMIT:
             break
 
+        time.sleep(PAUSE)
+
     return vencidos, {
-        "ok": True,
+        "ok": page_error is None,
         "first_code": first_code,
         "first_count": len(first_items),
         "total": total,
         "sample_keys": sample_keys,
-        "error": None
+        "error": page_error,
     }
 
 def execute_cleanup(vencidos: List[Dict], apply_changes: bool) -> List[Dict]:
