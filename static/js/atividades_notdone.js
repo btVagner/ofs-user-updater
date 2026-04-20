@@ -1,21 +1,21 @@
 document.addEventListener("DOMContentLoaded", function () {
+  const bodyEl = document.body;
+  const viewMode = (bodyEl?.dataset?.viewMode || "pendentes").trim();
+
   const activitiesEl = document.getElementById("activities-json");
   const activities = activitiesEl ? JSON.parse(activitiesEl.textContent || "[]") : [];
 
-  // Modal grande
   const modal = document.getElementById("modalTratar");
   const backdrop = document.getElementById("modalBackdrop");
   const btnFechar = document.getElementById("btnFecharModal");
   const btnAbrirTratativa = document.getElementById("btnAbrirTratativa");
   const btnRevogarTratativa = document.getElementById("btnRevogarTratativa");
 
-  // Modal pequeno tratativa
   const tModal = document.getElementById("modalTratativa");
   const tBackdrop = document.getElementById("modalTratativaBackdrop");
   const btnFecharTratativa = document.getElementById("btnFecharTratativa");
   const btnSalvarTratativa = document.getElementById("btnSalvarTratativa");
 
-  // Modal pequeno revogar
   const rModal = document.getElementById("modalRevogar");
   const rBackdrop = document.getElementById("modalRevogarBackdrop");
   const btnFecharRevogar = document.getElementById("btnFecharRevogar");
@@ -27,54 +27,102 @@ document.addEventListener("DOMContentLoaded", function () {
     const el = document.getElementById(id);
     if (el) el.value = value ?? "";
   }
+
   function setTratadoUI(isTratado) {
     if (btnAbrirTratativa) btnAbrirTratativa.style.display = isTratado ? "none" : "inline-block";
     if (btnRevogarTratativa) btnRevogarTratativa.style.display = isTratado ? "inline-block" : "none";
   }
-  // ===== Modal grande =====
-  function openModal() {
-    backdrop.style.display = "block";
-    modal.style.display = "block";
-  }
-  function closeModal() {
-    modal.style.display = "none";
-    backdrop.style.display = "none";
-    currentActivity = null;
 
-  // reset visual
+  function openModal() {
+    if (backdrop) backdrop.style.display = "block";
+    if (modal) modal.style.display = "block";
+  }
+
+  function closeModal() {
+    if (modal) modal.style.display = "none";
+    if (backdrop) backdrop.style.display = "none";
+    currentActivity = null;
     setTratadoUI(false);
   }
+
   if (btnFechar) btnFechar.addEventListener("click", closeModal);
   if (backdrop) backdrop.addEventListener("click", closeModal);
 
-  // ===== Modal tratativa =====
   function openTratativaModal() {
-    document.getElementById("t_status").value = "";
-    document.getElementById("t_obs").value = "";
-    tBackdrop.style.display = "block";
-    tModal.style.display = "block";
+    const tStatus = document.getElementById("t_status");
+    const tObs = document.getElementById("t_obs");
+    if (tStatus) tStatus.value = "";
+    if (tObs) tObs.value = "";
+    if (tBackdrop) tBackdrop.style.display = "block";
+    if (tModal) tModal.style.display = "block";
   }
+
   function closeTratativaModal() {
-    tModal.style.display = "none";
-    tBackdrop.style.display = "none";
+    if (tModal) tModal.style.display = "none";
+    if (tBackdrop) tBackdrop.style.display = "none";
   }
+
   if (btnFecharTratativa) btnFecharTratativa.addEventListener("click", closeTratativaModal);
   if (tBackdrop) tBackdrop.addEventListener("click", closeTratativaModal);
 
-  // ===== Modal revogar =====
   function openRevogarModal() {
-    document.getElementById("r_obs").value = "";
-    rBackdrop.style.display = "block";
-    rModal.style.display = "block";
+    const rObs = document.getElementById("r_obs");
+    if (rObs) rObs.value = "";
+    if (rBackdrop) rBackdrop.style.display = "block";
+    if (rModal) rModal.style.display = "block";
   }
+
   function closeRevogarModal() {
-    rModal.style.display = "none";
-    rBackdrop.style.display = "none";
+    if (rModal) rModal.style.display = "none";
+    if (rBackdrop) rBackdrop.style.display = "none";
   }
+
   if (btnFecharRevogar) btnFecharRevogar.addEventListener("click", closeRevogarModal);
   if (rBackdrop) rBackdrop.addEventListener("click", closeRevogarModal);
 
-  // ===== Helpers de UI =====
+  function updateLocalActivity(activityId, patch) {
+    const idx = activities.findIndex(a => String(a.activityId) === String(activityId));
+    if (idx >= 0) {
+      activities[idx] = { ...activities[idx], ...patch };
+    }
+    if (currentActivity && String(currentActivity.activityId) === String(activityId)) {
+      currentActivity = { ...currentActivity, ...patch };
+    }
+  }
+
+  function updateKpi(id, delta) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const current = parseInt(el.textContent || "0", 10) || 0;
+    el.textContent = String(Math.max(0, current + delta));
+  }
+
+  function ensureEmptyRow() {
+    const tbody = document.querySelector(".tabela-atividades tbody");
+    const table = document.querySelector(".tabela-atividades");
+    if (!tbody || !table) return;
+
+    const dataRows = Array.from(tbody.querySelectorAll("tr")).filter(tr => !tr.classList.contains("js-empty-row"));
+    if (dataRows.length > 0) return;
+
+    const colspan = table.dataset.emptyColspan || "5";
+    const tr = document.createElement("tr");
+    tr.className = "js-empty-row";
+    tr.innerHTML = `<td colspan="${colspan}" class="empty-row">Nenhuma atividade encontrada.</td>`;
+    tbody.appendChild(tr);
+  }
+
+  function removeEmptyRowIfNeeded() {
+    const emptyRow = document.querySelector(".js-empty-row");
+    if (emptyRow) emptyRow.remove();
+  }
+
+  function removeRow(activityId) {
+    const row = document.getElementById("row-" + activityId);
+    if (row) row.remove();
+    ensureEmptyRow();
+  }
+
   function updateRowToTratado(activityId, tratadoPor, status) {
     const row = document.getElementById("row-" + activityId);
     if (!row) return;
@@ -103,13 +151,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const tdAcoes = row.querySelector("td:last-child");
     if (tdAcoes) {
-      // NOTE: não temos mais idx aqui; mantemos pelo activityId e buscamos no JSON local
-      // então vamos recriar o botão com data-activityid e abrir pelo GET no clique.
       tdAcoes.innerHTML = `<button type="button" class="btn-tratar btn-tratar-byid" data-activityid="${activityId}">Tratar</button>`;
     }
   }
 
-  // ===== Abrir modal com dados =====
   function fillModalFromItem(a) {
     currentActivity = a;
 
@@ -124,18 +169,16 @@ document.addEventListener("DOMContentLoaded", function () {
     setVal("m_date", a.date);
     setVal("m_tskNot", a.XA_TSK_NOT);
 
-    // tratativa atual (pode ser null)
     setVal("m_tratativa_status", a.tratativa_status);
     setVal("m_tratado_por", a.tratado_por_username);
     setVal("m_tratativa_obs", a.tratativa_obs);
 
-    // Se tratado -> mostra botão revogar
-    const isTratado = (a.tratado_em !== null && a.tratado_em !== undefined && String(a.tratado_em).trim() !== "");
+    const isTratado = a.tratado_em !== null && a.tratado_em !== undefined && String(a.tratado_em).trim() !== "";
     setTratadoUI(isTratado);
   }
 
   async function fetchByActivityId(activityId) {
-    const resp = await fetch(`atividades-notdone/${encodeURIComponent(activityId)}`);
+    const resp = await fetch(`/atividades-notdone/${encodeURIComponent(activityId)}`);
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       throw new Error(data.error || "Falha ao buscar detalhes");
@@ -143,38 +186,21 @@ document.addEventListener("DOMContentLoaded", function () {
     return data.item;
   }
 
-  // Clique em "Tratar" (pendente) usando idx
   document.addEventListener("click", function (e) {
     const btn = e.target.closest(".btn-tratar");
     if (!btn) return;
 
-    // Se for botão por idx
-    const idxAttr = btn.getAttribute("data-idx");
-    if (idxAttr !== null) {
-      const idx = parseInt(idxAttr, 10);
-      const a = activities[idx];
-      if (!a) return;
-      fillModalFromItem(a);
-      openModal();
-      return;
-    }
+    const activityId = btn.getAttribute("data-activityid");
+    if (!activityId) return;
 
-    // Se for botão por activityId (caso revogou e recriou botão)
-    const byId = btn.classList.contains("btn-tratar-byid");
-    if (byId) {
-      const activityId = btn.getAttribute("data-activityid");
-      if (!activityId) return;
-
-      fetchByActivityId(activityId)
-        .then((item) => {
-          fillModalFromItem(item);
-          openModal();
-        })
-        .catch((err) => alert(err.message));
-    }
+    fetchByActivityId(activityId)
+      .then((item) => {
+        fillModalFromItem(item);
+        openModal();
+      })
+      .catch((err) => alert(err.message));
   });
 
-  // Clique em "Tratado" (clicável)
   document.addEventListener("click", function (e) {
     const btn = e.target.closest(".btn-ver-tratado");
     if (!btn) return;
@@ -190,7 +216,6 @@ document.addEventListener("DOMContentLoaded", function () {
       .catch((err) => alert(err.message));
   });
 
-  // Abrir modal pequeno de finalizar tratativa
   if (btnAbrirTratativa) {
     btnAbrirTratativa.addEventListener("click", function () {
       if (!currentActivity) return;
@@ -198,13 +223,12 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Salvar tratativa
   if (btnSalvarTratativa) {
     btnSalvarTratativa.addEventListener("click", async function () {
       if (!currentActivity) return;
 
-      const status = (document.getElementById("t_status").value || "").trim();
-      const obs = (document.getElementById("t_obs").value || "").trim();
+      const status = (document.getElementById("t_status")?.value || "").trim();
+      const obs = (document.getElementById("t_obs")?.value || "").trim();
 
       if (!status) {
         alert("Selecione o resultado da tratativa.");
@@ -214,7 +238,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const payload = { activityId: currentActivity.activityId, status, observacoes: obs };
 
       try {
-        const resp = await fetch("atividades-notdone/tratar", {
+        const resp = await fetch("/atividades-notdone/tratar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -226,39 +250,29 @@ document.addEventListener("DOMContentLoaded", function () {
           return;
         }
 
-        // Atualiza a linha da tabela
-        updateRowToTratado(currentActivity.activityId, data.tratadoPor, data.status);
-        // força UI do modal para tratado (sem depender do objeto)
+        updateLocalActivity(currentActivity.activityId, {
+          tratado_em: data.tratadoEm || new Date().toISOString(),
+          tratativa_status: data.status,
+          tratado_por_username: data.tratadoPor,
+          tratativa_obs: data.observacoes || obs,
+        });
+
+        setVal("m_tratativa_status", data.status);
+        setVal("m_tratado_por", data.tratadoPor);
+        setVal("m_tratativa_obs", data.observacoes || obs);
+
+        if (viewMode === "pendentes") {
+          removeRow(currentActivity.activityId);
+          updateKpi("kpiPendentes", -1);
+          updateKpi("kpiTratados", 1);
+          updateKpi("kpiTotal", -1);
+        } else {
+          updateRowToTratado(currentActivity.activityId, data.tratadoPor, data.status);
+        }
+
         setTratadoUI(true);
-
-        // atualiza campos da tratativa no modal
-        setVal("m_tratativa_status", data.status);
-        setVal("m_tratado_por", data.tratadoPor);
-        setVal("m_tratativa_obs", document.getElementById("t_obs").value);
-
-        // garante estado local também (opcional, mas bom)
-        currentActivity.tratado_em = new Date().toISOString();
-        currentActivity.tratativa_status = data.status;
-        currentActivity.tratado_por_username = data.tratadoPor;
-        currentActivity.tratativa_obs = document.getElementById("t_obs").value;
-
         closeTratativaModal();
-        // Atualiza o estado do objeto atual
-        currentActivity.tratado_em = new Date().toISOString();
-        currentActivity.tratativa_status = data.status;
-        currentActivity.tratado_por_username = data.tratadoPor;
-        currentActivity.tratativa_obs = document.getElementById("t_obs").value;
-
-        // 🔥 Atualiza os botões do modal grande
-        if (btnAbrirTratativa) btnAbrirTratativa.style.display = "none";
-        if (btnRevogarTratativa) btnRevogarTratativa.style.display = "inline-block";
-
-        // Atualiza os campos visíveis no modal
-        setVal("m_tratativa_status", data.status);
-        setVal("m_tratado_por", data.tratadoPor);
-        setVal("m_tratativa_obs", document.getElementById("t_obs").value);
-
-        closeTratativaModal();
+        closeModal();
       } catch (err) {
         alert("Falha de rede ao salvar tratativa.");
         console.error(err);
@@ -266,7 +280,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Revogar tratativa (abre modal)
   if (btnRevogarTratativa) {
     btnRevogarTratativa.addEventListener("click", function () {
       if (!currentActivity) return;
@@ -274,19 +287,18 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Confirmar revogação
   if (btnConfirmarRevogar) {
     btnConfirmarRevogar.addEventListener("click", async function () {
       if (!currentActivity) return;
 
-      const obs = (document.getElementById("r_obs").value || "").trim();
+      const obs = (document.getElementById("r_obs")?.value || "").trim();
       if (!obs) {
         alert("Observação é obrigatória para revogar.");
         return;
       }
 
       try {
-        const resp = await fetch("atividades-notdone/revogar", {
+        const resp = await fetch("/atividades-notdone/revogar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ activityId: currentActivity.activityId, observacoes: obs }),
@@ -298,17 +310,32 @@ document.addEventListener("DOMContentLoaded", function () {
           return;
         }
 
-        updateRowToPendente(currentActivity.activityId);
+        updateLocalActivity(currentActivity.activityId, {
+          tratado_em: null,
+          tratativa_status: null,
+          tratado_por_username: null,
+          tratativa_obs: null,
+        });
+
+        if (viewMode === "tratadas") {
+          removeRow(currentActivity.activityId);
+          updateKpi("kpiTratados", -1);
+          updateKpi("kpiPendentes", 1);
+          updateKpi("kpiTotal", -1);
+        } else {
+          updateRowToPendente(currentActivity.activityId);
+        }
 
         closeRevogarModal();
         closeModal();
-
       } catch (err) {
         alert("Falha de rede ao revogar.");
         console.error(err);
       }
     });
   }
+
+  removeEmptyRowIfNeeded();
 });
 
 // ===============================
@@ -319,14 +346,16 @@ document.addEventListener("DOMContentLoaded", function () {
   const input = document.getElementById("thFilterInput");
   const btnApply = document.getElementById("thFilterApply");
   const btnClear = document.getElementById("thFilterClear");
+  const dateRangeBox = document.getElementById("thFilterDateRange");
+  const dateFromInput = document.getElementById("thFilterDateFrom");
+  const dateToInput = document.getElementById("thFilterDateTo");
 
   if (!menu || !input || !btnApply || !btnClear) return;
 
   let activeCol = null;
-  let anchorBtn = null;
 
-  // filtros por coluna (mantém estado)
-  const filters = {}; // { col: "texto" }
+  const filters = {};
+  const dateFilters = {};
 
   function getTableBody() {
     return document.querySelector(".tabela-atividades tbody");
@@ -335,28 +364,88 @@ document.addEventListener("DOMContentLoaded", function () {
   function getRows() {
     const tbody = getTableBody();
     if (!tbody) return [];
-    return Array.from(tbody.querySelectorAll("tr")).filter(tr => tr.querySelector("td"));
+    return Array.from(tbody.querySelectorAll("tr")).filter(
+      tr => tr.querySelector("td") && !tr.classList.contains("js-empty-row")
+    );
   }
 
   function cellTextByCol(row, col) {
     const td = row.querySelector(`td[data-col="${col}"]`);
-    return (td ? td.textContent : "").trim().toLowerCase();
+    return (td ? td.textContent : "").trim();
+  }
+
+  function normalizeDateText(value) {
+    return String(value || "").trim().slice(0, 10);
+  }
+
+  function matchDateRange(cellValue, fromValue, toValue) {
+    const dateValue = normalizeDateText(cellValue);
+    if (!dateValue) return false;
+    if (fromValue && dateValue < fromValue) return false;
+    if (toValue && dateValue > toValue) return false;
+    return true;
+  }
+
+  function ensureEmptyStateForFilters() {
+    const tbody = getTableBody();
+    const table = document.querySelector(".tabela-atividades");
+    if (!tbody || !table) return;
+
+    const allRows = Array.from(tbody.querySelectorAll("tr")).filter(tr => !tr.classList.contains("js-empty-row"));
+    const visibleRows = allRows.filter(tr => tr.style.display !== "none");
+    const emptyRow = tbody.querySelector(".js-empty-row");
+
+    if (visibleRows.length === 0 && allRows.length > 0 && !emptyRow) {
+      const colspan = table.dataset.emptyColspan || "5";
+      const tr = document.createElement("tr");
+      tr.className = "js-empty-row";
+      tr.innerHTML = `<td colspan="${colspan}" class="empty-row">Nenhuma atividade encontrada com os filtros aplicados.</td>`;
+      tbody.appendChild(tr);
+      return;
+    }
+
+    if (visibleRows.length > 0 && emptyRow) {
+      emptyRow.remove();
+    }
   }
 
   function applyAllFilters() {
     const rows = getRows();
+
     rows.forEach(row => {
       let visible = true;
+
       for (const col in filters) {
-        const q = (filters[col] || "").toLowerCase();
+        const q = String(filters[col] || "").trim().toLowerCase();
         if (!q) continue;
-        if (!cellTextByCol(row, col).includes(q)) {
+
+        const cell = cellTextByCol(row, col).toLowerCase();
+        if (!cell.includes(q)) {
           visible = false;
           break;
         }
       }
+
+      if (visible) {
+        for (const col in dateFilters) {
+          const cfg = dateFilters[col] || {};
+          const fromValue = (cfg.from || "").trim();
+          const toValue = (cfg.to || "").trim();
+
+          if (!fromValue && !toValue) continue;
+
+          const cell = cellTextByCol(row, col);
+          if (!matchDateRange(cell, fromValue, toValue)) {
+            visible = false;
+            break;
+          }
+        }
+      }
+
       row.style.display = visible ? "" : "none";
     });
+
+    ensureEmptyStateForFilters();
   }
 
   function sortRows(col, dir) {
@@ -366,58 +455,76 @@ document.addEventListener("DOMContentLoaded", function () {
     const rows = getRows();
 
     rows.sort((a, b) => {
-      const A = cellTextByCol(a, col);
-      const B = cellTextByCol(b, col);
+      const A = cellTextByCol(a, col).toLowerCase();
+      const B = cellTextByCol(b, col).toLowerCase();
+
       if (A < B) return dir === "asc" ? -1 : 1;
       if (A > B) return dir === "asc" ? 1 : -1;
       return 0;
     });
 
     rows.forEach(r => tbody.appendChild(r));
+
+    const emptyRow = tbody.querySelector(".js-empty-row");
+    if (emptyRow) tbody.appendChild(emptyRow);
+  }
+
+  function syncMenuState(col) {
+    input.value = filters[col] || "";
+
+    if (col === "date" && dateRangeBox) {
+      dateRangeBox.style.display = "block";
+      const cfg = dateFilters[col] || {};
+      if (dateFromInput) dateFromInput.value = cfg.from || "";
+      if (dateToInput) dateToInput.value = cfg.to || "";
+    } else if (dateRangeBox) {
+      dateRangeBox.style.display = "none";
+      if (dateFromInput) dateFromInput.value = "";
+      if (dateToInput) dateToInput.value = "";
+    }
   }
 
   function openMenu(btn, col) {
     activeCol = col;
-    anchorBtn = btn;
-
-    // carrega filtro atual da coluna
-    input.value = filters[col] || "";
+    syncMenuState(col);
 
     const rect = btn.getBoundingClientRect();
     menu.style.display = "block";
     menu.style.top = `${rect.bottom + 6}px`;
-    menu.style.left = `${Math.min(rect.left, window.innerWidth - 300)}px`;
+    menu.style.left = `${Math.min(rect.left, window.innerWidth - 320)}px`;
 
-    input.focus();
+    if (col === "date" && dateFromInput) {
+      dateFromInput.focus();
+    } else {
+      input.focus();
+    }
   }
 
   function closeMenu() {
     menu.style.display = "none";
     activeCol = null;
-    anchorBtn = null;
   }
 
-  // clique no botãozinho do header
   document.addEventListener("click", function (e) {
     const btn = e.target.closest(".th-filter-btn");
     if (!btn) {
-      // clique fora fecha
-      if (menu.style.display === "block" && !e.target.closest("#thFilterMenu")) closeMenu();
+      if (menu.style.display === "block" && !e.target.closest("#thFilterMenu")) {
+        closeMenu();
+      }
       return;
     }
 
     const col = btn.getAttribute("data-col");
     if (!col) return;
 
-    // toggle
     if (menu.style.display === "block" && activeCol === col) {
       closeMenu();
       return;
     }
+
     openMenu(btn, col);
   });
 
-  // ordenar A→Z / Z→A
   menu.addEventListener("click", function (e) {
     const act = e.target.closest(".th-filter-action");
     if (!act || !activeCol) return;
@@ -425,29 +532,44 @@ document.addEventListener("DOMContentLoaded", function () {
     const action = act.getAttribute("data-action");
     if (action === "asc" || action === "desc") {
       sortRows(activeCol, action);
-      applyAllFilters(); // mantém filtros ativos após ordenar
+      applyAllFilters();
       closeMenu();
     }
   });
 
-  // aplicar filtro
   btnApply.addEventListener("click", function () {
     if (!activeCol) return;
+
     filters[activeCol] = (input.value || "").trim();
+
+    if (activeCol === "date") {
+      dateFilters[activeCol] = {
+        from: (dateFromInput?.value || "").trim(),
+        to: (dateToInput?.value || "").trim(),
+      };
+    }
+
     applyAllFilters();
     closeMenu();
   });
 
-  // limpar filtro
   btnClear.addEventListener("click", function () {
     if (!activeCol) return;
+
     filters[activeCol] = "";
-    input.value = "";
+
+    if (input) input.value = "";
+
+    if (activeCol === "date") {
+      dateFilters[activeCol] = { from: "", to: "" };
+      if (dateFromInput) dateFromInput.value = "";
+      if (dateToInput) dateToInput.value = "";
+    }
+
     applyAllFilters();
     closeMenu();
   });
 
-  // enter aplica
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -458,6 +580,32 @@ document.addEventListener("DOMContentLoaded", function () {
       closeMenu();
     }
   });
+
+  if (dateFromInput) {
+    dateFromInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        btnApply.click();
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeMenu();
+      }
+    });
+  }
+
+  if (dateToInput) {
+    dateToInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        btnApply.click();
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeMenu();
+      }
+    });
+  }
 })();
 
 // ===== Exportação (modal) =====

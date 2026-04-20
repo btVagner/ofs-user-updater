@@ -337,14 +337,14 @@
   background:#3a3a3a;
 }
 
-.th-filter-menu{
+.th-filter-menu {
   position: fixed;
   z-index: 10050;
-  width: 280px;
+  width: 300px;
   background: #1f1f1f;
   border: 1px solid #3a3a3a;
   border-radius: 10px;
-  padding: 12px;
+  padding: 14px;
   box-shadow: 0 10px 30px rgba(0,0,0,.45);
 }
 
@@ -443,3 +443,145 @@
   }
 }
 
+/* =========================================
+   Header - exportação + abas
+========================================= */
+.kpis-break {
+  flex-basis: 100%;
+  height: 0;
+}
+
+.view-switch {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.view-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid #3b3b3b;
+  background: #252525;
+  color: #d8d8d8;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: 0.18s ease;
+}
+
+.view-switch-btn:hover {
+  background: #323232;
+  border-color: #4b4b4b;
+  color: #ffffff;
+}
+
+.view-switch-btn.active {
+  background: #0d6efd;
+  border-color: #0d6efd;
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.15);
+}
+
+/* =========================================
+   Menu de filtro - datas mais bonitas
+========================================= */
+.th-filter-menu {
+  width: 300px;
+  padding: 14px;
+}
+.th-filter-date-range {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #353535;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.th-filter-date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.th-filter-date-field label {
+  display: block;
+  color: #cfcfcf;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.th-filter-date-field input[type="date"] {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #4a4a4a;
+  background: #2a2a2a;
+  color: #f1f1f1;
+  outline: none;
+  font-size: 13px;
+  line-height: 42px;
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.th-filter-date-field input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.85;
+  cursor: pointer;
+  filter: invert(1);
+}
+
+.th-filter-date-field input[type="date"]::-webkit-datetime-edit,
+.th-filter-date-field input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.th-filter-date-field input[type="date"]::-webkit-datetime-edit-text,
+.th-filter-date-field input[type="date"]::-webkit-datetime-edit-month-field,
+.th-filter-date-field input[type="date"]::-webkit-datetime-edit-day-field,
+.th-filter-date-field input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #f1f1f1;
+}
+
+.th-filter-date-field input[type="date"]:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+}
+.th-filter-date-field input[type="date"]:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+}
+
+/* melhora visual do campo "contém" também */
+.th-filter-search input {
+  height: 40px;
+  border-radius: 10px;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+/* footer do menu um pouco melhor */
+.th-filter-footer {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #353535;
+}
+
+/* responsivo */
+@media (max-width: 768px) {
+  .view-switch {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .view-switch-btn {
+    flex: 1;
+    min-width: 0;
+  }
+}

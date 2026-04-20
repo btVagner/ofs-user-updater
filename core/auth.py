@@ -17,16 +17,18 @@ def current_actor():
 def _carregar_permissoes_por_perfil(perfil_id: int):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT p.recurso
-        FROM perfil_permissao pp
-        JOIN permissoes p ON p.id = pp.permissao_id
-        WHERE pp.perfil_id = %s
-    """, (perfil_id,))
-    perms = [row[0] for row in cur.fetchall()]
-    cur.close()
-    conn.close()
-    return perms
+    try:
+        cur.execute("""
+            SELECT p.recurso
+            FROM perfil_permissao pp
+            JOIN permissoes p ON p.id = pp.permissao_id
+            WHERE pp.perfil_id = %s
+        """, (perfil_id,))
+        perms = [row[0] for row in cur.fetchall()]
+        return perms
+    finally:
+        cur.close()
+        conn.close()
 
 
 def login_required(f):
@@ -53,10 +55,12 @@ def perm_required(*recursos):
             if "usuario_logado" not in session:
                 flash("Faça login para acessar esta página.", "danger")
                 return redirect(url_for("login"))
+
             perms = session.get("permissoes", [])
             if not any(r in perms for r in recursos):
                 flash("Acesso negado para este recurso.", "danger")
                 return redirect(url_for("home"))
+
             return f(*args, **kwargs)
         return wrapper
     return deco

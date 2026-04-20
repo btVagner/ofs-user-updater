@@ -1,8 +1,9 @@
-from flask import render_template, request, send_file, redirect, url_for, flash, jsonify
+from math import ceil
+from urllib.parse import urlencode
 from datetime import datetime
-from io import BytesIO, StringIO
-import csv
+from io import BytesIO
 
+from flask import render_template, request, send_file, redirect, url_for, flash, jsonify
 from openpyxl import Workbook
 
 from database.connection import get_connection
@@ -10,10 +11,176 @@ from database.audit import audit_log
 from ofs.client import OFSClient
 from core.auth import login_required, perm_required, current_actor
 from core.utils import xlsx_auto_width
-from urllib.parse import urlencode
+
+
+PER_PAGE = 300
+
+TIPOS_DESCONSIDERADOS = {
+    "RET",
+    "APR",
+    "LUNCH",
+    "MAN",
+    "PRE",
+    "ALM",
+    "MAN_VEIC",
+    "REUNIAO",
+    "EQP_DUP",
+}
 
 
 def init_app(app):
+
+    def _parse_period():
+        today = datetime.now().strftime("%Y-%m-%d")
+        date_from = (request.args.get("dateFrom") or today).strip()
+        date_to = (request.args.get("dateTo") or today).strip()
+        resources = (request.args.get("resources") or "MG").strip()
+
+        try:
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d").date()
+        except Exception:
+            flash("Período inválido. Foi aplicado o dia atual automaticamente.", "danger")
+            date_from = today
+            date_to = today
+            dt_from = datetime.strptime(today, "%Y-%m-%d").date()
+            dt_to = dt_from
+
+        if dt_to < dt_from:
+            flash("O campo 'Até' não pode ser menor que 'De'. Foi aplicado o dia atual.", "danger")
+            date_from = today
+            date_to = today
+            dt_from = datetime.strptime(today, "%Y-%m-%d").date()
+            dt_to = dt_from
+
+        page_raw = (request.args.get("page") or "1").strip()
+        try:
+            page = int(page_raw)
+        except ValueError:
+            page = 1
+        if page < 1:
+            page = 1
+
+        return date_from, date_to, resources, page
+
+    def _get_kpis(date_from, date_to):
+        conn = get_connection()
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute("""
+                SELECT
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN tratado_em IS NULL THEN 1 ELSE 0 END) AS pendentes,
+                    SUM(CASE WHEN tratado_em IS NOT NULL THEN 1 ELSE 0 END) AS tratados
+                FROM ofs_atividades_notdone
+                WHERE `date` BETWEEN %s AND %s
+            """, (date_from, date_to))
+            row = cur.fetchone() or {}
+            return {
+                "total": int(row.get("total") or 0),
+                "pendentes": int(row.get("pendentes") or 0),
+                "tratados": int(row.get("tratados") or 0),
+            }
+        finally:
+            cur.close()
+            conn.close()
+
+    def _get_items(date_from, date_to, page, view_mode):
+        where_status = "tratado_em IS NULL" if view_mode == "pendentes" else "tratado_em IS NOT NULL"
+        offset = (page - 1) * PER_PAGE
+
+        conn = get_connection()
+        cur = conn.cursor(dictionary=True)
+
+        try:
+            cur.execute(f"""
+                SELECT COUNT(*) AS total_items
+                FROM ofs_atividades_notdone
+                WHERE `date` BETWEEN %s AND %s
+                  AND {where_status}
+            """, (date_from, date_to))
+            total_items = int((cur.fetchone() or {}).get("total_items") or 0)
+
+            total_pages = max(1, ceil(total_items / PER_PAGE)) if total_items else 1
+            if page > total_pages:
+                page = total_pages
+                offset = (page - 1) * PER_PAGE
+
+            order_sql = "tratado_em DESC, created_at DESC" if view_mode == "tratadas" else "created_at DESC"
+
+            cur.execute(f"""
+                SELECT
+                    activity_id AS activityId,
+                    activity_type AS activityType,
+                    city,
+                    customer_number AS customerNumber,
+                    customer_phone AS customerPhone,
+                    customer_name AS customerName,
+                    appt_number AS apptNumber,
+                    origin_bucket AS XA_ORIGIN_BUCKET,
+                    tsk_not AS XA_TSK_NOT,
+                    ser_clo_imp_ada AS XA_SER_CLO_IMP_ADA,
+                    resource_id AS resourceId,
+                    `date` AS date,
+                    tratativa_status,
+                    tratativa_obs,
+                    tratado_por_username,
+                    tratado_em
+                FROM ofs_atividades_notdone
+                WHERE `date` BETWEEN %s AND %s
+                  AND {where_status}
+                ORDER BY {order_sql}
+                LIMIT %s OFFSET %s
+            """, (date_from, date_to, PER_PAGE, offset))
+            items = cur.fetchall()
+
+            return items, total_items, total_pages, page
+        finally:
+            cur.close()
+            conn.close()
+
+    def _build_page_url(endpoint_name, page, date_from, date_to, resources):
+        return url_for(
+            endpoint_name,
+            page=page,
+            dateFrom=date_from,
+            dateTo=date_to,
+            resources=resources,
+        )
+
+    def _render_atividades_notdone(view_mode):
+        date_from, date_to, resources, page = _parse_period()
+        kpis = _get_kpis(date_from, date_to)
+        items, total_items, total_pages, current_page = _get_items(date_from, date_to, page, view_mode)
+
+        endpoint_name = "atividades_notdone" if view_mode == "pendentes" else "atividades_notdone_tratadas"
+
+        prev_page_url = None
+        next_page_url = None
+
+        if current_page > 1:
+            prev_page_url = _build_page_url(endpoint_name, current_page - 1, date_from, date_to, resources)
+
+        if current_page < total_pages:
+            next_page_url = _build_page_url(endpoint_name, current_page + 1, date_from, date_to, resources)
+
+        return render_template(
+            "atividades_notdone.html",
+            items=items,
+            date_from=date_from,
+            date_to=date_to,
+            resources=resources,
+            total=kpis["total"],
+            tratados=kpis["tratados"],
+            pendentes=kpis["pendentes"],
+            total_items=total_items,
+            per_page=PER_PAGE,
+            page=current_page,
+            total_pages=total_pages,
+            prev_page_url=prev_page_url,
+            next_page_url=next_page_url,
+            view_mode=view_mode,
+        )
 
     @app.route("/atividades-notdone/exportar", methods=["POST"])
     @login_required
@@ -22,21 +189,24 @@ def init_app(app):
         tipo = (request.form.get("tipo") or "").strip().lower()
         date_from = (request.form.get("dateFrom") or "").strip()
         date_to = (request.form.get("dateTo") or "").strip()
+        current_view = (request.form.get("currentView") or "pendentes").strip().lower()
+
+        redirect_endpoint = "atividades_notdone_tratadas" if current_view == "tratadas" else "atividades_notdone"
 
         if tipo not in {"clientes", "tratativas"}:
             flash("Tipo de exportação inválido.", "danger")
-            return redirect(url_for("atividades_notdone"))
+            return redirect(url_for(redirect_endpoint))
 
         try:
             dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
             dt_to = datetime.strptime(date_to, "%Y-%m-%d").date()
         except Exception:
             flash("Informe um período válido (De / Até).", "danger")
-            return redirect(url_for("atividades_notdone"))
+            return redirect(url_for(redirect_endpoint))
 
         if dt_to < dt_from:
             flash("O campo 'Até' não pode ser menor que 'De'.", "danger")
-            return redirect(url_for("atividades_notdone"))
+            return redirect(url_for(redirect_endpoint))
 
         conn = get_connection()
         cur = conn.cursor(dictionary=True)
@@ -46,6 +216,7 @@ def init_app(app):
                 cur.execute("""
                     SELECT
                         activity_id,
+                        activity_type,
                         `date`,
                         city,
                         customer_number,
@@ -68,7 +239,7 @@ def init_app(app):
 
                 sheet_name = "Clientes"
                 headers = [
-                    "activity_id", "date", "city",
+                    "activity_id", "activity_type", "date", "city",
                     "customer_number", "customer_phone", "customer_name",
                     "appt_number", "origin_bucket",
                     "ser_clo_imp_ada", "resource_id",
@@ -80,6 +251,7 @@ def init_app(app):
                     SELECT
                         h.id AS history_id,
                         h.activity_id,
+                        n.activity_type,
                         n.customer_name,
                         n.customer_number,
                         n.appt_number,
@@ -99,7 +271,7 @@ def init_app(app):
 
                 sheet_name = "Tratativas"
                 headers = [
-                    "history_id", "activity_id",
+                    "history_id", "activity_id", "activity_type",
                     "customer_name", "customer_number", "appt_number",
                     "action", "status", "obs", "actor_username", "created_at"
                 ]
@@ -136,54 +308,13 @@ def init_app(app):
     @login_required
     @perm_required("ofs.atividades_notdone")
     def atividades_notdone():
-        today = datetime.now().strftime("%Y-%m-%d")
-        date_from = (request.args.get("dateFrom") or today).strip()
-        date_to = (request.args.get("dateTo") or today).strip()
-        resources = (request.args.get("resources") or "MG").strip()
+        return _render_atividades_notdone("pendentes")
 
-        conn = get_connection()
-        cur = conn.cursor(dictionary=True)
-
-        cur.execute("""
-            SELECT
-                activity_id AS activityId,
-                city,
-                customer_number AS customerNumber,
-                customer_name AS customerName,
-                appt_number AS apptNumber,
-                origin_bucket AS XA_ORIGIN_BUCKET,
-                tsk_not AS XA_TSK_NOT,
-                ser_clo_imp_ada AS XA_SER_CLO_IMP_ADA,
-                resource_id AS resourceId,
-                date AS date,
-                tratativa_status,
-                tratativa_obs,
-                tratado_por_username,
-                tratado_em
-            FROM ofs_atividades_notdone
-            ORDER BY
-                (tratado_em IS NULL) DESC,
-                created_at DESC
-            LIMIT 5000
-        """)
-        items = cur.fetchall()
-        cur.close()
-        conn.close()
-
-        total = len(items)
-        tratados = sum(1 for i in items if i.get("tratado_em"))
-        pendentes = total - tratados
-
-        return render_template(
-            "atividades_notdone.html",
-            items=items,
-            date_from=date_from,
-            date_to=date_to,
-            resources=resources,
-            total=total,
-            tratados=tratados,
-            pendentes=pendentes,
-        )
+    @app.route("/atividades-notdone/tratadas", methods=["GET"])
+    @login_required
+    @perm_required("ofs.atividades_notdone")
+    def atividades_notdone_tratadas():
+        return _render_atividades_notdone("tratadas")
 
     @app.route("/atividades-notdone/importar", methods=["POST"])
     @login_required
@@ -193,11 +324,15 @@ def init_app(app):
         date_from = (request.form.get("dateFrom") or today).strip()
         date_to = (request.form.get("dateTo") or today).strip()
         resources = (request.form.get("resources") or "MG").strip()
+        current_view = (request.form.get("currentView") or "pendentes").strip().lower()
+
+        redirect_endpoint = "atividades_notdone_tratadas" if current_view == "tratadas" else "atividades_notdone"
 
         client = OFSClient()
 
         fields = [
             "activityId",
+            "activityType",
             "city",
             "customerNumber",
             "customerName",
@@ -240,27 +375,48 @@ def init_app(app):
                 page += 1
         except Exception as e:
             flash(f"❌ Falha ao importar da API: {e}", "danger")
-            return redirect(url_for("atividades_notdone", dateFrom=date_from, dateTo=date_to, resources=resources))
+            return redirect(url_for(redirect_endpoint, dateFrom=date_from, dateTo=date_to, resources=resources))
 
         conn = get_connection()
         cur = conn.cursor()
 
         inserted = 0
         skipped = 0
+        ignored_types = 0
 
         sql = """
             INSERT IGNORE INTO ofs_atividades_notdone
-            (activity_id, city, customer_number, customer_phone, customer_name, appt_number, origin_bucket, tsk_not, ser_clo_imp_ada, resource_id,date)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (
+                activity_id,
+                activity_type,
+                city,
+                customer_number,
+                customer_phone,
+                customer_name,
+                appt_number,
+                origin_bucket,
+                tsk_not,
+                ser_clo_imp_ada,
+                resource_id,
+                date
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """
 
         for a in items:
             activity_id = str(a.get("activityId") or "").strip()
+            activity_type = str(a.get("activityType") or "").strip().upper()
+
             if not activity_id:
+                continue
+
+            if activity_type in TIPOS_DESCONSIDERADOS:
+                ignored_types += 1
                 continue
 
             cur.execute(sql, (
                 activity_id,
+                activity_type or None,
                 str(a.get("city") or "") or None,
                 str(a.get("customerNumber") or "") or None,
                 str(a.get("customerPhone") or "") or None,
@@ -281,8 +437,11 @@ def init_app(app):
         cur.close()
         conn.close()
 
-        flash(f"✅ Importação concluída. Novos: {inserted} | Já existiam: {skipped}", "success")
-        return redirect(url_for("atividades_notdone", dateFrom=date_from, dateTo=date_to, resources=resources))
+        flash(
+            f"✅ Importação concluída. Novos: {inserted} | Já existiam: {skipped} | Desconsiderados por tipo: {ignored_types}",
+            "success"
+        )
+        return redirect(url_for(redirect_endpoint, dateFrom=date_from, dateTo=date_to, resources=resources))
 
     @app.route("/atividades-notdone/tratar", methods=["POST"])
     @login_required
@@ -381,7 +540,9 @@ def init_app(app):
             "ok": True,
             "activityId": activity_id,
             "tratadoPor": username,
-            "status": status
+            "status": status,
+            "tratadoEm": datetime.now().isoformat(),
+            "observacoes": obs,
         }), 200
 
     @app.route("/atividades-notdone/<activity_id>", methods=["GET"])
@@ -398,6 +559,7 @@ def init_app(app):
         cur.execute("""
             SELECT
                 activity_id AS activityId,
+                activity_type AS activityType,
                 city,
                 customer_number AS customerNumber,
                 customer_phone AS customerPhone,

@@ -11,10 +11,17 @@ from .ofs_reprocessing_routes import init_app as init_ofs_reprocessing_routes
 from .ddc_mensageria_routes import init_app as init_ddc_mensageria_routes
 from .ofs_erros_tratativas_dashboards_routes import init_app as init_ofs_erros_tratativas_dashboards_routes
 from .ofs_erros_agendamento_routes import init_app as init_ofs_erros_agendamento_routes
+from .home_routes import init_app as init_home_routes
+from .online_routes import init_app as init_online_routes
+from .toquio_td_bucket_routes import init_app as init_toquio_td_bucket_routes
 
 
 def register_routes(app):
     init_auth_routes(app)
+    init_home_routes(app)
+    init_online_routes(app)
+    init_toquio_td_bucket_routes(app)
+
     init_logs_routes(app)
     init_adapter_routes(app)
 
