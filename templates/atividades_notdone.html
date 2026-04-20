@@ -5,7 +5,10 @@
 {% include 'includes/navbar.html' %}
 {% endif %}
 
-<body data-view-mode="{{ view_mode }}">
+<body data-view-mode="{{ view_mode }}"
+  data-detail-url-base="{{ url_for('atividades_notdone_get', activity_id='__ACTIVITY_ID__') }}"
+  data-tratar-url="{{ url_for('atividades_notdone_tratar') }}"
+  data-revogar-url="{{ url_for('atividades_notdone_revogar') }}">
   <div class="page-atividades">
 
     <div class="page-header">
@@ -409,7 +412,7 @@
         </div>
       </form>
     </div>
-
+    <div id="toastContainer" class="toast-container"></div>
     <script id="activities-json" type="application/json">
     {{ items|tojson }}
   </script>

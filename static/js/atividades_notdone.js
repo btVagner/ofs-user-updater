@@ -1,6 +1,9 @@
 document.addEventListener("DOMContentLoaded", function () {
   const bodyEl = document.body;
   const viewMode = (bodyEl?.dataset?.viewMode || "pendentes").trim();
+  const detailUrlBase = bodyEl?.dataset?.detailUrlBase || "";
+  const tratarUrl = bodyEl?.dataset?.tratarUrl || "/atividades-notdone/tratar";
+  const revogarUrl = bodyEl?.dataset?.revogarUrl || "/atividades-notdone/revogar";
 
   const activitiesEl = document.getElementById("activities-json");
   const activities = activitiesEl ? JSON.parse(activitiesEl.textContent || "[]") : [];
@@ -22,7 +25,32 @@ document.addEventListener("DOMContentLoaded", function () {
   const btnConfirmarRevogar = document.getElementById("btnConfirmarRevogar");
 
   let currentActivity = null;
+  function showToast(type, title, message) {
+    const container = document.getElementById("toastContainer");
+    if (!container) return;
 
+    const toast = document.createElement("div");
+    toast.className = `toast-msg ${type}`;
+
+    toast.innerHTML = `
+    <div class="toast-body">
+      <div class="toast-title">${title}</div>
+      <div class="toast-text">${message}</div>
+    </div>
+    <div class="toast-progress">
+      <div class="toast-progress-bar"></div>
+    </div>
+  `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.animation = "toastOut 0.28s ease forwards";
+      setTimeout(() => {
+        toast.remove();
+      }, 280);
+    }, 1700);
+  }
   function setVal(id, value) {
     const el = document.getElementById(id);
     if (el) el.value = value ?? "";
@@ -178,7 +206,8 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   async function fetchByActivityId(activityId) {
-    const resp = await fetch(`/atividades-notdone/${encodeURIComponent(activityId)}`);
+    const url = detailUrlBase.replace("__ACTIVITY_ID__", encodeURIComponent(activityId));
+    const resp = await fetch(url);
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       throw new Error(data.error || "Falha ao buscar detalhes");
@@ -198,7 +227,7 @@ document.addEventListener("DOMContentLoaded", function () {
         fillModalFromItem(item);
         openModal();
       })
-      .catch((err) => alert(err.message));
+      .catch((err) => showToast("error", "Erro", err.message || "Falha ao buscar detalhes."));
   });
 
   document.addEventListener("click", function (e) {
@@ -231,14 +260,14 @@ document.addEventListener("DOMContentLoaded", function () {
       const obs = (document.getElementById("t_obs")?.value || "").trim();
 
       if (!status) {
-        alert("Selecione o resultado da tratativa.");
+        showToast("warning", "Atenção", "Selecione o resultado da tratativa.");
         return;
       }
 
       const payload = { activityId: currentActivity.activityId, status, observacoes: obs };
 
       try {
-        const resp = await fetch("/atividades-notdone/tratar", {
+        const resp = await fetch(tratarUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -246,7 +275,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
-          alert(data.error || "Erro ao salvar tratativa.");
+          showToast("error", "Erro", data.error || "Erro ao salvar tratativa.");
           return;
         }
 
@@ -271,10 +300,11 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         setTratadoUI(true);
+        showToast("success", "Sucesso", "Tratativa realizada com sucesso.");
         closeTratativaModal();
         closeModal();
       } catch (err) {
-        alert("Falha de rede ao salvar tratativa.");
+        showToast("error", "Erro", "Falha de rede ao salvar tratativa.");
         console.error(err);
       }
     });
@@ -293,12 +323,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const obs = (document.getElementById("r_obs")?.value || "").trim();
       if (!obs) {
-        alert("Observação é obrigatória para revogar.");
+        showToast("warning", "Atenção", "Observação é obrigatória para revogar.");
         return;
       }
 
       try {
-        const resp = await fetch("/atividades-notdone/revogar", {
+        const resp = await fetch(revogarUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ activityId: currentActivity.activityId, observacoes: obs }),
@@ -306,7 +336,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
-          alert(data.error || "Erro ao revogar tratativa.");
+          showToast("error", "Erro", data.error || "Erro ao revogar tratativa.");
           return;
         }
 
@@ -325,11 +355,11 @@ document.addEventListener("DOMContentLoaded", function () {
         } else {
           updateRowToPendente(currentActivity.activityId);
         }
-
+        showToast("success", "Sucesso", "Revogação realizada com sucesso.");
         closeRevogarModal();
         closeModal();
       } catch (err) {
-        alert("Falha de rede ao revogar.");
+        showToast("error", "Erro", "Falha de rede ao revogar.");
         console.error(err);
       }
     });
