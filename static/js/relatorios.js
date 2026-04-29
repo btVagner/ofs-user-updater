@@ -190,11 +190,57 @@ document.addEventListener("DOMContentLoaded", function () {
             .filter(Boolean);
     }
 
+    function checkedValuesInScope(name, scope) {
+        if (!scope) return [];
+        return Array.from(scope.querySelectorAll(`input[name="${name}"]:checked`))
+            .map(el => el.value)
+            .filter(Boolean);
+    }
+
     function setChecked(name, checked, scope) {
         const root = scope || document;
         root.querySelectorAll(`input[name="${name}"]`).forEach(el => {
             el.checked = checked;
         });
+    }
+
+    function getActiveResourceTypeButton() {
+        return document.querySelector(".resource-type-btn.active");
+    }
+
+    function getVisibleResourceGroup() {
+        return document.querySelector(".resource-group:not(.hidden)");
+    }
+
+    function clearResourceSelectionsOutsideGroup(activeGroup) {
+        document.querySelectorAll(".resource-group").forEach(group => {
+            if (group !== activeGroup) {
+                setChecked("resources", false, group);
+            }
+        });
+    }
+
+    function activateResourceGroup(resourceType) {
+        if (!resourceType) return;
+
+        document.querySelectorAll(".resource-type-btn").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.resourceType === resourceType);
+        });
+
+        let activeGroup = null;
+
+        document.querySelectorAll(".resource-group").forEach(group => {
+            const isActive = group.dataset.resourceGroup === resourceType;
+            group.classList.toggle("hidden", !isActive);
+
+            if (isActive) {
+                activeGroup = group;
+            }
+        });
+
+        if (activeGroup) {
+            clearResourceSelectionsOutsideGroup(activeGroup);
+        }
     }
 
     function setStatusBox(text, type) {
@@ -227,6 +273,7 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("btnClearStatus")?.addEventListener("click", () => {
         setChecked("statuses", false);
     });
+
     document.getElementById("btnSelectAllActivityTypes")?.addEventListener("click", () => {
         setChecked("activityTypes", true);
     });
@@ -246,23 +293,22 @@ document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll(".resource-type-btn").forEach(btn => {
         btn.addEventListener("click", function () {
             const type = btn.dataset.resourceType;
-
-            document.querySelectorAll(".resource-type-btn").forEach(x => x.classList.remove("active"));
-            btn.classList.add("active");
-
-            document.querySelectorAll(".resource-group").forEach(group => {
-                group.classList.toggle("hidden", group.dataset.resourceGroup !== type);
-            });
+            activateResourceGroup(type);
         });
     });
 
+    const initiallyActiveButton = getActiveResourceTypeButton();
+    if (initiallyActiveButton?.dataset.resourceType) {
+        activateResourceGroup(initiallyActiveButton.dataset.resourceType);
+    }
+
     document.getElementById("btnSelectVisibleResources")?.addEventListener("click", () => {
-        const visibleGroup = document.querySelector(".resource-group:not(.hidden)");
+        const visibleGroup = getVisibleResourceGroup();
         if (visibleGroup) setChecked("resources", true, visibleGroup);
     });
 
     document.getElementById("btnClearVisibleResources")?.addEventListener("click", () => {
-        const visibleGroup = document.querySelector(".resource-group:not(.hidden)");
+        const visibleGroup = getVisibleResourceGroup();
         if (visibleGroup) setChecked("resources", false, visibleGroup);
     });
 
@@ -317,7 +363,8 @@ document.addEventListener("DOMContentLoaded", function () {
             const dateTo = document.getElementById("dateTo")?.value || "";
             const statuses = checkedValues("statuses");
             const activityTypes = checkedValues("activityTypes");
-            const resources = checkedValues("resources");
+            const activeResourceGroup = getVisibleResourceGroup();
+            const resources = checkedValuesInScope("resources", activeResourceGroup);
             const fields = checkedValues("fields");
 
             if (!dateFrom || !dateTo) {
@@ -329,12 +376,16 @@ document.addEventListener("DOMContentLoaded", function () {
                 showToast("warning", "Atenção", "Selecione pelo menos um status.");
                 return;
             }
+
             if (activityTypes.length === 0) {
                 showToast("warning", "Atenção", "Selecione pelo menos um tipo de atividade.");
                 return;
             }
+
             if (resources.length === 0) {
-                showToast("warning", "Atenção", "Selecione pelo menos um recurso.");
+                const activeTypeBtn = getActiveResourceTypeButton();
+                const activeTypeLabel = activeTypeBtn?.textContent?.trim() || "aba ativa";
+                showToast("warning", "Atenção", `Selecione pelo menos um recurso na aba ${activeTypeLabel}.`);
                 return;
             }
 
@@ -351,6 +402,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 resources,
                 fields,
             };
+
             btnStart.disabled = true;
             clearStatusBox();
             setStatusBox("Iniciando extração em segundo plano...", "info");
