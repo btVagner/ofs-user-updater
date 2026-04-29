@@ -1,145 +1,179 @@
 {% include 'includes/head.html' %}
-{% if session.usuario_logado %}
-{% include 'includes/navbar.html' %}
-{% endif %}
 
 <body>
-  <div class="menu-container">
-    <h2>Painel OFS</h2>
+  {% if session.usuario_logado %}
+    {% include 'includes/navbar.html' %}
+  {% endif %}
+
+  <div class="menu-container fade-in">
+    <section class="home-hero">
+      <span class="home-kicker">Central operacional</span>
+      <h1>Painel OFS</h1>
+      <p class="home-subtitle">
+        Acesse os módulos de operação, integrações, cadastros e administração do portal.
+      </p>
+    </section>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, message in messages %}
-    <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
-    {% endfor %}
+      {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+      {% endfor %}
     {% endwith %}
 
     <div class="card-grid">
-      {# ====== OFS ====== #}
       {% if has_perm('ofs.atualizar_tipo') %}
       <a href="{{ url_for('atualizar_user_type') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">OFS</span>
+        </div>
         <h3>Tipos de usuário</h3>
         <div class="card-description">
-          <p>
-            ➤ Altere o tipo de usuário de um ou mais técnicos.<br>
-            ➤ Gerencie os tipos disponíveis de usuários.
-          </p>
+          <p>Altere o tipo de usuário de um ou mais técnicos e gerencie os tipos disponíveis no ambiente.</p>
         </div>
+        <span class="card-arrow">Acessar &rarr;</span>
+      </a>
+      {% endif %}
+
+      {% if has_perm('relatorios.acessar') %}
+      <a href="{{ url_for('relatorios') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Relatórios</span>
+        </div>
+        <h3>Relatórios</h3>
+        <div class="card-description">
+          <p>Acesse relatórios operacionais do painel OFS com filtros, geração em segundo plano e exportação.</p>
+        </div>
+        <span class="card-arrow">Acessar &rarr;</span>
       </a>
       {% endif %}
 
       {% if has_perm('ofs.consultar') %}
       <a href="{{ url_for('consultar_usuarios') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Consulta</span>
+        </div>
         <h3>Consultar usuários</h3>
         <div class="card-description">
-          <p>
-            ➤ Lista todos os usuários cadastrados no OFS.<br>
-            ➤ Exibe nome, login, status e XU_CODE_SAP.
-          </p>
+          <p>Liste usuários do OFS com visão de nome, login, status, userType e código SAP.</p>
         </div>
+        <span class="card-arrow">Acessar &rarr;</span>
       </a>
       {% endif %}
 
       {% if has_perm('ofs.desativar') %}
       <a href="{{ url_for('desativar_inativos') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Operação</span>
+        </div>
         <h3>Desativar usuários e recursos</h3>
         <div class="card-description">
-          <p>
-            ➤ Lista usuários sem acesso há muito tempo ou sem login.<br>
-            ➤ Permite simular ou executar exclusão e inativação.
-          </p>
+          <p>Analise usuários sem acesso recente ou sem login e execute simulação ou desativação com segurança.</p>
         </div>
-      </a>
-      {% endif %}
-      {% if has_perm('ddc.mensageria') %}
-      <a href="{{ url_for('ddc_mensageria') }}" class="card">
-        <h3>Mensageria DDC</h3>
-        <div class="card-description">
-          <p>
-            ➤ Envie integrações DDC de forma unitária ou massiva.<br>
-            ➤ Tela preparada para retorno de sucesso ou erro.
-          </p>
-        </div>
-      </a>
-      {% endif %}
-      {% if has_perm('ofs.criar_tecnicos') %}
-      <a href="{{ url_for('criar_tecnicos') }}" class="card">
-        <h3>Criar técnicos</h3>
-        <div class="card-description">
-          <p>
-            ➤ Envie um CSV e crie recurso + usuário no OFS (ambiente de teste).
-          </p>
-        </div>
+        <span class="card-arrow">Acessar &rarr;</span>
       </a>
       {% endif %}
 
-      {# ====== ADMIN / PORTAL ====== #}
+      {% if has_perm('ddc.mensageria') %}
+      <a href="{{ url_for('ddc_mensageria') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Integração</span>
+        </div>
+        <h3>Mensageria DDC</h3>
+        <div class="card-description">
+          <p>Envie integrações DDC de forma unitária ou massiva e acompanhe o retorno de processamento.</p>
+        </div>
+        <span class="card-arrow">Acessar &rarr;</span>
+      </a>
+      {% endif %}
+
+      {% if has_perm('ofs.criar_tecnicos') %}
+      <a href="{{ url_for('criar_tecnicos') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Cadastro</span>
+        </div>
+        <h3>Criar técnicos</h3>
+        <div class="card-description">
+          <p>Envie um CSV para criar recurso e usuário no OFS de forma padronizada no ambiente de teste.</p>
+        </div>
+        <span class="card-arrow">Acessar &rarr;</span>
+      </a>
+      {% endif %}
+
       {% if has_perm('perfis.gerenciar') %}
       <a href="{{ url_for('perfis_view') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Admin</span>
+        </div>
         <h3>Gerenciar Perfis</h3>
         <div class="card-description">
-          <p>
-            ➤ Crie/edite perfis e permissões.<br>
-            ➤ Controle de acesso do portal por tela.
-          </p>
+          <p>Crie, edite e mantenha perfis e permissões de acesso do portal por módulo e funcionalidade.</p>
         </div>
+        <span class="card-arrow">Acessar &rarr;</span>
       </a>
       {% endif %}
 
       {% if has_perm('usuarios.criar') %}
       <a href="{{ url_for('usuarios_painel') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Admin</span>
+        </div>
         <h3>Usuários do painel</h3>
         <div class="card-description">
-          <p>
-            ➤ Liste e filtre usuários do portal.<br>
-            ➤ Visualize perfil e last login.
-          </p>
+          <p>Liste, filtre e acompanhe usuários do portal com perfil associado e último acesso registrado.</p>
         </div>
+        <span class="card-arrow">Acessar &rarr;</span>
       </a>
       {% endif %}
 
       {% if has_perm('adapter.fechar_os') %}
       <a href="{{ url_for('fechar_os_adapter') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Adapter</span>
+        </div>
         <h3>Fechar OS Adapter</h3>
         <div class="card-description">
-          <p>
-            ➤ Fecha OS manualmente quando a integração falha.<br>
-            ➤ Pré-visualize dados antes de enviar.
-          </p>
+          <p>Feche ordens manualmente quando a integração falhar, com validação e pré-visualização antes do envio.</p>
         </div>
+        <span class="card-arrow">Acessar &rarr;</span>
       </a>
       {% endif %}
-      {% if has_perm('ofs.activities_errors') or has_perm('ofs.atividades_base') or
-      has_perm('sap.acompanhamento_critica') %}
+
+      {% if has_perm('ofs.activities_errors') or has_perm('ofs.atividades_base') or has_perm('sap.acompanhamento_critica') %}
       <a href="{{ url_for('ofs_erros_tratativas_dashboards') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Monitoramento</span>
+        </div>
         <h3>Erros - Tratativas e Dashboards</h3>
         <div class="card-description">
-          <p>
-            ➤ Centraliza os acessos de erros, tratativas e dashboards operacionais.<br>
-            ➤ Reúne Dashboard de Erros, Atividades Base e Crítica SAP.
-          </p>
+          <p>Central de acesso para dashboards operacionais, erros de integração, atividades base e crítica SAP.</p>
         </div>
+        <span class="card-arrow">Acessar &rarr;</span>
       </a>
       {% endif %}
 
       {% if has_perm('ofs.atividades_notdone') %}
       <a href="{{ url_for('atividades_notdone') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Operação</span>
+        </div>
         <h3>Atividades notdone</h3>
         <div class="card-description">
-          <p>
-            ➤ Lista atividades notdone por data e resource.<br>
-            ➤ Botão Tratar abre modal com detalhes.
-          </p>
+          <p>Consulte atividades notdone por período e recurso, com tratativa, revogação e exportação.</p>
         </div>
+        <span class="card-arrow">Acessar &rarr;</span>
       </a>
       {% endif %}
+
       {% if has_perm('toquio.td_bucket_insert') %}
       <a href="{{ url_for('toquio_td_bucket_inserir_mapeamento_bairro') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Base local</span>
+        </div>
         <h3>Insert de mapeamento de bairro</h3>
         <div class="card-description">
-          <p>
-            ➤ Insere um novo mapeamento de bairro no banco de dados.<br>
-          </p>
+          <p>Cadastre manualmente novos mapeamentos de bairro diretamente na base utilizada pelo processo.</p>
         </div>
+        <span class="card-arrow">Acessar &rarr;</span>
       </a>
       {% endif %}
     </div>

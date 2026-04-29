@@ -4,9 +4,29 @@ import bcrypt
 
 from database.connection import get_connection
 from database.audit import audit_log
-from core.auth import login_required, perm_required, current_actor
+from core.auth import login_required, perm_required, current_actor, has_perm
+
 
 def init_app(app):
+
+    def _load_usuarios_para_reset():
+        conn = get_connection()
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute("""
+                SELECT
+                    u.id,
+                    u.nome,
+                    u.username,
+                    p.nome AS perfil_nome
+                FROM usuarios u
+                LEFT JOIN perfis p ON p.id = u.tipo_id
+                ORDER BY u.nome ASC, u.username ASC
+            """)
+            return cur.fetchall()
+        finally:
+            cur.close()
+            conn.close()
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
@@ -104,67 +124,167 @@ def init_app(app):
 
     @app.route("/trocar-senha", methods=["GET", "POST"])
     @login_required
-    @perm_required("usuarios.trocar_senha")
+    @perm_required("usuarios.trocar_senha", "usuarios.reset_senha")
     def trocar_senha():
+        pode_trocar_propria = has_perm("usuarios.trocar_senha")
+        pode_resetar_terceiros = has_perm("usuarios.reset_senha")
+
         if request.method == "POST":
-            senha_atual = (request.form.get("senha_atual") or "").strip()
-            nova_senha = (request.form.get("nova_senha") or "").strip()
-            confirmar = (request.form.get("confirmar_senha") or "").strip()
+            acao = (request.form.get("acao") or "trocar_propria").strip()
 
-            if not senha_atual or not nova_senha or not confirmar:
-                flash("Preencha todos os campos.", "danger")
-                return redirect(url_for("trocar_senha"))
+            if acao == "trocar_propria":
+                if not pode_trocar_propria:
+                    flash("Você não tem permissão para trocar a própria senha por esta tela.", "danger")
+                    return redirect(url_for("trocar_senha"))
 
-            if len(nova_senha) < 8:
-                flash("A nova senha deve ter pelo menos 8 caracteres.", "danger")
-                return redirect(url_for("trocar_senha"))
+                senha_atual = (request.form.get("senha_atual") or "").strip()
+                nova_senha = (request.form.get("nova_senha") or "").strip()
+                confirmar = (request.form.get("confirmar_senha") or "").strip()
 
-            if nova_senha != confirmar:
-                flash("A confirmação não confere com a nova senha.", "danger")
-                return redirect(url_for("trocar_senha"))
+                if not senha_atual or not nova_senha or not confirmar:
+                    flash("Preencha todos os campos da troca de senha.", "danger")
+                    return redirect(url_for("trocar_senha"))
 
-            username = session.get("usuario_logado")
+                if len(nova_senha) < 8:
+                    flash("A nova senha deve ter pelo menos 8 caracteres.", "danger")
+                    return redirect(url_for("trocar_senha"))
 
-            conn = get_connection()
-            cursor = conn.cursor(dictionary=True)
-            cursor.execute("SELECT id, password_hash FROM usuarios WHERE username = %s", (username,))
-            user = cursor.fetchone()
+                if nova_senha != confirmar:
+                    flash("A confirmação não confere com a nova senha.", "danger")
+                    return redirect(url_for("trocar_senha"))
 
-            if not user:
+                username = session.get("usuario_logado")
+
+                conn = get_connection()
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT id, password_hash FROM usuarios WHERE username = %s", (username,))
+                user = cursor.fetchone()
+
+                if not user:
+                    cursor.close()
+                    conn.close()
+                    flash("Usuário não encontrado.", "danger")
+                    return redirect(url_for("trocar_senha"))
+
+                if not bcrypt.checkpw(senha_atual.encode(), user["password_hash"].encode()):
+                    cursor.close()
+                    conn.close()
+                    flash("Senha atual incorreta.", "danger")
+                    return redirect(url_for("trocar_senha"))
+
+                novo_hash = bcrypt.hashpw(nova_senha.encode(), bcrypt.gensalt()).decode()
+                cursor.execute("UPDATE usuarios SET password_hash = %s WHERE id = %s", (novo_hash, user["id"]))
+                conn.commit()
                 cursor.close()
                 conn.close()
-                flash("Usuário não encontrado.", "danger")
-                return redirect(url_for("trocar_senha"))
 
-            if not bcrypt.checkpw(senha_atual.encode(), user["password_hash"].encode()):
-                cursor.close()
+                actor = current_actor()
+                audit_log(
+                    actor_user_id=actor.get("id"),
+                    actor_username=actor.get("username"),
+                    module="usuarios",
+                    action="change_password",
+                    entity_type="usuario",
+                    entity_id=user["id"],
+                    entity_ref=actor.get("username"),
+                    summary=f"Trocou a própria senha: {actor.get('username')}",
+                    meta={"ip": request.remote_addr},
+                )
+
+                flash("Senha alterada com sucesso!", "success")
+                return redirect(url_for("home"))
+
+            elif acao == "resetar_usuario":
+                if not pode_resetar_terceiros:
+                    flash("Você não tem permissão para resetar senha de outros usuários.", "danger")
+                    return redirect(url_for("trocar_senha"))
+
+                usuario_alvo_raw = (request.form.get("usuario_alvo_id") or "").strip()
+                nova_senha_admin = (request.form.get("nova_senha_admin") or "").strip()
+                confirmar_admin = (request.form.get("confirmar_senha_admin") or "").strip()
+
+                if not usuario_alvo_raw or not nova_senha_admin or not confirmar_admin:
+                    flash("Preencha todos os campos do reset de senha.", "danger")
+                    return redirect(url_for("trocar_senha"))
+
+                try:
+                    usuario_alvo_id = int(usuario_alvo_raw)
+                except ValueError:
+                    flash("Usuário selecionado é inválido.", "danger")
+                    return redirect(url_for("trocar_senha"))
+
+                if len(nova_senha_admin) < 8:
+                    flash("A nova senha do usuário deve ter pelo menos 8 caracteres.", "danger")
+                    return redirect(url_for("trocar_senha"))
+
+                if nova_senha_admin != confirmar_admin:
+                    flash("A confirmação não confere com a nova senha informada para o usuário.", "danger")
+                    return redirect(url_for("trocar_senha"))
+
+                conn = get_connection()
+                cur = conn.cursor(dictionary=True)
+                cur.execute("""
+                    SELECT id, nome, username, tipo_id
+                    FROM usuarios
+                    WHERE id = %s
+                    LIMIT 1
+                """, (usuario_alvo_id,))
+                usuario_alvo = cur.fetchone()
+
+                if not usuario_alvo:
+                    cur.close()
+                    conn.close()
+                    flash("Usuário alvo não encontrado.", "danger")
+                    return redirect(url_for("trocar_senha"))
+
+                novo_hash = bcrypt.hashpw(nova_senha_admin.encode(), bcrypt.gensalt()).decode()
+                cur.execute(
+                    "UPDATE usuarios SET password_hash = %s WHERE id = %s",
+                    (novo_hash, usuario_alvo_id),
+                )
+                conn.commit()
+                cur.close()
                 conn.close()
-                flash("Senha atual incorreta.", "danger")
+
+                actor = current_actor()
+                audit_log(
+                    actor_user_id=actor.get("id"),
+                    actor_username=actor.get("username"),
+                    module="usuarios",
+                    action="admin_reset_password",
+                    entity_type="usuario",
+                    entity_id=usuario_alvo.get("id"),
+                    entity_ref=usuario_alvo.get("username"),
+                    summary=(
+                        f"Resetou a senha do usuário {usuario_alvo.get('username')} "
+                        f"({usuario_alvo.get('nome')})"
+                    ),
+                    meta={
+                        "target_user_id": usuario_alvo.get("id"),
+                        "target_username": usuario_alvo.get("username"),
+                        "target_nome": usuario_alvo.get("nome"),
+                        "ip": request.remote_addr,
+                    },
+                )
+
+                flash(
+                    f"Senha do usuário {usuario_alvo.get('username')} redefinida com sucesso.",
+                    "success",
+                )
                 return redirect(url_for("trocar_senha"))
 
-            novo_hash = bcrypt.hashpw(nova_senha.encode(), bcrypt.gensalt()).decode()
-            cursor.execute("UPDATE usuarios SET password_hash = %s WHERE id = %s", (novo_hash, user["id"]))
-            conn.commit()
-            cursor.close()
-            conn.close()
+            else:
+                flash("Ação inválida.", "danger")
+                return redirect(url_for("trocar_senha"))
 
-            actor = current_actor()
-            audit_log(
-                actor_user_id=actor.get("id"),
-                actor_username=actor.get("username"),
-                module="usuarios",
-                action="change_password",
-                entity_type="usuario",
-                entity_id=user["id"],
-                entity_ref=actor.get("username"),
-                summary=f"Trocou a própria senha: {actor.get('username')}",
-                meta={"ip": request.remote_addr},
-            )
+        usuarios_para_reset = _load_usuarios_para_reset() if pode_resetar_terceiros else []
 
-            flash("Senha alterada com sucesso!", "success")
-            return redirect(url_for("home"))
-
-        return render_template("trocar_senha.html")
+        return render_template(
+            "trocar_senha.html",
+            pode_trocar_propria=pode_trocar_propria,
+            pode_resetar_terceiros=pode_resetar_terceiros,
+            usuarios_para_reset=usuarios_para_reset,
+        )
 
     @app.route("/criar-usuario", methods=["GET", "POST"])
     @login_required

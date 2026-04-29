@@ -8,6 +8,12 @@
 
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
+  {% if page_css_files %}
+    {% for css_file in page_css_files %}
+  <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
+    {% endfor %}
+  {% endif %}
+
   <!-- DataTables CSS -->
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">

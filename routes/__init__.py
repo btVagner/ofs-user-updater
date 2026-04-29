@@ -14,6 +14,7 @@ from .ofs_erros_agendamento_routes import init_app as init_ofs_erros_agendamento
 from .home_routes import init_app as init_home_routes
 from .online_routes import init_app as init_online_routes
 from .toquio_td_bucket_routes import init_app as init_toquio_td_bucket_routes
+from .relatorios_routes import init_app as init_relatorios_routes
 
 
 def register_routes(app):
@@ -35,3 +36,4 @@ def register_routes(app):
     init_ddc_mensageria_routes(app)
     init_ofs_erros_tratativas_dashboards_routes(app)
     init_ofs_erros_agendamento_routes(app)
+    init_relatorios_routes(app)

@@ -5,7 +5,7 @@
 
 <body>
   <div class="menu-container">
-    <h2>Trocar senha</h2>
+    <h2>Senha</h2>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -17,8 +17,13 @@
       {% endif %}
     {% endwith %}
 
-    <div class="form-box" style="max-width: 520px; margin: 0 auto;">
+    {% if pode_trocar_propria %}
+    <div class="form-box" style="max-width: 520px; margin: 0 auto 24px auto;">
+      <h3 style="margin-top:0; margin-bottom:18px;">Trocar minha senha</h3>
+
       <form method="post" autocomplete="off">
+        <input type="hidden" name="acao" value="trocar_propria">
+
         <label for="senha_atual">Senha atual</label>
         <input type="password" id="senha_atual" name="senha_atual" required>
 
@@ -30,10 +35,39 @@
 
         <button type="submit">Salvar nova senha</button>
       </form>
+    </div>
+    {% endif %}
 
-      <div style="text-align:center; margin-top:16px;">
-        <a class="btn-voltar" href="{{ url_for('home') }}">Voltar</a>
-      </div>
+    {% if pode_resetar_terceiros %}
+    <div class="form-box" style="max-width: 700px; margin: 0 auto;">
+      <h3 style="margin-top:0; margin-bottom:18px;">Reset de senha de usuário</h3>
+
+      <form method="post" autocomplete="off">
+        <input type="hidden" name="acao" value="resetar_usuario">
+
+        <label for="usuario_alvo_id">Usuário</label>
+        <select id="usuario_alvo_id" name="usuario_alvo_id" required style="width: 100%; margin-bottom: 14px;">
+          <option value="">Selecione um usuário...</option>
+          {% for u in usuarios_para_reset %}
+            <option value="{{ u.id }}">
+              {{ u.nome }} — {{ u.username }}{% if u.perfil_nome %} ({{ u.perfil_nome }}){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+
+        <label for="nova_senha_admin">Nova senha</label>
+        <input type="password" id="nova_senha_admin" name="nova_senha_admin" minlength="8" required>
+
+        <label for="confirmar_senha_admin">Confirmar nova senha</label>
+        <input type="password" id="confirmar_senha_admin" name="confirmar_senha_admin" minlength="8" required>
+
+        <button type="submit">Resetar senha do usuário</button>
+      </form>
+    </div>
+    {% endif %}
+
+    <div style="text-align:center; margin-top:16px;">
+      <a class="btn-voltar" href="{{ url_for('home') }}">Voltar</a>
     </div>
   </div>
 </body>

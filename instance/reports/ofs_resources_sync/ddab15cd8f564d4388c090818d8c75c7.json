@@ -1,0 +1,36 @@
+{
+  "status": "completed",
+  "phase": "Lista de recursos atualizada com sucesso",
+  "created_at": "2026-04-29T10:05:40",
+  "finished_at": "2026-04-29T10:06:38",
+  "percent": 100,
+  "raw_total_from_api": 4094,
+  "inserted_so_far": 2477,
+  "inserted_total": 2477,
+  "error": null,
+  "job_id": "ddab15cd8f564d4388c090818d8c75c7",
+  "updated_at": "2026-04-29T10:06:38",
+  "page": 41,
+  "offset": 4000,
+  "total_expected": 4094,
+  "result": {
+    "raw_total_from_api": 4094,
+    "active_total": 2477,
+    "allowed_type_total": 2477,
+    "inserted_total": 2477,
+    "ignored_inactive": 1387,
+    "ignored_type": {},
+    "resource_types_allowed": [
+      "BK",
+      "ESTADO",
+      "GR",
+      "LC",
+      "TCP",
+      "TCW",
+      "TCV"
+    ],
+    "limit": 100,
+    "last_offset": 4000,
+    "total_expected": 4094
+  }
+}
