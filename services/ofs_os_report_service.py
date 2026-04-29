@@ -250,6 +250,22 @@ def _load_resource_name_map() -> Dict[str, str]:
     finally:
         cur.close()
         conn.close()
+
+def _load_activity_type_label_map() -> Dict[str, str]:
+    mapping = {}
+
+    for item in list_activity_types():
+        code = str(item.get("code") or "").strip()
+        label = str(item.get("label") or "").strip()
+
+        if not code:
+            continue
+
+        mapping[code] = label or code
+
+    return mapping
+
+
 def read_job_status(base_dir: str, job_id: str) -> dict:
     path = _job_status_path(base_dir, job_id)
 
@@ -669,7 +685,12 @@ def _first_filled(item: dict, keys: list):
     return ""
 
 
-def _row_value(item: dict, field_key: str, resource_name_map: Dict[str, str] = None):
+def _row_value(
+    item: dict,
+    field_key: str,
+    resource_name_map: Dict[str, str] = None,
+    activity_type_label_map: Dict[str, str] = None,
+):
     if field_key == "customerName":
         return _first_name(item.get("customerName"))
 
@@ -685,6 +706,17 @@ def _row_value(item: dict, field_key: str, resource_name_map: Dict[str, str] = N
             return resource_name_map[resource_id] or "Técnico não encontrado na base"
 
         return "Técnico não encontrado na base"
+
+    if field_key == "activityType":
+        activity_code = str(item.get("activityType") or "").strip()
+
+        if not activity_code:
+            return ""
+
+        if activity_type_label_map and activity_code in activity_type_label_map:
+            return activity_type_label_map[activity_code]
+
+        return activity_code
 
     value = item.get(field_key)
 
@@ -799,7 +831,6 @@ def _fetch_activities(client: OFSClient, config: dict, base_dir: str, job_id: st
 
     return all_items
 
-
 def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
     wb = Workbook()
     ws = wb.active
@@ -809,10 +840,20 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
     ws.append(headers)
 
     resource_name_map = _load_resource_name_map()
+    activity_type_label_map = (
+        _load_activity_type_label_map()
+        if "activityType" in selected_fields
+        else {}
+    )
 
     for item in rows:
         ws.append([
-            _row_value(item, key, resource_name_map=resource_name_map)
+            _row_value(
+                item,
+                key,
+                resource_name_map=resource_name_map,
+                activity_type_label_map=activity_type_label_map,
+            )
             for key in selected_fields
         ])
 
@@ -836,6 +877,7 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
     xlsx_auto_width(ws)
 
     wb.save(output_path)
+
 def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
     filename = f"relatorio_os_ofs_{config['date_from']}_{config['date_to']}_{job_id[:8]}.xlsx"
 

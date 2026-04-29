@@ -1,0 +1,45 @@
+{
+  "status": "completed",
+  "phase": "Extração concluída",
+  "created_at": "2026-04-29T10:48:04",
+  "finished_at": "2026-04-29T10:48:06",
+  "rows_so_far": 55,
+  "total_rows": 55,
+  "filename": "relatorio_os_ofs_2026-04-29_2026-04-29_9484d4b8.xlsx",
+  "dateFrom": "2026-04-29",
+  "dateTo": "2026-04-29",
+  "statuses": [
+    "completed"
+  ],
+  "resources": [
+    "SUL"
+  ],
+  "activity_types": [
+    "INS"
+  ],
+  "fields": [
+    "resourceId",
+    "resourceName",
+    "XA_REQ_CRE_DAT",
+    "timeSlot",
+    "workZone",
+    "stateProvince",
+    "XA_SAP_CRT_LDG",
+    "date",
+    "XA_ORG_SYS",
+    "status",
+    "customerName",
+    "city",
+    "fechamento_atividade",
+    "activityType",
+    "activityId",
+    "apptNumber"
+  ],
+  "error": null,
+  "job_id": "9484d4b8fd8e490f8bdb50f1237e019e",
+  "updated_at": "2026-04-29T10:48:06",
+  "q": "status=='completed' and activityType=='INS'",
+  "offset": 0,
+  "page": 1,
+  "download_ready": true
+}

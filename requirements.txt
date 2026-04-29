@@ -16,3 +16,5 @@ requests==2.32.5
 urllib3==2.6.3
 Werkzeug==3.1.6
 xlsxwriter==3.2.9
+mysql-connector-python
+gunicorn
