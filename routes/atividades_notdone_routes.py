@@ -114,7 +114,6 @@ def init_app(app):
                     activity_type AS activityType,
                     city,
                     customer_number AS customerNumber,
-                    customer_phone AS customerPhone,
                     customer_name AS customerName,
                     appt_number AS apptNumber,
                     origin_bucket AS XA_ORIGIN_BUCKET,
@@ -296,6 +295,28 @@ def init_app(app):
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"ofs_notdone_{tipo}_{dt_from}_{dt_to}_{stamp}.xlsx"
+
+        try:
+            actor = current_actor()
+            audit_log(
+                actor_user_id=actor.get("id"),
+                actor_username=actor.get("username"),
+                module="ofs",
+                action=f"export_notdone_{tipo}_xlsx",
+                entity_type="atividades_notdone",
+                entity_ref=tipo,
+                summary=f"Exportou XLSX atividades notdone: tipo={tipo}",
+                meta={
+                    "tipo": tipo,
+                    "date_from": str(dt_from),
+                    "date_to": str(dt_to),
+                    "current_view": current_view,
+                    "total_rows": len(rows),
+                    "filename": filename,
+                },
+            )
+        except Exception:
+            pass
 
         return send_file(
             output,
@@ -562,7 +583,6 @@ def init_app(app):
                 activity_type AS activityType,
                 city,
                 customer_number AS customerNumber,
-                customer_phone AS customerPhone,
                 customer_name AS customerName,
                 appt_number AS apptNumber,
                 origin_bucket AS XA_ORIGIN_BUCKET,
@@ -587,6 +607,84 @@ def init_app(app):
             return jsonify({"ok": False, "error": "Não encontrado"}), 404
 
         return jsonify({"ok": True, "item": row}), 200
+
+
+    @app.route("/atividades-notdone/<activity_id>/telefone", methods=["POST"])
+    @login_required
+    @perm_required("ofs.atividades_notdone")
+    def atividades_notdone_phone(activity_id):
+        activity_id = str(activity_id or "").strip()
+
+        if not activity_id:
+            return jsonify({"ok": False, "error": "activityId invalido"}), 400
+
+        conn = get_connection()
+        cur = conn.cursor(dictionary=True)
+
+        try:
+            cur.execute("""
+                SELECT
+                    activity_id,
+                    customer_phone,
+                    customer_name,
+                    customer_number,
+                    appt_number
+                FROM ofs_atividades_notdone
+                WHERE activity_id = %s
+                LIMIT 1
+            """, (activity_id,))
+            row = cur.fetchone()
+
+        finally:
+            cur.close()
+            conn.close()
+
+        if not row:
+            return jsonify({"ok": False, "error": "Atividade nao encontrada"}), 404
+
+        phone = str(row.get("customer_phone") or "").strip()
+        customer_name = str(row.get("customer_name") or "").strip()
+        customer_number = str(row.get("customer_number") or "").strip()
+        appt_number = str(row.get("appt_number") or "").strip()
+
+        last4 = phone[-4:] if phone else ""
+        phone_masked = ("*" * max(0, len(phone) - 4) + last4) if phone else ""
+
+        actor = current_actor()
+
+        try:
+            audit_log(
+                actor_user_id=actor.get("id"),
+                actor_username=actor.get("username"),
+                module="ofs",
+                action="view_notdone_customer_phone",
+                entity_type="activity",
+                entity_ref=activity_id,
+                summary=f"Visualizou telefone de cliente em atividade notdone: activityId={activity_id}",
+                meta={
+                    "activity_id": activity_id,
+                    "customer_name": customer_name,
+                    "customer_number": customer_number,
+                    "appt_number": appt_number,
+                    "phone_last4": last4,
+                    "phone_masked": phone_masked,
+                },
+            )
+        except Exception:
+            pass
+
+        if not phone:
+            return jsonify({
+                "ok": False,
+                "error": "Telefone nao encontrado para esta atividade."
+            }), 404
+
+        return jsonify({
+            "ok": True,
+            "activityId": activity_id,
+            "phone": phone,
+        }), 200
+
 
     @app.route("/atividades-notdone/revogar", methods=["POST"])
     @login_required

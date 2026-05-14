@@ -8,7 +8,8 @@
 <body data-view-mode="{{ view_mode }}"
   data-detail-url-base="{{ url_for('atividades_notdone_get', activity_id='__ACTIVITY_ID__') }}"
   data-tratar-url="{{ url_for('atividades_notdone_tratar') }}"
-  data-revogar-url="{{ url_for('atividades_notdone_revogar') }}">
+  data-revogar-url="{{ url_for('atividades_notdone_revogar') }}"
+  data-phone-url-base="{{ url_for('atividades_notdone_phone', activity_id='__ACTIVITY_ID__') }}">
   <div class="page-atividades">
 
     <div class="page-header">
@@ -270,7 +271,17 @@
 
         <div>
           <label>Telefone</label>
-          <input id="m_customerPhone" readonly>
+          <div class="phone-reveal-wrap">
+            <input id="m_customerPhone" readonly value="***********">
+            <button type="button" id="btnRevealPhone" class="btn-phone-reveal" title="Mostrar telefone"
+              aria-label="Mostrar telefone">
+              <svg class="phone-eye-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+                <path class="eye-slash" d="M4 4l16 16"></path>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div>

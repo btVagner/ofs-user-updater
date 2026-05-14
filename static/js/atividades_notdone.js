@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const detailUrlBase = bodyEl?.dataset?.detailUrlBase || "";
   const tratarUrl = bodyEl?.dataset?.tratarUrl || "/atividades-notdone/tratar";
   const revogarUrl = bodyEl?.dataset?.revogarUrl || "/atividades-notdone/revogar";
+  const phoneUrlBase = bodyEl?.dataset?.phoneUrlBase || "";
 
   const activitiesEl = document.getElementById("activities-json");
   const activities = activitiesEl ? JSON.parse(activitiesEl.textContent || "[]") : [];
@@ -13,7 +14,20 @@ document.addEventListener("DOMContentLoaded", function () {
   const btnFechar = document.getElementById("btnFecharModal");
   const btnAbrirTratativa = document.getElementById("btnAbrirTratativa");
   const btnRevogarTratativa = document.getElementById("btnRevogarTratativa");
+  const phoneIconEye = `
+    <svg class="phone-eye-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  `;
 
+  const phoneIconEyeOff = `
+    <svg class="phone-eye-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+      <path class="eye-slash" d="M4 4l16 16"></path>
+    </svg>
+  `;
   const tModal = document.getElementById("modalTratativa");
   const tBackdrop = document.getElementById("modalTratativaBackdrop");
   const btnFecharTratativa = document.getElementById("btnFecharTratativa");
@@ -55,6 +69,111 @@ document.addEventListener("DOMContentLoaded", function () {
     const el = document.getElementById(id);
     if (el) el.value = value ?? "";
   }
+
+  function resetPhoneField() {
+    const input = document.getElementById("m_customerPhone");
+    const btn = document.getElementById("btnRevealPhone");
+
+    if (input) {
+      input.value = "***********";
+      input.dataset.visible = "0";
+      input.dataset.loaded = "0";
+      input.type = "text";
+    }
+
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = phoneIconEyeOff;
+      btn.title = "Mostrar telefone";
+      btn.setAttribute("aria-label", "Mostrar telefone");
+    }
+  }
+
+  function setPhoneLoading(isLoading) {
+    const btn = document.getElementById("btnRevealPhone");
+    if (!btn) return;
+
+    btn.disabled = isLoading;
+    btn.innerHTML = isLoading ? "..." : phoneIconEyeOff;
+  }
+  function hidePhoneField() {
+    const input = document.getElementById("m_customerPhone");
+    const btn = document.getElementById("btnRevealPhone");
+
+    if (input) {
+      input.value = "***********";
+      input.dataset.visible = "0";
+    }
+
+    if (btn) {
+      btn.innerHTML = phoneIconEyeOff;
+      btn.title = "Mostrar telefone";
+      btn.setAttribute("aria-label", "Mostrar telefone");
+    }
+  }
+
+  async function revealPhoneField() {
+    if (!currentActivity || !currentActivity.activityId) return;
+
+    const input = document.getElementById("m_customerPhone");
+    const btn = document.getElementById("btnRevealPhone");
+
+    if (input && input.dataset.visible === "1") {
+      hidePhoneField();
+      return;
+    }
+
+    if (!phoneUrlBase) {
+      showToast("error", "Erro", "URL de telefone nao configurada.");
+      return;
+    }
+
+    const url = phoneUrlBase.replace("__ACTIVITY_ID__", encodeURIComponent(currentActivity.activityId));
+
+    try {
+      setPhoneLoading(true);
+
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok || !data.ok) {
+        showToast("error", "Erro", data.error || "Falha ao buscar telefone.");
+        return;
+      }
+
+      if (input) {
+        input.value = data.phone || "";
+        input.dataset.visible = "1";
+        input.dataset.loaded = "1";
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = phoneIconEye;
+        btn.title = "Ocultar telefone";
+        btn.setAttribute("aria-label", "Ocultar telefone");
+      }
+    } catch (err) {
+      showToast("error", "Erro", "Falha de rede ao buscar telefone.");
+      console.error(err);
+    } finally {
+      setPhoneLoading(false);
+
+      const inputAfter = document.getElementById("m_customerPhone");
+      const btnAfter = document.getElementById("btnRevealPhone");
+
+      if (btnAfter && inputAfter && inputAfter.dataset.visible === "1") {
+        btnAfter.disabled = false;
+        btnAfter.innerHTML = phoneIconEye;
+        btnAfter.title = "Ocultar telefone";
+        btnAfter.setAttribute("aria-label", "Ocultar telefone");
+      }
+    }
+  }
+
 
   function setTratadoUI(isTratado) {
     if (btnAbrirTratativa) btnAbrirTratativa.style.display = isTratado ? "none" : "inline-block";
@@ -190,7 +309,7 @@ document.addEventListener("DOMContentLoaded", function () {
     setVal("m_resourceId", a.resourceId);
     setVal("m_apptNumber", a.apptNumber);
     setVal("m_customerNumber", a.customerNumber);
-    setVal("m_customerPhone", a.customerPhone);
+    resetPhoneField();
     setVal("m_customerName", a.customerName);
     setVal("m_city", a.city);
     setVal("m_bucket", a.XA_ORIGIN_BUCKET);
@@ -213,6 +332,11 @@ document.addEventListener("DOMContentLoaded", function () {
       throw new Error(data.error || "Falha ao buscar detalhes");
     }
     return data.item;
+  }
+
+  const btnRevealPhone = document.getElementById("btnRevealPhone");
+  if (btnRevealPhone) {
+    btnRevealPhone.addEventListener("click", revealPhoneField);
   }
 
   document.addEventListener("click", function (e) {

@@ -1,34 +1,53 @@
-{% include 'includes/head.html' %}
-{% include 'includes/navbar.html' %}
+﻿{% include 'includes/head.html' %}
 
 <body>
-  <div class="menu-container" style="max-width: 1300px;">
-    <h2>Log do sistema</h2>
+  {% include 'includes/navbar.html' %}
 
-    <!-- Filtros -->
+  <div class="menu-container logs-page" style="max-width: 1380px;">
+    <div class="logs-page-header">
+      <div>
+        <span class="home-kicker">Auditoria</span>
+        <h2>Log do sistema</h2>
+        <p class="logs-page-subtitle">
+          Consulte eventos auditados do portal, filtre por usu&aacute;rio, m&oacute;dulo, a&ccedil;&atilde;o, per&iacute;odo e exporte a vis&atilde;o filtrada.
+        </p>
+      </div>
+
+      <div class="logs-header-actions">
+        <a href="{{ dashboard_url }}" class="btn-secondary-link">Dashboard de logs</a>
+        <a href="{{ export_url }}" class="btn-link-strong">Exportar CSV</a>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+      {% endfor %}
+    {% endwith %}
+
     <form method="get" class="logs-filters">
       <div class="logs-filters-row">
         <div class="filter-field">
-          <label>Usuário</label>
+          <label>Usu&aacute;rio</label>
           <input type="text" name="user" placeholder="Ex.: bvagner" value="{{ filtros.user }}">
         </div>
 
         <div class="filter-field">
-          <label>Módulo</label>
+          <label>M&oacute;dulo</label>
           <select name="module">
             <option value="">Todos</option>
             {% for m in modules %}
-            <option value="{{ m }}" {% if filtros.module==m %}selected{% endif %}>{{ m }}</option>
+              <option value="{{ m }}" {% if filtros.module == m %}selected{% endif %}>{{ m }}</option>
             {% endfor %}
           </select>
         </div>
 
         <div class="filter-field">
-          <label>Ação</label>
+          <label>A&ccedil;&atilde;o</label>
           <select name="action">
             <option value="">Todas</option>
             {% for a in actions %}
-            <option value="{{ a }}" {% if filtros.action==a %}selected{% endif %}>{{ a }}</option>
+              <option value="{{ a }}" {% if filtros.action == a %}selected{% endif %}>{{ a }}</option>
             {% endfor %}
           </select>
         </div>
@@ -39,89 +58,131 @@
         </div>
 
         <div class="filter-field">
-          <label>Até</label>
+          <label>At&eacute;</label>
           <input type="date" name="date_fim" value="{{ filtros.date_fim }}">
+        </div>
+
+        <div class="filter-field">
+          <label>Por p&aacute;gina</label>
+          <select name="per_page">
+            {% for opt in per_page_options %}
+              <option value="{{ opt }}" {% if pagination.per_page == opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
         </div>
 
         <div class="filter-field filter-grow">
           <label>Busca</label>
-          <input type="text" name="q" placeholder="Resumo / Ref." value="{{ filtros.q }}">
+          <input type="text" name="q" placeholder="Resumo, referencia, modulo, acao, meta..." value="{{ filtros.q }}">
         </div>
 
         <div class="filter-actions">
           <button type="submit" class="btn-primary">Filtrar</button>
-
-          <a href="{{ url_for('logs_view',
-                             user=filtros.user,
-                             module=filtros.module,
-                             action=filtros.action,
-                             q=filtros.q,
-                             date_ini=filtros.date_ini,
-                             date_fim=filtros.date_fim,
-                             export=1) }}" class="btn-link">
-            Exportar CSV
-          </a>
+          <a href="{{ url_for('logs_view') }}" class="btn-link">Limpar</a>
         </div>
       </div>
+
       <div class="logs-filters-hint">
-        Dica: clique no nome das colunas para ordenar sem recarregar.
+        Total filtrado: <strong>{{ pagination.total }}</strong> registro(s).
       </div>
     </form>
 
-    <!-- Tabela -->
-    <div class="tabela-container">
+    <div class="logs-pagination logs-pagination-top">
+      <div>
+        Exibindo <strong>{{ pagination.page_start }}</strong> a <strong>{{ pagination.page_end }}</strong>
+        de <strong>{{ pagination.total }}</strong>
+      </div>
+
+      <div class="logs-pagination-actions">
+        {% if pagination.prev_page_url %}
+          <a href="{{ pagination.prev_page_url }}" class="btn-secondary-link">Anterior</a>
+        {% else %}
+          <span class="btn-disabled">Anterior</span>
+        {% endif %}
+
+        <span class="page-pill">P&aacute;gina {{ pagination.page }} de {{ pagination.total_pages }}</span>
+
+        {% if pagination.next_page_url %}
+          <a href="{{ pagination.next_page_url }}" class="btn-secondary-link">Pr&oacute;xima</a>
+        {% else %}
+          <span class="btn-disabled">Pr&oacute;xima</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="tabela-container logs-table-container">
       <table class="tabela-usuarios logs-table" id="logs-table">
         <thead>
           <tr>
-            <th data-sort="datetime">Data/Hora <span class="sort-indicator"></span></th>
-            <th data-sort="text">Usuário <span class="sort-indicator"></span></th>
-            <th data-sort="text">Módulo <span class="sort-indicator"></span></th>
-            <th data-sort="text">Ação <span class="sort-indicator"></span></th>
-            <th data-sort="text">Resumo <span class="sort-indicator"></span></th>
-            <th data-sort="text">Ref. <span class="sort-indicator"></span></th>
-            <th data-sort="none">Resposta (API)</th>
+            <th>Data/Hora</th>
+            <th>Usu&aacute;rio</th>
+            <th>M&oacute;dulo</th>
+            <th>A&ccedil;&atilde;o</th>
+            <th>Resumo</th>
+            <th>Ref.</th>
+            <th>Resposta API</th>
           </tr>
         </thead>
         <tbody>
           {% for log in logs %}
-          <tr>
-            <td>{{ log.created_at.strftime("%d/%m/%Y %H:%M:%S") if log.created_at else "-" }}</td>
-            <td>{{ log.actor_username or "-" }}</td>
-            <td>{{ log.module }}</td>
-            <td>{{ log.action }}</td>
-            <td>{{ log.summary }}</td>
-            <td>{{ log.entity_ref or "-" }}</td>
-            <td>
-              {% if log.api_response_text %}
-              <button type="button" class="btn-secondary btn-sm" data-api-id="{{ log.id }}">
-                Ver
-              </button>
+            <tr>
+              <td>{{ log.created_at.strftime("%d/%m/%Y %H:%M:%S") if log.created_at else "-" }}</td>
+              <td>{{ log.actor_username or "-" }}</td>
+              <td>{{ log.module or "-" }}</td>
+              <td>{{ log.action or "-" }}</td>
+              <td>{{ log.summary or "-" }}</td>
+              <td>{{ log.entity_ref or "-" }}</td>
+              <td>
+                {% if log.api_response_text %}
+                  <button type="button" class="btn-secondary btn-sm" data-api-id="{{ log.id }}">
+                    Ver
+                  </button>
 
-              <!-- Guarda o conteúdo de forma segura fora de atributos HTML -->
-              <script type="application/json" id="apiresp-{{ log.id }}">
-                {{ log.api_response_text | tojson }}
-              </script>
-              {% else %}
-              -
-              {% endif %}
-            </td>
-
-          </tr>
+                  <script type="application/json" id="apiresp-{{ log.id }}">
+                    {{ log.api_response_text | tojson }}
+                  </script>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
           {% else %}
-          <tr>
-            <td colspan="7" style="text-align:center;">Nenhum registro encontrado</td>
-          </tr>
+            <tr>
+              <td colspan="7" style="text-align:center;">Nenhum registro encontrado</td>
+            </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    <div class="logs-pagination">
+      <div>
+        Exibindo <strong>{{ pagination.page_start }}</strong> a <strong>{{ pagination.page_end }}</strong>
+        de <strong>{{ pagination.total }}</strong>
+      </div>
+
+      <div class="logs-pagination-actions">
+        {% if pagination.prev_page_url %}
+          <a href="{{ pagination.prev_page_url }}" class="btn-secondary-link">Anterior</a>
+        {% else %}
+          <span class="btn-disabled">Anterior</span>
+        {% endif %}
+
+        <span class="page-pill">P&aacute;gina {{ pagination.page }} de {{ pagination.total_pages }}</span>
+
+        {% if pagination.next_page_url %}
+          <a href="{{ pagination.next_page_url }}" class="btn-secondary-link">Pr&oacute;xima</a>
+        {% else %}
+          <span class="btn-disabled">Pr&oacute;xima</span>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
-  <!-- Modal (sem CSS inline) -->
   <div id="apiRespModal" class="modal-overlay">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 class="modal-title">Resposta da API (Adapter)</h3>
+        <h3 class="modal-title">Resposta da API</h3>
         <button type="button" id="apiRespClose" class="btn-danger btn-sm">Fechar</button>
       </div>
 

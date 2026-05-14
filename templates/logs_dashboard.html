@@ -1,0 +1,457 @@
+﻿{% include 'includes/head.html' %}
+
+<body>
+  {% include 'includes/navbar.html' %}
+
+  <div class="menu-container logs-page" style="max-width: 1440px;">
+    <div class="logs-page-header">
+      <div>
+        <span class="home-kicker">Auditoria</span>
+        <h2>Dashboard de logs</h2>
+        <p class="logs-page-subtitle">
+          Vis&atilde;o gerencial dos eventos auditados, uso dos m&oacute;dulos, a&ccedil;&otilde;es criticas, downloads e tratativas.
+        </p>
+      </div>
+
+      <div class="logs-header-actions">
+        <a href="{{ url_for('logs_view') }}" class="btn-secondary-link">Voltar aos logs</a>
+        <a href="{{ export_url }}" class="btn-link-strong">Exportar XLSX</a>
+      </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">{{ message }}</p>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="get" class="logs-filters">
+      <div class="logs-filters-row">
+        <div class="filter-field">
+          <label>Usu&aacute;rio</label>
+          <input type="text" name="user" placeholder="Ex.: bvagner" value="{{ filtros.user }}">
+        </div>
+
+        <div class="filter-field">
+          <label>M&oacute;dulo</label>
+          <select name="module">
+            <option value="">Todos</option>
+            {% for m in modules %}
+              <option value="{{ m }}" {% if filtros.module == m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="filter-field">
+          <label>A&ccedil;&atilde;o</label>
+          <select name="action">
+            <option value="">Todas</option>
+            {% for a in actions %}
+              <option value="{{ a }}" {% if filtros.action == a %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="filter-field">
+          <label>De</label>
+          <input type="date" name="date_ini" value="{{ filtros.date_ini }}">
+        </div>
+
+        <div class="filter-field">
+          <label>At&eacute;</label>
+          <input type="date" name="date_fim" value="{{ filtros.date_fim }}">
+        </div>
+
+        <div class="filter-field filter-grow">
+          <label>Busca</label>
+          <input type="text" name="q" placeholder="Resumo, referencia, usuario, meta..." value="{{ filtros.q }}">
+        </div>
+
+        <div class="filter-actions">
+          <button type="submit" class="btn-primary">Filtrar</button>
+          <a href="{{ url_for('logs_dashboard') }}" class="btn-link">Ultimos 30 dias</a>
+        </div>
+      </div>
+
+      <div class="logs-filters-hint">
+        Por padrao, o dashboard abre com os ultimos 30 dias para manter a consulta leve.
+      </div>
+    </form>
+
+    <div class="logs-kpi-grid">
+      <div class="logs-kpi-card">
+        <span>Total de logs</span>
+        <strong>{{ data.kpis.total_logs }}</strong>
+      </div>
+
+      <div class="logs-kpi-card">
+        <span>Usuarios ativos</span>
+        <strong>{{ data.kpis.usuarios_ativos }}</strong>
+      </div>
+
+      <div class="logs-kpi-card">
+        <span>Modulos utilizados</span>
+        <strong>{{ data.kpis.modulos_utilizados }}</strong>
+      </div>
+
+      <div class="logs-kpi-card">
+        <span>Acoes registradas</span>
+        <strong>{{ data.kpis.acoes_registradas }}</strong>
+      </div>
+
+      <div class="logs-kpi-card warning">
+        <span>Downloads/exportacoes</span>
+        <strong>{{ data.kpis.downloads }}</strong>
+      </div>
+
+      <div class="logs-kpi-card warning">
+        <span>Downloads relatorio OFS</span>
+        <strong>{{ data.kpis.downloads_relatorio_ofs }}</strong>
+      </div>
+
+      <div class="logs-kpi-card success">
+        <span>Tratativas notdone</span>
+        <strong>{{ data.kpis.tratativas }}</strong>
+      </div>
+
+      <div class="logs-kpi-card danger">
+        <span>Revogacoes notdone</span>
+        <strong>{{ data.kpis.revogacoes }}</strong>
+      </div>
+
+      <div class="logs-kpi-card danger">
+        <span>Falhas de login</span>
+        <strong>{{ data.kpis.login_failed }}</strong>
+      </div>
+
+      <div class="logs-kpi-card">
+        <span>Fechamentos Adapter</span>
+        <strong>{{ data.kpis.close_os_adapter }}</strong>
+      </div>
+    </div>
+
+    <div class="logs-dashboard-grid two-cols">
+      <section class="logs-panel">
+        <h3>Modulos mais utilizados</h3>
+        <table class="logs-mini-table">
+          <thead>
+            <tr>
+              <th>Modulo</th>
+              <th>Total</th>
+              <th>Uso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data.top_modules %}
+              <tr>
+                <td>{{ row.module or "-" }}</td>
+                <td>{{ row.total }}</td>
+                <td>
+                  <span class="metric-bar"><span style="width: {{ row.percent }}%;"></span></span>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="3">Sem dados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="logs-panel">
+        <h3>Usuarios mais ativos</h3>
+        <table class="logs-mini-table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Total</th>
+              <th>Uso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data.top_users %}
+              <tr>
+                <td>{{ row.actor_username or "-" }}</td>
+                <td>{{ row.total }}</td>
+                <td>
+                  <span class="metric-bar"><span style="width: {{ row.percent }}%;"></span></span>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="3">Sem dados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <section class="logs-panel full">
+      <h3>Acoes mais executadas</h3>
+      <table class="logs-mini-table">
+        <thead>
+          <tr>
+            <th>Modulo</th>
+            <th>Acao</th>
+            <th>Total</th>
+            <th>Uso</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in data.top_actions %}
+            <tr>
+              <td>{{ row.module or "-" }}</td>
+              <td>{{ row.action or "-" }}</td>
+              <td>{{ row.total }}</td>
+              <td>
+                <span class="metric-bar"><span style="width: {{ row.percent }}%;"></span></span>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4">Sem dados</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <div class="logs-dashboard-grid two-cols">
+      <section class="logs-panel">
+        <h3>Downloads/exportacoes por usuario</h3>
+        <table class="logs-mini-table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Total</th>
+              <th>Uso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data.downloads_by_user %}
+              <tr>
+                <td>{{ row.actor_username or "-" }}</td>
+                <td>{{ row.total }}</td>
+                <td>
+                  <span class="metric-bar"><span style="width: {{ row.percent }}%;"></span></span>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="3">Sem downloads no periodo</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="logs-panel">
+        <h3>Tratativas notdone por usuario</h3>
+        <table class="logs-mini-table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Tratou</th>
+              <th>Revogou</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data.notdone_by_user %}
+              <tr>
+                <td>{{ row.actor_username or "-" }}</td>
+                <td>{{ row.tratativas or 0 }}</td>
+                <td>{{ row.revogacoes or 0 }}</td>
+                <td>{{ row.total }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4">Sem tratativas no periodo</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <div class="logs-dashboard-grid two-cols">
+      <section class="logs-panel">
+        <h3>Falhas de login por usuario</h3>
+        <table class="logs-mini-table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Total</th>
+              <th>Uso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data.login_failed_by_user %}
+              <tr>
+                <td>{{ row.actor_username or "-" }}</td>
+                <td>{{ row.total }}</td>
+                <td>
+                  <span class="metric-bar danger"><span style="width: {{ row.percent }}%;"></span></span>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="3">Sem falhas de login</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="logs-panel">
+        <h3>Tratativas por status</h3>
+        <table class="logs-mini-table">
+          <thead>
+            <tr>
+              <th>Acao</th>
+              <th>Status</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data.notdone_by_status %}
+              <tr>
+                <td>{{ row.action or "-" }}</td>
+                <td>{{ row.status or "-" }}</td>
+                <td>{{ row.total }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="3">Sem dados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <section class="logs-panel full">
+      <h3>Ultimos downloads/exportacoes</h3>
+      <table class="logs-mini-table">
+        <thead>
+          <tr>
+            <th>Data/Hora</th>
+            <th>Usuario</th>
+            <th>Acao</th>
+            <th>Referencia</th>
+            <th>Arquivo</th>
+            <th>Periodo</th>
+            <th>Linhas</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in data.downloads_detail %}
+            <tr>
+              <td>{{ row.created_at_text }}</td>
+              <td>{{ row.actor_username or "-" }}</td>
+              <td>{{ row.action or "-" }}</td>
+              <td>{{ row.entity_ref or "-" }}</td>
+              <td>{{ row.filename or "-" }}</td>
+              <td>{{ row.dateFrom or "-" }} ate {{ row.dateTo or "-" }}</td>
+              <td>{{ row.total_rows or "-" }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="7">Sem downloads/exportacoes no periodo</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="logs-panel full">
+      <h3>Acoes criticas por usuario</h3>
+      <table class="logs-mini-table">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Modulo</th>
+            <th>Acao</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in data.critical_by_user %}
+            <tr>
+              <td>{{ row.actor_username or "-" }}</td>
+              <td>{{ row.module or "-" }}</td>
+              <td>{{ row.action or "-" }}</td>
+              <td>{{ row.total }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4">Sem acoes criticas no periodo</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="logs-panel full">
+      <h3>Acoes criticas recentes</h3>
+      <table class="logs-mini-table">
+        <thead>
+          <tr>
+            <th>Data/Hora</th>
+            <th>Usuario</th>
+            <th>Modulo</th>
+            <th>Acao</th>
+            <th>Resumo</th>
+            <th>Ref.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in data.recent_critical %}
+            <tr>
+              <td>{{ row.created_at_text }}</td>
+              <td>{{ row.actor_username or "-" }}</td>
+              <td>{{ row.module or "-" }}</td>
+              <td>{{ row.action or "-" }}</td>
+              <td>{{ row.summary or "-" }}</td>
+              <td>{{ row.entity_ref or "-" }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6">Sem acoes criticas recentes</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <div class="logs-dashboard-grid two-cols">
+      <section class="logs-panel">
+        <h3>Logs por dia</h3>
+        <table class="logs-mini-table">
+          <thead>
+            <tr>
+              <th>Dia</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data.activity_by_day %}
+              <tr>
+                <td>{{ row.dia }}</td>
+                <td>{{ row.total }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="2">Sem dados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="logs-panel">
+        <h3>Logs por hora</h3>
+        <table class="logs-mini-table">
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data.activity_by_hour %}
+              <tr>
+                <td>{{ row.hora }}h</td>
+                <td>{{ row.total }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="2">Sem dados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </div>
+
+  {% include 'includes/footer.html' %}
+</body>

@@ -728,3 +728,61 @@
     transform: scaleX(0);
   }
 }
+
+
+/* ===== Sensitive phone reveal - START ===== */
+.phone-reveal-wrap {
+  display: grid;
+  grid-template-columns: 1fr 46px;
+  gap: 8px;
+  align-items: center;
+}
+
+.phone-reveal-wrap input {
+  min-width: 0;
+}
+
+.btn-phone-reveal {
+  height: 40px;
+  min-width: 46px;
+  border: 1px solid #444;
+  background: #2c2c2c;
+  color: #ffffff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.btn-phone-reveal:hover {
+  background: #383838;
+  border-color: #0d6efd;
+}
+
+.btn-phone-reveal:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+/* ===== Sensitive phone reveal - END ===== */
+
+.phone-eye-icon {
+  width: 21px;
+  height: 21px;
+  display: block;
+  margin: 0 auto;
+}
+
+.phone-eye-icon path,
+.phone-eye-icon circle {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.phone-eye-icon .eye-slash {
+  stroke: #ffffff;
+  stroke-width: 2.4;
+}

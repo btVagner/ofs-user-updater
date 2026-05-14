@@ -1,3 +1,11 @@
 .env
 venv/
 __pycache__/
+
+# Runtime/generated Flask files
+instance/
+
+
+# Work in progress
+services/bi_activities_service.py
+
