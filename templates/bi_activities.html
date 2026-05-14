@@ -2,7 +2,8 @@
 {% include 'includes/head.html' %}
 
 <body data-bi-collect-url="{{ url_for('bi_activities_coletar') }}"
-    data-bi-jobs-url="{{ url_for('bi_activities_jobs') }}" data-bi-summary-url="{{ url_for('bi_activities_summary') }}">
+    data-bi-jobs-url="{{ url_for('bi_activities_jobs') }}" data-bi-summary-url="{{ url_for('bi_activities_summary') }}"
+    data-bi-close-reasons-sync-url="{{ url_for('bi_activities_sync_close_reasons') }}">
     {% include 'includes/navbar.html' %}
 
     <main class="bi-page">
@@ -140,6 +141,10 @@
 
                         <button type="button" id="btnReloadJobs" class="bi-btn-secondary">
                             Atualizar jobs
+                        </button>
+
+                        <button type="button" id="btnSyncCloseReasons" class="bi-btn-secondary">
+                            Atualizar motivos de fechamento
                         </button>
                     </div>
                 </form>

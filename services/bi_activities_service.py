@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple
@@ -21,6 +22,7 @@ CLOSE_REASON_FIELDS = [
 ]
 
 DEFAULT_CLOSE_REASON = "Sem motivo de fechamento informado"
+METADATA_ENUM_LIMIT = 100
 
 BASE_FIELDS = [
     "activityId",
@@ -62,6 +64,13 @@ def _ensure_valid_period(date_from, date_to) -> Tuple[date, date]:
 
 def _json_dumps(value) -> str:
     return json.dumps(value, ensure_ascii=False)
+
+
+def _safe_str(value) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if text else None
 
 
 def _create_job(
@@ -274,6 +283,7 @@ def _list_allowed_activity_types() -> List[str]:
 
     return sorted(set(allowed_codes))
 
+
 def list_available_activity_types() -> List[Dict]:
     """
     Lista os tipos de atividade disponíveis para seleção na tela BI.
@@ -337,6 +347,7 @@ def _resolve_activity_types_for_collection(
         raise BIActivitiesError("Selecione pelo menos um tipo de atividade para coleta BI.")
 
     return resolved
+
 
 def _load_resource_name_map() -> Dict[str, str]:
     conn = get_connection()
@@ -503,19 +514,21 @@ def fetch_activities(
     )
 
 
-def _safe_str(value) -> Optional[str]:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text if text else None
+def _resolve_close_reason(activity: Dict) -> Tuple[Optional[str], Optional[str], str]:
+    """
+    Retorna:
+      - close_reason_property: a propriedade OFS que trouxe o fechamento
+      - close_reason_id: o ID bruto vindo da propriedade OFS
+      - close_reason: mantém o valor bruto por compatibilidade com a base atual
 
-def _resolve_close_reason(activity: Dict) -> str:
+    A tradução fica na tabela ofs_close_reason_map.
+    """
     for field_name in CLOSE_REASON_FIELDS:
         value = _safe_str(activity.get(field_name))
         if value:
-            return value
+            return field_name, value, value
 
-    return DEFAULT_CLOSE_REASON
+    return None, None, DEFAULT_CLOSE_REASON
 
 def _prepare_snapshot_rows(
     activities: List[Dict],
@@ -544,6 +557,9 @@ def _prepare_snapshot_rows(
             resource_id or "",
             "Técnico não encontrado na base",
         )
+
+        close_reason_property, close_reason_id, close_reason = _resolve_close_reason(activity)
+
         row = (
             job_id,
             collected_at,
@@ -555,7 +571,9 @@ def _prepare_snapshot_rows(
             activity_type_label,
             resource_id,
             resource_name,
-            _resolve_close_reason(activity),
+            close_reason_id,
+            close_reason_property,
+            close_reason,
             _safe_str(activity.get(FIELD_CITY)),
             1,
         )
@@ -584,11 +602,13 @@ def insert_snapshot_rows(rows: List[Tuple]) -> int:
                 activity_type_label,
                 resource_id,
                 resource_name,
+                close_reason_id,
+                close_reason_property,
                 close_reason,
                 city,
                 is_customer_home
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             rows,
         )
@@ -638,12 +658,14 @@ def run_collection(
             allowed_activity_types=allowed_activity_types,
             resources=resources,
         )
+
         rows = _prepare_snapshot_rows(
             activities=activities,
             collected_at=collected_at,
             snapshot_date=snapshot_date,
             job_id=job_id,
         )
+
         inserted = insert_snapshot_rows(rows)
 
         _finish_job_success(
@@ -720,6 +742,8 @@ def get_last_job_summary() -> Dict:
                 SUM(CASE WHEN status = 'notdone' THEN 1 ELSE 0 END) AS total_notdone,
                 SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS total_pending,
                 SUM(CASE WHEN status = 'started' THEN 1 ELSE 0 END) AS total_started,
+                SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS total_cancelled,
+                SUM(CASE WHEN status = 'enroute' THEN 1 ELSE 0 END) AS total_enroute,
 
                 SUM(
                     CASE
@@ -774,11 +798,231 @@ def get_last_job_summary() -> Dict:
                 "total_notdone": safe_int(summary.get("total_notdone")),
                 "total_pending": safe_int(summary.get("total_pending")),
                 "total_started": safe_int(summary.get("total_started")),
+                "total_cancelled": safe_int(summary.get("total_cancelled")),
+                "total_enroute": safe_int(summary.get("total_enroute")),
                 "closed_without_close_reason": safe_int(summary.get("closed_without_close_reason")),
                 "resource_not_found": safe_int(summary.get("resource_not_found")),
                 "empty_city": safe_int(summary.get("empty_city")),
             },
         }
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def purge_old_bi_activity_data(keep_date: Optional[date] = None) -> Dict:
+    """
+    Remove dados antigos do módulo BI Activities, mantendo somente o dia informado.
+    """
+    if keep_date is None:
+        keep_date = date.today()
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            """
+            DELETE FROM ofs_activities_bi_snapshot
+            WHERE snapshot_date < %s
+            """,
+            (keep_date,),
+        )
+        deleted_snapshots = cursor.rowcount or 0
+
+        cursor.execute(
+            """
+            DELETE FROM ofs_activities_bi_jobs
+            WHERE date_to < %s
+            """,
+            (keep_date,),
+        )
+        deleted_jobs = cursor.rowcount or 0
+
+        conn.commit()
+
+        return {
+            "ok": True,
+            "keep_date": keep_date.strftime("%Y-%m-%d"),
+            "deleted_snapshots": deleted_snapshots,
+            "deleted_jobs": deleted_jobs,
+        }
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _metadata_base_url(client: OFSClient) -> str:
+    env_url = (os.getenv("OFS_METADATA_BASE_URL") or "").strip().rstrip("/")
+    if env_url:
+        return env_url
+
+    core_marker = "/rest/ofscCore/v1"
+    metadata_marker = "/rest/ofscMetadata/v1"
+
+    if core_marker in client.base_url:
+        return client.base_url.replace(core_marker, metadata_marker).rstrip("/")
+
+    raise BIActivitiesError(
+        "Não foi possível montar a URL metadata. "
+        "Defina OFS_METADATA_BASE_URL no .env."
+    )
+
+
+def _extract_br_translation(item: Dict) -> str:
+    label = _safe_str(item.get("label")) or ""
+
+    translations = item.get("translations") or []
+
+    for translation in translations:
+        language = (_safe_str(translation.get("language")) or "").lower()
+        language_iso = (_safe_str(translation.get("languageISO")) or "").lower()
+        name = _safe_str(translation.get("name"))
+
+        if name and (language == "br" or language_iso == "pt-br"):
+            return name
+
+    for translation in translations:
+        name = _safe_str(translation.get("name"))
+        if name:
+            return name
+
+    return label
+
+
+def _fetch_close_reason_enumeration_page(
+    client: OFSClient,
+    property_code: str,
+    offset: int,
+    limit: int = METADATA_ENUM_LIMIT,
+) -> Dict:
+    base_url = _metadata_base_url(client)
+    url = f"{base_url}/properties/{property_code}/enumerationList"
+
+    response = requests.get(
+        url,
+        params={
+            "limit": limit,
+            "offset": offset,
+        },
+        headers={"Accept": "application/json"},
+        auth=client.auth,
+        timeout=120,
+    )
+
+    if not response.ok:
+        raise BIActivitiesError(_extract_http_error_detail(response))
+
+    return response.json()
+
+
+def _fetch_close_reason_enumerations(property_code: str) -> List[Dict]:
+    client = OFSClient()
+
+    items = []
+    offset = 0
+
+    while True:
+        payload = _fetch_close_reason_enumeration_page(
+            client=client,
+            property_code=property_code,
+            offset=offset,
+            limit=METADATA_ENUM_LIMIT,
+        )
+
+        page_items = payload.get("items") or []
+        has_more = bool(payload.get("hasMore"))
+
+        items.extend(page_items)
+
+        if not has_more or not page_items:
+            break
+
+        offset += len(page_items)
+
+    return items
+
+
+def sync_close_reason_map() -> Dict:
+    """
+    Atualiza a tabela ofs_close_reason_map com as enumerações das propriedades
+    de fechamento do OFS Metadata.
+
+    Não altera a tabela de snapshot.
+    O BI poderá fazer join usando:
+      snapshot.close_reason_id = map.label
+    """
+    started_at = datetime.now()
+
+    total_properties = 0
+    total_items = 0
+
+    details = []
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        for property_code in CLOSE_REASON_FIELDS:
+            total_properties += 1
+
+            items = _fetch_close_reason_enumerations(property_code)
+            property_total = 0
+
+            for item in items:
+                label = _safe_str(item.get("label"))
+                if not label:
+                    continue
+
+                name_br = _extract_br_translation(item)
+                active = 1 if bool(item.get("active")) else 0
+
+                cursor.execute(
+                    """
+                    INSERT INTO ofs_close_reason_map (
+                        property_code,
+                        label,
+                        name_br,
+                        active
+                    )
+                    VALUES (%s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        name_br = VALUES(name_br),
+                        active = VALUES(active),
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        property_code,
+                        label,
+                        name_br,
+                        active,
+                    ),
+                )
+
+                property_total += 1
+                total_items += 1
+
+            details.append({
+                "property_code": property_code,
+                "items": property_total,
+            })
+
+        conn.commit()
+
+        return {
+            "ok": True,
+            "started_at": started_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "total_properties": total_properties,
+            "total_items": total_items,
+            "details": details,
+        }
+
+    except Exception:
+        conn.rollback()
+        raise
 
     finally:
         cursor.close()

@@ -9,6 +9,7 @@ from services.bi_activities_service import (
     list_available_activity_types,
     list_recent_jobs,
     run_collection,
+    sync_close_reason_map,
 )
 
 
@@ -137,5 +138,30 @@ def init_app(app):
             return jsonify({
                 "ok": False,
                 "error": "Erro ao carregar resumo BI.",
+                "detail": str(exc),
+            }), 500
+
+    @app.post("/bi-activities/close-reasons/sync")
+    @perm_required("bi_activities.executar_coleta")
+    def bi_activities_sync_close_reasons():
+        """
+        Atualiza a tabela local de motivos de fechamento a partir do OFS Metadata.
+        """
+
+        try:
+            result = sync_close_reason_map()
+
+            return jsonify(result), 200
+
+        except BIActivitiesError as exc:
+            return jsonify({
+                "ok": False,
+                "error": str(exc),
+            }), 400
+
+        except Exception as exc:
+            return jsonify({
+                "ok": False,
+                "error": "Erro inesperado ao atualizar motivos de fechamento.",
                 "detail": str(exc),
             }), 500

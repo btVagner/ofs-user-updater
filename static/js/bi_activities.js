@@ -4,10 +4,11 @@ document.addEventListener("DOMContentLoaded", function () {
     const collectUrl = body.dataset.biCollectUrl;
     const jobsUrl = body.dataset.biJobsUrl;
     const summaryUrl = body.dataset.biSummaryUrl;
-
+    const closeReasonsSyncUrl = body.dataset.biCloseReasonsSyncUrl;
     const form = document.getElementById("biCollectForm");
     const btnRunCollect = document.getElementById("btnRunCollect");
     const btnReloadJobs = document.getElementById("btnReloadJobs");
+    const btnSyncCloseReasons = document.getElementById("btnSyncCloseReasons");
     const btnSelectAllActivityTypes = document.getElementById("btnSelectAllActivityTypes");
     const btnClearActivityTypes = document.getElementById("btnClearActivityTypes");
     const resultBox = document.getElementById("biResultBox");
@@ -22,6 +23,11 @@ document.addEventListener("DOMContentLoaded", function () {
     function setLoading(isLoading) {
         btnRunCollect.disabled = isLoading;
         btnReloadJobs.disabled = isLoading;
+
+        if (btnSyncCloseReasons) {
+            btnSyncCloseReasons.disabled = isLoading;
+        }
+
         btnRunCollect.textContent = isLoading ? "Executando..." : "Executar coleta";
     }
 
@@ -320,7 +326,9 @@ document.addEventListener("DOMContentLoaded", function () {
     if (btnReloadJobs) {
         btnReloadJobs.addEventListener("click", loadJobs);
     }
-
+    if (btnSyncCloseReasons) {
+        btnSyncCloseReasons.addEventListener("click", syncCloseReasons);
+    }
     if (btnSelectAllActivityTypes) {
         btnSelectAllActivityTypes.addEventListener("click", function () {
             setAllActivityTypes(true);
@@ -332,7 +340,62 @@ document.addEventListener("DOMContentLoaded", function () {
             setAllActivityTypes(false);
         });
     }
+    async function syncCloseReasons() {
+        if (!closeReasonsSyncUrl) {
+            showResult("error", "URL de atualização dos motivos de fechamento não encontrada.");
+            return;
+        }
 
+        setLoading(true);
+
+        if (btnSyncCloseReasons) {
+            btnSyncCloseReasons.textContent = "Atualizando motivos...";
+        }
+
+        showResult("success", "Atualizando motivos de fechamento pelo OFS Metadata. Aguarde...");
+
+        try {
+            const response = await fetch(closeReasonsSyncUrl, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json"
+                }
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error || data.detail || "Erro ao atualizar motivos de fechamento.");
+            }
+
+            const details = (data.details || [])
+                .map((item) => `${item.property_code}: ${item.items} itens`)
+                .join("\n");
+
+            showResult(
+                "success",
+                [
+                    "Motivos de fechamento atualizados com sucesso.",
+                    `Início: ${data.started_at}`,
+                    `Fim: ${data.finished_at}`,
+                    `Propriedades consultadas: ${data.total_properties}`,
+                    `Itens processados: ${data.total_items}`,
+                    "",
+                    details
+                ].join("\n")
+            );
+
+        } catch (error) {
+            showResult("error", error.message);
+
+        } finally {
+            if (btnSyncCloseReasons) {
+                btnSyncCloseReasons.textContent = "Atualizar motivos de fechamento";
+            }
+
+            setLoading(false);
+        }
+    }
     loadJobs();
     loadSummary();
 });
