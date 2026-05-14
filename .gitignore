@@ -6,6 +6,3 @@ __pycache__/
 instance/
 
 
-# Work in progress
-services/bi_activities_service.py
-

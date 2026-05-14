@@ -1,0 +1,177 @@
+{% set page_css_files = ['css/bi_activities.css'] %}
+{% include 'includes/head.html' %}
+
+<body data-bi-collect-url="{{ url_for('bi_activities_coletar') }}"
+    data-bi-jobs-url="{{ url_for('bi_activities_jobs') }}" data-bi-summary-url="{{ url_for('bi_activities_summary') }}">
+    {% include 'includes/navbar.html' %}
+
+    <main class="bi-page">
+        <section class="bi-header">
+            <div>
+                <p class="bi-kicker">BI Operacional</p>
+                <h1>Coleta de atividades OFS</h1>
+                <p class="bi-subtitle">
+                    Execute coletas manuais da API Get Activities by Fields e acompanhe os últimos processamentos.
+                </p>
+            </div>
+        </section>
+        <section class="bi-summary-grid" id="biSummaryCards">
+            <div class="bi-summary-card">
+                <span>Último job</span>
+                <strong>-</strong>
+                <small>Aguardando dados</small>
+            </div>
+
+            <div class="bi-summary-card">
+                <span>Status</span>
+                <strong>-</strong>
+                <small>Última execução</small>
+            </div>
+
+            <div class="bi-summary-card">
+                <span>Total inserido</span>
+                <strong>-</strong>
+                <small>Linhas no snapshot</small>
+            </div>
+
+            <div class="bi-summary-card">
+                <span>Fechadas sem motivo</span>
+                <strong>-</strong>
+                <small>Completed/Notdone</small>
+            </div>
+        </section>
+        <section class="bi-layout">
+            <div class="bi-card">
+                <div class="bi-card-header">
+                    <div>
+                        <h2>Nova coleta</h2>
+                        <p>Use período curto durante os testes. O limite técnico atual é de até 31 dias.</p>
+                    </div>
+                </div>
+
+                <form id="biCollectForm" class="bi-form">
+                    <div class="bi-form-grid">
+                        <div class="bi-field">
+                            <label for="dateFrom">Data inicial</label>
+                            <input type="date" id="dateFrom" name="dateFrom" value="{{ today }}" required>
+                        </div>
+
+                        <div class="bi-field">
+                            <label for="dateTo">Data final</label>
+                            <input type="date" id="dateTo" name="dateTo" value="{{ today }}" required>
+                        </div>
+
+                        <div class="bi-field">
+                            <label for="resources">Resources</label>
+                            <input type="text" id="resources" name="resources" value="02" required>
+                            <small>Por enquanto usamos 02 como padrão validado.</small>
+                        </div>
+                    </div>
+
+                    <div class="bi-statuses">
+                        <span>Status</span>
+
+                        <label>
+                            <input type="checkbox" name="statuses" value="completed" checked>
+                            Completed
+                        </label>
+
+                        <label>
+                            <input type="checkbox" name="statuses" value="notdone" checked>
+                            Notdone
+                        </label>
+
+                        <label>
+                            <input type="checkbox" name="statuses" value="pending">
+                            Pending
+                        </label>
+
+                        <label>
+                            <input type="checkbox" name="statuses" value="started">
+                            Started
+                        </label>
+                    </div>
+
+                    <div class="bi-activity-types">
+                        <div class="bi-activity-types-header">
+                            <div>
+                                <span>Tipos de atividade</span>
+                                <small>Selecione quais tipos serão enviados no filtro activityType da API.</small>
+                            </div>
+
+                            <div class="bi-activity-type-actions">
+                                <button type="button" id="btnSelectAllActivityTypes" class="bi-mini-btn">
+                                    Marcar todos
+                                </button>
+                                <button type="button" id="btnClearActivityTypes" class="bi-mini-btn">
+                                    Limpar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="bi-activity-type-grid">
+                            {% for activity_type in activity_types %}
+                            <label class="bi-activity-type-option">
+                                <input type="checkbox" name="activityTypes" value="{{ activity_type.code }}" checked>
+                                <span class="bi-activity-type-label">{{ activity_type.label }}</span>
+                                <span class="bi-activity-type-code">{{ activity_type.code }}</span>
+                            </label>
+                            {% else %}
+                            <div class="bi-empty-inline">
+                                Nenhum tipo de atividade disponível para coleta BI.
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="bi-actions">
+                        <button type="submit" id="btnRunCollect" class="bi-btn-primary">
+                            Executar coleta
+                        </button>
+
+                        <button type="button" id="btnReloadJobs" class="bi-btn-secondary">
+                            Atualizar jobs
+                        </button>
+                    </div>
+                </form>
+
+                <div id="biResultBox" class="bi-result hidden"></div>
+            </div>
+
+            <div class="bi-card">
+                <div class="bi-card-header">
+                    <div>
+                        <h2>Últimas execuções</h2>
+                        <p>Histórico das tentativas registradas em ofs_activities_bi_jobs.</p>
+                    </div>
+                </div>
+
+                <div class="bi-table-wrapper">
+                    <table class="bi-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Status</th>
+                                <th>Período</th>
+                                <th>Início</th>
+                                <th>Fim</th>
+                                <th>Buscados</th>
+                                <th>Inseridos</th>
+                                <th>Erro</th>
+                            </tr>
+                        </thead>
+                        <tbody id="biJobsTbody">
+                            <tr>
+                                <td colspan="8" class="bi-empty">Carregando jobs...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/bi_activities.js') }}"></script>
+</body>
+
+</html>
