@@ -342,21 +342,34 @@ def list_resources_grouped() -> Dict[str, List[dict]]:
 
 def list_activity_types() -> List[dict]:
     """
-    Lista tipos de atividade para montar os checkboxes da tela.
+    Lista tipos de atividade para montar os checkboxes da tela de relatório.
 
     Exibição para o usuário: label_pt, se existir.
     Valor enviado para a API: code.
-
-    A leitura é defensiva para não quebrar caso a tabela não tenha coluna active.
+    Categoria:
+      - customer_home: atividade operacional/casa cliente
+      - internal: atividade interna
     """
     conn = get_connection()
     cur = conn.cursor(dictionary=True)
 
     try:
         cur.execute("""
-            SELECT *
+            SELECT
+                code,
+                label_pt,
+                category,
+                include_in_bi,
+                is_active
             FROM ofs_activity_type_map
-            ORDER BY code ASC
+            WHERE is_active = 1
+            ORDER BY
+                CASE
+                    WHEN category = 'internal' THEN 2
+                    ELSE 1
+                END,
+                label_pt ASC,
+                code ASC
         """)
         rows = cur.fetchall()
 
@@ -366,17 +379,6 @@ def list_activity_types() -> List[dict]:
             code = str(row.get("code") or "").strip()
             if not code:
                 continue
-
-            active_value = None
-            for active_key in ("active", "ativo", "is_active", "enabled"):
-                if active_key in row:
-                    active_value = row.get(active_key)
-                    break
-
-            if active_value is not None:
-                active_str = str(active_value).strip().lower()
-                if active_str in {"0", "false", "não", "nao", "no", "inactive", "inativo"}:
-                    continue
 
             label_pt = (
                 row.get("label_pt")
@@ -388,9 +390,16 @@ def list_activity_types() -> List[dict]:
                 or code
             )
 
+            category = str(row.get("category") or "customer_home").strip().lower()
+
+            if category not in {"customer_home", "internal"}:
+                category = "customer_home"
+
             activity_types.append({
                 "code": code,
-                "label": str(label_pt or code).strip(),
+                "label": str(label_pt).strip() or code,
+                "category": category,
+                "is_internal": category == "internal",
             })
 
         return activity_types

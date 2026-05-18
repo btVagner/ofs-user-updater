@@ -955,3 +955,45 @@
   overflow-x: auto;
   border-radius: 10px;
 }
+
+.type-filter-group {
+    margin-bottom: 16px;
+}
+
+.type-filter-group-title {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.type-filter-group-title strong {
+    color: #ffffff;
+    font-size: 0.92rem;
+}
+
+.type-filter-group-title span {
+    color: #a7a7b4;
+    font-size: 0.78rem;
+}
+
+.type-filter-group-internal .type-filter-group-title {
+    background: rgba(245, 158, 11, 0.10);
+    border-color: rgba(245, 158, 11, 0.24);
+}
+
+.type-filter-group-internal .type-filter-code {
+    color: #fbbf24;
+}
+
+.type-filter-empty {
+    padding: 14px;
+    color: #a7a7b4;
+    text-align: center;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+}

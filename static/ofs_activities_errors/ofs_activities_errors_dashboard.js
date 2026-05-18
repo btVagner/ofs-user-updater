@@ -1,5 +1,5 @@
 let dashboardDataCache = null;
-let selectedTypeLabels = new Set();
+let selectedTypeCodes = new Set();
 let chartByOwnerInstance = null;
 let chartTopSapMessagesInstance = null;
 let chartSapByActivityTypeInstance = null;
@@ -418,40 +418,122 @@ let chartSapByActivityTypeInstance = null;
         if (modal) modal.style.display = "none";
         if (backdrop) backdrop.style.display = "none";
     }
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
 
+    function normalizeActivityCategory(item) {
+        return String(item?.activityTypeCategory || "customer_home").toLowerCase().trim();
+    }
+
+    function getActivityTypeOptions() {
+        const options = Array.isArray(dashboardDataCache?.activity_type_options)
+            ? dashboardDataCache.activity_type_options
+            : [];
+
+        if (options.length) return options;
+
+        return Array.isArray(dashboardDataCache?.by_type)
+            ? dashboardDataCache.by_type
+            : [];
+    }
+
+    function isInternalActivity(item) {
+        return normalizeActivityCategory(item) === "internal";
+    }
+
+    function activityCode(item) {
+        return String(item?.activityType || "-");
+    }
+
+    function activityLabel(item) {
+        return String(item?.activityTypeLabel || item?.activityType || "-");
+    }
     function renderTypeFilterList() {
         const list = document.getElementById("typeFilterList");
         const search = document.getElementById("typeFilterSearch");
         if (!list || !dashboardDataCache) return;
 
         const term = String(search?.value || "").toLowerCase().trim();
-        const byType = Array.isArray(dashboardDataCache.by_type) ? dashboardDataCache.by_type : [];
+        const options = getActivityTypeOptions();
 
-        const filtered = byType.filter(item => {
-            const label = String(item.activityTypeLabel || item.activityType || "-").toLowerCase();
-            const code = String(item.activityType || "-").toLowerCase();
+        const filtered = options.filter(item => {
+            const label = activityLabel(item).toLowerCase();
+            const code = activityCode(item).toLowerCase();
             return !term || label.includes(term) || code.includes(term);
         });
 
-        list.innerHTML = filtered.map(item => {
-            const code = item.activityType || "-";
-            const label = item.activityTypeLabel || code;
-            const qtd = Number(item.qtd || 0);
-            const checked = selectedTypeLabels.has(label) ? "checked" : "";
+        const operational = filtered.filter(item => !isInternalActivity(item));
+        const internal = filtered.filter(item => isInternalActivity(item));
+
+        function renderGroup(title, subtitle, items, extraClass) {
+            if (!items.length) return "";
+
+            const rows = items.map(item => {
+                const code = activityCode(item);
+                const label = activityLabel(item);
+                const qtd = Number(item.qtd || 0);
+                const checked = selectedTypeCodes.has(code) ? "checked" : "";
+                const tag = isInternalActivity(item) ? "Interna" : "Operacional";
+
+                return `
+                    <label class="type-filter-item ${extraClass}">
+                        <div class="type-filter-left">
+                            <input
+                                type="checkbox"
+                                class="js-type-filter-check"
+                                value="${escapeHtml(code)}"
+                                ${checked}
+                            >
+                            <div class="type-filter-labels">
+                                <span class="type-filter-name">${escapeHtml(label)}</span>
+                                <span class="type-filter-code">${escapeHtml(code)} · ${escapeHtml(tag)}</span>
+                            </div>
+                        </div>
+                        <div class="type-filter-qtd">${qtd}</div>
+                    </label>
+                `;
+            }).join("");
 
             return `
-                <label class="type-filter-item">
-                    <div class="type-filter-left">
-                        <input type="checkbox" class="js-type-filter-check" value="${label}" ${checked}>
-                        <div class="type-filter-labels">
-                            <span class="type-filter-name">${label}</span>
-                            <span class="type-filter-code">${code}</span>
-                        </div>
+                <div class="type-filter-group ${extraClass}">
+                    <div class="type-filter-group-title">
+                        <strong>${escapeHtml(title)}</strong>
+                        <span>${escapeHtml(subtitle)}</span>
                     </div>
-                    <div class="type-filter-qtd">${qtd}</div>
-                </label>
+                    ${rows}
+                </div>
             `;
-        }).join("");
+        }
+
+        if (!filtered.length) {
+            list.innerHTML = `
+                <div class="type-filter-empty">
+                    Nenhum tipo encontrado para a busca informada.
+                </div>
+            `;
+            return;
+        }
+
+        list.innerHTML = [
+            renderGroup(
+                "Atividades operacionais",
+                "Marcadas por padrão no filtro.",
+                operational,
+                "type-filter-group-operational"
+            ),
+            renderGroup(
+                "Atividades internas",
+                "Desmarcadas por padrão. Marque apenas quando quiser incluir essas atividades nos gráficos.",
+                internal,
+                "type-filter-group-internal"
+            )
+        ].join("");
     }
     function buildByDayFiltered() {
         if (!dashboardDataCache) return [];
@@ -463,9 +545,9 @@ let chartSapByActivityTypeInstance = null;
         const map = new Map();
 
         rows.forEach(item => {
-            const label = item.activityTypeLabel || item.activityType || "-";
+            const code = activityCode(item);
 
-            if (!selectedTypeLabels.has(label)) return;
+            if (!selectedTypeCodes.has(code)) return;
 
             const date = item.date;
             const qtd = Number(item.qtd || 0);
@@ -481,9 +563,11 @@ let chartSapByActivityTypeInstance = null;
     function applyTypeFilterToChart() {
         if (!dashboardDataCache) return;
 
-        const filteredByType = (dashboardDataCache.by_type || []).filter(item => {
-            const label = item.activityTypeLabel || item.activityType || "-";
-            return selectedTypeLabels.has(label);
+        const sourceTypes = getActivityTypeOptions();
+
+        const filteredByType = sourceTypes.filter(item => {
+            const code = activityCode(item);
+            return selectedTypeCodes.has(code);
         });
 
         const filteredByDay = buildByDayFiltered();
@@ -494,7 +578,6 @@ let chartSapByActivityTypeInstance = null;
             by_day: filteredByDay
         });
     }
-
     async function loadDashboardData() {
         const params = new URLSearchParams({
             dateFrom,
@@ -521,13 +604,22 @@ let chartSapByActivityTypeInstance = null;
 
             dashboardDataCache = data;
 
-            const byType = Array.isArray(data.by_type) ? data.by_type : [];
-            selectedTypeLabels = new Set(
-                byType.map(item => item.activityTypeLabel || item.activityType || "-")
+            const options = Array.isArray(data.activity_type_options)
+                ? data.activity_type_options
+                : [];
+
+            const sourceTypes = options.length
+                ? options
+                : (Array.isArray(data.by_type) ? data.by_type : []);
+
+            selectedTypeCodes = new Set(
+                sourceTypes
+                    .filter(item => !isInternalActivity(item))
+                    .map(item => activityCode(item))
             );
 
             updateKpis(data);
-            buildCharts(data);
+            applyTypeFilterToChart();
             renderTypeFilterList();
         } catch (e) {
             console.error("Erro ao carregar dashboard:", e);
@@ -549,15 +641,17 @@ let chartSapByActivityTypeInstance = null;
     document.getElementById("btnMarkAllTypes")?.addEventListener("click", () => {
         if (!dashboardDataCache) return;
 
-        selectedTypeLabels = new Set(
-            (dashboardDataCache.by_type || []).map(item => item.activityTypeLabel || item.activityType || "-")
+        selectedTypeCodes = new Set(
+            getActivityTypeOptions()
+                .filter(item => !isInternalActivity(item))
+                .map(item => activityCode(item))
         );
 
         renderTypeFilterList();
     });
 
     document.getElementById("btnUnmarkAllTypes")?.addEventListener("click", () => {
-        selectedTypeLabels = new Set();
+        selectedTypeCodes = new Set();
         renderTypeFilterList();
     });
 
@@ -567,9 +661,9 @@ let chartSapByActivityTypeInstance = null;
 
         const value = input.value;
         if (input.checked) {
-            selectedTypeLabels.add(value);
+            selectedTypeCodes.add(value);
         } else {
-            selectedTypeLabels.delete(value);
+            selectedTypeCodes.delete(value);
         }
     });
 

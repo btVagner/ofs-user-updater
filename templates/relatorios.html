@@ -1,14 +1,12 @@
 {% set page_css_files = ['css/relatorios.css'] %}
 {% include 'includes/head.html' %}
 
-<body
-    data-ofs-os-start-url="{{ url_for('relatorios_ofs_os_iniciar') }}"
+<body data-ofs-os-start-url="{{ url_for('relatorios_ofs_os_iniciar') }}"
     data-ofs-os-status-url-base="{{ url_for('relatorios_ofs_os_status', job_id='__JOB_ID__') }}"
     data-ofs-os-download-url-base="{{ url_for('relatorios_ofs_os_download', job_id='__JOB_ID__') }}"
     data-ofs-os-discard-url-base="{{ url_for('relatorios_ofs_os_descartar', job_id='__JOB_ID__') }}"
     data-resource-sync-start-url="{{ url_for('relatorios_recursos_atualizar_iniciar') }}"
-    data-resource-sync-status-url-base="{{ url_for('relatorios_recursos_atualizar_status', job_id='__JOB_ID__') }}"
->
+    data-resource-sync-status-url-base="{{ url_for('relatorios_recursos_atualizar_status', job_id='__JOB_ID__') }}">
     {% if session.usuario_logado %}
     {% include 'includes/navbar.html' %}
     {% endif %}
@@ -53,7 +51,8 @@
 
     <div id="ofsOsReportBackdrop" class="modal-backdrop-custom"></div>
 
-    <div id="ofsOsReportModal" class="modal-custom modal-report" role="dialog" aria-modal="true" aria-labelledby="ofsOsReportTitle">
+    <div id="ofsOsReportModal" class="modal-custom modal-report" role="dialog" aria-modal="true"
+        aria-labelledby="ofsOsReportTitle">
         <div class="modal-top">
             <div class="modal-top-copy">
                 <h3 id="ofsOsReportTitle">Relatório de OS do OFS</h3>
@@ -127,7 +126,8 @@
                 <div class="checkbox-grid">
                     {% for status in status_options %}
                     <label class="check-card">
-                        <input type="checkbox" name="statuses" value="{{ status }}" {% if status == 'completed' %}checked{% endif %}>
+                        <input type="checkbox" name="statuses" value="{{ status }}" {% if status=='completed'
+                            %}checked{% endif %}>
                         <span>{{ status }}</span>
                     </label>
                     {% endfor %}
@@ -136,21 +136,57 @@
 
             <div class="report-section">
                 <div class="report-section-title-row">
-                    <h4>Tipos de atividade</h4>
+                    <div>
+                        <h4>Tipos de atividade</h4>
+                        <p class="report-section-hint">
+                            Atividades internas ficam separadas e desmarcadas por padrão.
+                        </p>
+                    </div>
 
                     <div class="mini-actions">
-                        <button type="button" class="btn-mini" id="btnSelectAllActivityTypes">Selecionar tudo</button>
+                        <button type="button" class="btn-mini" id="btnSelectAllActivityTypes">Selecionar
+                            operacionais</button>
                         <button type="button" class="btn-mini" id="btnClearActivityTypes">Desmarcar tudo</button>
                     </div>
                 </div>
 
-                <div class="checkbox-grid fields-grid">
-                    {% for activity_type in activity_types %}
-                    <label class="check-card">
-                        <input type="checkbox" name="activityTypes" value="{{ activity_type.code }}" checked>
-                        <span>{{ activity_type.label }}</span>
-                    </label>
-                    {% endfor %}
+                <div class="activity-type-block">
+                    <div class="activity-type-group-title">
+                        <strong>Atividades operacionais</strong>
+                        <span>Marcadas por padrão para extrações de OS em campo.</span>
+                    </div>
+
+                    <div class="checkbox-grid fields-grid">
+                        {% for activity_type in activity_types %}
+                        {% if activity_type.category != 'internal' %}
+                        <label class="check-card">
+                            <input type="checkbox" name="activityTypes" value="{{ activity_type.code }}"
+                                data-category="{{ activity_type.category }}" checked>
+                            <span>{{ activity_type.label }}</span>
+                        </label>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="activity-type-block activity-type-block-internal">
+                    <div class="activity-type-group-title">
+                        <strong>Atividades internas</strong>
+                        <span>Marque apenas quando quiser incluir intervalo, reunião, manutenção ou atividades
+                            administrativas.</span>
+                    </div>
+
+                    <div class="checkbox-grid fields-grid">
+                        {% for activity_type in activity_types %}
+                        {% if activity_type.category == 'internal' %}
+                        <label class="check-card check-card-internal">
+                            <input type="checkbox" name="activityTypes" value="{{ activity_type.code }}"
+                                data-category="{{ activity_type.category }}">
+                            <span>{{ activity_type.label }}</span>
+                        </label>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
                 </div>
 
                 {% if activity_types|length == 0 %}
@@ -159,20 +195,21 @@
                 </div>
                 {% endif %}
             </div>
-
             <div class="report-section">
                 <div class="report-section-title-row">
                     <h4>Recursos</h4>
 
                     <div class="mini-actions">
-                        <button type="button" class="btn-mini" id="btnSelectVisibleResources">Selecionar visíveis</button>
+                        <button type="button" class="btn-mini" id="btnSelectVisibleResources">Selecionar
+                            visíveis</button>
                         <button type="button" class="btn-mini" id="btnClearVisibleResources">Desmarcar visíveis</button>
                     </div>
                 </div>
 
                 <div class="resource-type-tabs">
                     {% for code, label in resource_types.items() %}
-                    <button type="button" class="resource-type-btn {% if loop.first %}active{% endif %}" data-resource-type="{{ code }}">
+                    <button type="button" class="resource-type-btn {% if loop.first %}active{% endif %}"
+                        data-resource-type="{{ code }}">
                         {{ label }}
                         <span>{{ resources_grouped.get(code, [])|length }}</span>
                     </button>
@@ -182,7 +219,8 @@
                 <div class="resource-list">
                     {% for code, label in resource_types.items() %}
                     {% set group = resources_grouped.get(code, []) %}
-                    <div class="resource-group {% if not loop.first %}hidden{% endif %}" data-resource-group="{{ code }}">
+                    <div class="resource-group {% if not loop.first %}hidden{% endif %}"
+                        data-resource-group="{{ code }}">
                         {% if group|length == 0 %}
                         <div class="empty-resources">
                             Nenhum recurso ativo carregado para {{ label }}.
@@ -213,9 +251,9 @@
 
                 <div class="checkbox-grid fields-grid">
                     {% for field in field_choices %}
-                    <label class="check-card">
+                    <label class="check-card" title="{{ field.key }}">
                         <input type="checkbox" name="fields" value="{{ field.key }}" checked>
-                        <span>{{ field.label }}</span>
+                        <span>{{ field.xlsx_header or field.label }}</span>
                     </label>
                     {% endfor %}
                 </div>

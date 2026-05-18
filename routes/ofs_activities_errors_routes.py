@@ -702,55 +702,122 @@ def init_app(app):
         by_day = cur.fetchall()
         cur.execute("""
             SELECT
-                `date`,
+                e.`date`,
                 COALESCE(e.activity_type, '-') AS activityType,
-                COALESCE(c.descricao, COALESCE(e.activity_type, '-')) AS activityTypeLabel,
+                COALESCE(
+                    atm.label_pt,
+                    c.descricao,
+                    COALESCE(e.activity_type, '-')
+                ) AS activityTypeLabel,
+                COALESCE(atm.category, 'customer_home') AS activityTypeCategory,
                 COUNT(*) AS qtd
             FROM ofs_activities_errors e
+            LEFT JOIN ofs_activity_type_map atm
+                ON atm.code = e.activity_type
+               AND atm.is_active = 1
             LEFT JOIN ofs_activity_type_config c
                 ON c.activity_type = e.activity_type
-            AND c.ativo = 1
+               AND c.ativo = 1
             WHERE e.`date` BETWEEN %s AND %s
-            AND (
+              AND (
                     e.ng_dispatch_message IS NOT NULL
                     OR e.ng_response_message IS NOT NULL
-                )
-            AND (
+                  )
+              AND (
                     c.mostrar_dashboard = 1
                     OR c.id IS NULL
-                )
+                  )
             GROUP BY
-                `date`,
+                e.`date`,
                 COALESCE(e.activity_type, '-'),
-                COALESCE(c.descricao, COALESCE(e.activity_type, '-'))
-            ORDER BY `date` ASC
+                COALESCE(
+                    atm.label_pt,
+                    c.descricao,
+                    COALESCE(e.activity_type, '-')
+                ),
+                COALESCE(atm.category, 'customer_home')
+            ORDER BY e.`date` ASC
         """, (date_from, date_to))
         by_day_type = cur.fetchall()
         cur.execute("""
             SELECT
                 COALESCE(e.activity_type, '-') AS activityType,
-                COALESCE(c.descricao, COALESCE(e.activity_type, '-')) AS activityTypeLabel,
+                COALESCE(
+                    atm.label_pt,
+                    c.descricao,
+                    COALESCE(e.activity_type, '-')
+                ) AS activityTypeLabel,
+                COALESCE(atm.category, 'customer_home') AS activityTypeCategory,
                 COUNT(*) AS qtd
             FROM ofs_activities_errors e
+            LEFT JOIN ofs_activity_type_map atm
+                ON atm.code = e.activity_type
+               AND atm.is_active = 1
             LEFT JOIN ofs_activity_type_config c
                 ON c.activity_type = e.activity_type
-            AND c.ativo = 1
+               AND c.ativo = 1
             WHERE e.`date` BETWEEN %s AND %s
-            AND (
+              AND (
                     e.ng_dispatch_message IS NOT NULL
                     OR e.ng_response_message IS NOT NULL
-                )
-            AND (
+                  )
+              AND (
                     c.mostrar_dashboard = 1
                     OR c.id IS NULL
-                )
+                  )
             GROUP BY
                 COALESCE(e.activity_type, '-'),
-                COALESCE(c.descricao, COALESCE(e.activity_type, '-'))
+                COALESCE(
+                    atm.label_pt,
+                    c.descricao,
+                    COALESCE(e.activity_type, '-')
+                ),
+                COALESCE(atm.category, 'customer_home')
             ORDER BY qtd DESC
             LIMIT 20
         """, (date_from, date_to))
         by_type = cur.fetchall()
+
+        cur.execute("""
+            SELECT
+                atm.code AS activityType,
+                COALESCE(
+                    atm.label_pt,
+                    c.descricao,
+                    atm.code
+                ) AS activityTypeLabel,
+                COALESCE(atm.category, 'customer_home') AS activityTypeCategory,
+                COALESCE(cnt.qtd, 0) AS qtd
+            FROM ofs_activity_type_map atm
+            LEFT JOIN ofs_activity_type_config c
+                ON c.activity_type = atm.code
+               AND c.ativo = 1
+            LEFT JOIN (
+                SELECT
+                    e.activity_type,
+                    COUNT(*) AS qtd
+                FROM ofs_activities_errors e
+                WHERE e.`date` BETWEEN %s AND %s
+                  AND (
+                        e.ng_dispatch_message IS NOT NULL
+                        OR e.ng_response_message IS NOT NULL
+                      )
+                GROUP BY e.activity_type
+            ) cnt
+                ON cnt.activity_type = atm.code
+            WHERE atm.is_active = 1
+              AND (
+                    c.mostrar_dashboard = 1
+                    OR c.id IS NULL
+                  )
+            ORDER BY
+                CASE
+                    WHEN COALESCE(atm.category, 'customer_home') = 'internal' THEN 2
+                    ELSE 1
+                END,
+                activityTypeLabel ASC
+        """, (date_from, date_to))
+        activity_type_options = cur.fetchall()
         cur.execute("""
             SELECT
                 sap_response_message AS msg,
@@ -768,17 +835,30 @@ def init_app(app):
         cur.execute("""
             SELECT
                 COALESCE(e.activity_type, '-') AS activityType,
-                COALESCE(c.descricao, COALESCE(e.activity_type, '-')) AS activityTypeLabel,
+                COALESCE(
+                    atm.label_pt,
+                    c.descricao,
+                    COALESCE(e.activity_type, '-')
+                ) AS activityTypeLabel,
+                COALESCE(atm.category, 'customer_home') AS activityTypeCategory,
                 COUNT(*) AS qtd
             FROM ofs_activities_errors e
+            LEFT JOIN ofs_activity_type_map atm
+                ON atm.code = e.activity_type
+               AND atm.is_active = 1
             LEFT JOIN ofs_activity_type_config c
                 ON c.activity_type = e.activity_type
-                AND c.ativo = 1
+               AND c.ativo = 1
             WHERE e.`date` BETWEEN %s AND %s
-                AND COALESCE(TRIM(e.xa_sap_crt), '') = '1'
+              AND COALESCE(TRIM(e.xa_sap_crt), '') = '1'
             GROUP BY
                 COALESCE(e.activity_type, '-'),
-                COALESCE(c.descricao, COALESCE(e.activity_type, '-'))
+                COALESCE(
+                    atm.label_pt,
+                    c.descricao,
+                    COALESCE(e.activity_type, '-')
+                ),
+                COALESCE(atm.category, 'customer_home')
             ORDER BY qtd DESC
             LIMIT 20
         """, (date_from, date_to))
@@ -794,6 +874,7 @@ def init_app(app):
             "by_day": by_day,
             "by_day_type": by_day_type,
             "by_type": by_type,
+            "activity_type_options": activity_type_options,
             "date_from": date_from,
             "date_to": date_to,
             "top_sap_messages": top_sap_messages,

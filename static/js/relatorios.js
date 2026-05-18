@@ -275,7 +275,9 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     document.getElementById("btnSelectAllActivityTypes")?.addEventListener("click", () => {
-        setChecked("activityTypes", true);
+        document.querySelectorAll('input[name="activityTypes"]').forEach(el => {
+            el.checked = el.dataset.category !== "internal";
+        });
     });
 
     document.getElementById("btnClearActivityTypes")?.addEventListener("click", () => {

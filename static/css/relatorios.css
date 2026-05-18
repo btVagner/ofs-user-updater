@@ -722,3 +722,47 @@
     width: 100%;
   }
 }
+
+.report-section-hint {
+    margin: 4px 0 0;
+    color: #a7a7b4;
+    font-size: 0.82rem;
+}
+
+.activity-type-block {
+    margin-top: 12px;
+}
+
+.activity-type-block + .activity-type-block {
+    margin-top: 18px;
+}
+
+.activity-type-group-title {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.activity-type-group-title strong {
+    color: #ffffff;
+    font-size: 0.92rem;
+}
+
+.activity-type-group-title span {
+    color: #a7a7b4;
+    font-size: 0.78rem;
+}
+
+.activity-type-block-internal .activity-type-group-title {
+    background: rgba(245, 158, 11, 0.10);
+    border-color: rgba(245, 158, 11, 0.25);
+}
+
+.check-card-internal {
+    border-color: rgba(245, 158, 11, 0.18);
+}

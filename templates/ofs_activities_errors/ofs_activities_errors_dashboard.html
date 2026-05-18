@@ -271,6 +271,7 @@
     <div class="dashboard-filter-modal-help">
       Selecione os tipos que devem aparecer nos gráficos
       <b>Erros por dia</b> e <b>Erros por tipo de atividade</b>.
+      Atividades internas ficam separadas e desmarcadas por padrão.
     </div>
 
     <div class="filter-card" style="margin-bottom: 12px;">
@@ -282,7 +283,7 @@
 
     <div class="type-filter-actions">
       <button type="button" class="btn-secondary" id="btnMarkAllTypes">
-        Marcar todos
+        Marcar operacionais
       </button>
 
       <button type="button" class="btn-secondary" id="btnUnmarkAllTypes">
@@ -299,7 +300,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <script src="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors_dashboard.js') }}"></script>
+  <script src="{{ url_for('static', filename='ofs_activities_errors/ofs_activities_errors_dashboard.js') }}?v=20260518_1"></script>
 
   {% include 'includes/footer.html' %}
 </body>
