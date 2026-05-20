@@ -113,6 +113,24 @@ FIELD_CHOICES = [
         "xlsx_header": "Data",
     },
     {
+        "key": "startTime",
+        "label": "startTime (Início da atividade)",
+        "api_fields": ["startTime"],
+        "xlsx_header": "Início da atividade",
+    },
+    {
+        "key": "endTime",
+        "label": "endTime (Fim da atividade)",
+        "api_fields": ["endTime"],
+        "xlsx_header": "Fim da atividade",
+    },
+    {
+        "key": "XA_TSK_NOT",
+        "label": "XA_TSK_NOT (Observações finais)",
+        "api_fields": ["XA_TSK_NOT"],
+        "xlsx_header": "Observações finais",
+    },
+    {
         "key": "XA_ORG_SYS",
         "label": "XA_ORG_SYS",
         "api_fields": ["XA_ORG_SYS"],
