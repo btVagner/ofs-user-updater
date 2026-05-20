@@ -265,6 +265,46 @@ def _load_activity_type_label_map() -> Dict[str, str]:
 
     return mapping
 
+def _load_close_reason_name_map() -> Dict[Tuple[str, str], str]:
+    """
+    Carrega o mapa de motivos de fechamento.
+
+    Importante:
+    O mesmo label/ID pode existir em propriedades diferentes com significados diferentes.
+    Por isso a chave correta é sempre:
+      (property_code, label)
+    """
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        cur.execute("""
+            SELECT
+                property_code,
+                label,
+                name_br
+            FROM ofs_close_reason_map
+            WHERE active = 1
+        """)
+        rows = cur.fetchall() or []
+
+        mapping = {}
+
+        for row in rows:
+            property_code = str(row.get("property_code") or "").strip()
+            label = str(row.get("label") or "").strip()
+            name_br = str(row.get("name_br") or "").strip()
+
+            if not property_code or not label:
+                continue
+
+            mapping[(property_code, label)] = name_br or label
+
+        return mapping
+
+    finally:
+        cur.close()
+        conn.close()
 
 def read_job_status(base_dir: str, job_id: str) -> dict:
     path = _job_status_path(base_dir, job_id)
@@ -699,12 +739,31 @@ def _row_value(
     field_key: str,
     resource_name_map: Dict[str, str] = None,
     activity_type_label_map: Dict[str, str] = None,
+    close_reason_name_map: Dict[Tuple[str, str], str] = None,
 ):
     if field_key == "customerName":
         return _first_name(item.get("customerName"))
 
     if field_key == "fechamento_atividade":
-        return _first_filled(item, CLOSURE_FIELDS)
+        for closure_field in CLOSURE_FIELDS:
+            raw_value = item.get(closure_field)
+
+            if raw_value is None:
+                continue
+
+            label = str(raw_value).strip()
+
+            if not label:
+                continue
+
+            if close_reason_name_map:
+                translated = close_reason_name_map.get((closure_field, label))
+                if translated:
+                    return translated
+
+            return label
+
+        return ""
 
     if field_key == "resourceName":
         resource_id = str(item.get("resourceId") or "").strip()
@@ -733,6 +792,7 @@ def _row_value(
         return ""
 
     return value
+
 def _build_or_equals_query(field_name: str, values: List[str]) -> str:
     cleaned = []
 
@@ -854,6 +914,11 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
         if "activityType" in selected_fields
         else {}
     )
+    close_reason_name_map = (
+        _load_close_reason_name_map()
+        if "fechamento_atividade" in selected_fields
+        else {}
+    )
 
     for item in rows:
         ws.append([
@@ -862,6 +927,7 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
                 key,
                 resource_name_map=resource_name_map,
                 activity_type_label_map=activity_type_label_map,
+                close_reason_name_map=close_reason_name_map,
             )
             for key in selected_fields
         ])
@@ -886,7 +952,6 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
     xlsx_auto_width(ws)
 
     wb.save(output_path)
-
 def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
     filename = f"relatorio_os_ofs_{config['date_from']}_{config['date_to']}_{job_id[:8]}.xlsx"
 
