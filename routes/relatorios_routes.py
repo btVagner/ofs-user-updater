@@ -5,12 +5,12 @@ from flask import render_template, request, jsonify, send_file, flash, redirect,
 from core.auth import login_required, perm_required, current_actor, has_perm
 from database.audit import audit_log
 from services.ofs_os_report_service import (
-    FIELD_CHOICES,
     RESOURCE_TYPES,
     STATUS_OPTIONS,
     discard_job,
     get_xlsx_path,
     list_activity_types,
+    list_report_field_choices,
     list_resources_grouped,
     read_job_status,
     start_report_job,
@@ -32,17 +32,19 @@ def init_app(app):
     @perm_required("relatorios.acessar")
     def relatorios():
         resources_grouped = list_resources_grouped()
+        can_view_extra_fields = has_perm("relatorios.campos_extras")
 
         return render_template(
             "relatorios.html",
-            field_choices=FIELD_CHOICES,
+            field_choices=list_report_field_choices(
+                can_view_extra_fields=can_view_extra_fields,
+            ),
             resource_types=RESOURCE_TYPES,
             resources_grouped=resources_grouped,
             status_options=STATUS_OPTIONS,
             activity_types=list_activity_types(),
             can_update_resources=has_perm("relatorios.recursos_atualizar"),
         )
-
 
     @app.route("/relatorios/recursos/atualizar/iniciar", methods=["POST"])
     @login_required
@@ -103,7 +105,10 @@ def init_app(app):
         payload = request.get_json(silent=True) or {}
 
         try:
-            config = validate_report_payload(payload)
+            config = validate_report_payload(
+                payload,
+                can_view_extra_fields=has_perm("relatorios.campos_extras"),
+            )
             job_id = start_report_job(
                 base_dir=_reports_base_dir(),
                 actor=current_actor(),

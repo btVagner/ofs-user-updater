@@ -62,7 +62,7 @@ CLOSURE_FIELDS = [
     "XA_SER_CLO_PRO_NG",
     "XA_SER_CLO_INP_NG",
 ]
-
+EXTRA_REPORT_FIELDS_PERMISSION = "relatorios.campos_extras"
 FIELD_CHOICES = [
     {
         "key": "resourceId",
@@ -137,6 +137,12 @@ FIELD_CHOICES = [
         "xlsx_header": "Sistema de Origem",
     },
     {
+        "key": "XA_TSK_TYP",
+        "label": "XA_TSK_TYP",
+        "api_fields": ["XA_TSK_TYP"],
+        "xlsx_header": "Tipo de tarefa",
+    },
+    {
         "key": "status",
         "label": "status",
         "api_fields": ["status"],
@@ -178,10 +184,50 @@ FIELD_CHOICES = [
         "api_fields": ["apptNumber"],
         "xlsx_header": "Código da OS",
     },
+    {
+        "key": "XA_PLA_CON_CUS",
+        "label": "XA_PLA_CON_CUS",
+        "api_fields": ["XA_PLA_CON_CUS"],
+        "xlsx_header": "Plano contratado",
+        "required_perm": EXTRA_REPORT_FIELDS_PERMISSION,
+    },
+    {
+        "key": "customerNumber",
+        "label": "customerNumber",
+        "api_fields": ["customerNumber"],
+        "xlsx_header": "Contrato do cliente",
+        "required_perm": EXTRA_REPORT_FIELDS_PERMISSION,
+    },
 ]
 
 FIELD_MAP = {f["key"]: f for f in FIELD_CHOICES}
 
+def _field_allowed_for_user(field_config: dict, can_view_extra_fields: bool = False) -> bool:
+    required_perm = field_config.get("required_perm")
+
+    if not required_perm:
+        return True
+
+    if required_perm == EXTRA_REPORT_FIELDS_PERMISSION:
+        return bool(can_view_extra_fields)
+
+    return False
+
+
+def list_report_field_choices(can_view_extra_fields: bool = False) -> List[dict]:
+    """
+    Lista os campos disponíveis para o usuário na tela de relatório.
+
+    Campos sem required_perm são públicos para quem acessa o relatório.
+    Campos com required_perm só aparecem para quem possui a permissão necessária.
+    """
+    visible_fields = []
+
+    for field in FIELD_CHOICES:
+        if _field_allowed_for_user(field, can_view_extra_fields=can_view_extra_fields):
+            visible_fields.append(field)
+
+    return visible_fields
 
 def _now_iso():
     return datetime.now().isoformat(timespec="seconds")
@@ -649,7 +695,7 @@ def _validate_statuses(statuses: list) -> List[str]:
     return cleaned
 
 
-def _validate_fields(fields: list) -> List[str]:
+def _validate_fields(fields: list, can_view_extra_fields: bool = False) -> List[str]:
     cleaned = []
     allowed = set(FIELD_MAP.keys())
 
@@ -661,8 +707,28 @@ def _validate_fields(fields: list) -> List[str]:
     if not cleaned:
         raise ValueError("Selecione pelo menos um campo para extração.")
 
-    return cleaned
+    denied_fields = []
 
+    for field_key in cleaned:
+        field_config = FIELD_MAP[field_key]
+
+        if not _field_allowed_for_user(
+            field_config,
+            can_view_extra_fields=can_view_extra_fields,
+        ):
+            denied_fields.append(
+                field_config.get("xlsx_header")
+                or field_config.get("label")
+                or field_key
+            )
+
+    if denied_fields:
+        raise ValueError(
+            "Você não tem permissão para extrair os seguintes campos: "
+            + ", ".join(denied_fields)
+        )
+
+    return cleaned
 
 def _validate_resources(resource_ids: list) -> List[str]:
     selected = []
@@ -699,7 +765,7 @@ def _validate_resources(resource_ids: list) -> List[str]:
     return selected
 
 
-def validate_report_payload(payload: dict) -> dict:
+def validate_report_payload(payload: dict, can_view_extra_fields: bool = False) -> dict:
     date_from = str(payload.get("dateFrom") or "").strip()
     date_to = str(payload.get("dateTo") or "").strip()
 
@@ -707,7 +773,10 @@ def validate_report_payload(payload: dict) -> dict:
 
     statuses = _validate_statuses(payload.get("statuses") or [])
     activity_types = _validate_activity_types(payload.get("activityTypes") or [])
-    selected_fields = _validate_fields(payload.get("fields") or [])
+    selected_fields = _validate_fields(
+        payload.get("fields") or [],
+        can_view_extra_fields=can_view_extra_fields,
+    )
     resource_ids = _validate_resources(payload.get("resources") or [])
 
     return {
