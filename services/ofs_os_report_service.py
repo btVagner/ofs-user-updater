@@ -62,6 +62,10 @@ CLOSURE_FIELDS = [
     "XA_SER_CLO_PRO_NG",
     "XA_SER_CLO_INP_NG",
 ]
+
+TASK_TYPE_PROPERTY_CODE = "XA_TSK_TYP"
+METADATA_ENUM_LIMIT = 100
+
 EXTRA_REPORT_FIELDS_PERMISSION = "relatorios.campos_extras"
 FIELD_CHOICES = [
     {
@@ -137,12 +141,6 @@ FIELD_CHOICES = [
         "xlsx_header": "Sistema de Origem",
     },
     {
-        "key": "XA_TSK_TYP",
-        "label": "XA_TSK_TYP",
-        "api_fields": ["XA_TSK_TYP"],
-        "xlsx_header": "Tipo de tarefa",
-    },
-    {
         "key": "status",
         "label": "status",
         "api_fields": ["status"],
@@ -171,6 +169,12 @@ FIELD_CHOICES = [
         "label": "activityType",
         "api_fields": ["activityType"],
         "xlsx_header": "Tipo de Atividade",
+    },
+    {
+        "key": "XA_TSK_TYP",
+        "label": "XA_TSK_TYP",
+        "api_fields": ["XA_TSK_TYP"],
+        "xlsx_header": "Tipo de tarefa",
     },
     {
         "key": "activityId",
@@ -328,6 +332,225 @@ def _load_activity_type_label_map() -> Dict[str, str]:
         mapping[code] = label or code
 
     return mapping
+
+def _metadata_base_url(client: OFSClient) -> str:
+    env_url = (os.getenv("OFS_METADATA_BASE_URL") or "").strip().rstrip("/")
+    if env_url:
+        return env_url
+
+    core_marker = "/rest/ofscCore/v1"
+    metadata_marker = "/rest/ofscMetadata/v1"
+
+    if core_marker in client.base_url:
+        return client.base_url.replace(core_marker, metadata_marker).rstrip("/")
+
+    raise RuntimeError(
+        "Não foi possível montar a URL metadata. "
+        "Defina OFS_METADATA_BASE_URL no .env."
+    )
+
+
+def _safe_text(value) -> str:
+    return str(value or "").strip()
+
+
+def _extract_br_translation(item: dict) -> str:
+    label = _safe_text(item.get("label"))
+
+    translations = item.get("translations") or []
+
+    for translation in translations:
+        language = _safe_text(translation.get("language")).lower()
+        language_iso = _safe_text(translation.get("languageISO")).lower()
+        name = _safe_text(translation.get("name"))
+
+        if name and (language == "br" or language_iso == "pt-br"):
+            return name
+
+    for translation in translations:
+        name = _safe_text(translation.get("name"))
+        if name:
+            return name
+
+    return label
+
+
+def _fetch_property_enumeration_page(
+    client: OFSClient,
+    property_code: str,
+    offset: int,
+    limit: int = METADATA_ENUM_LIMIT,
+) -> dict:
+    base_url = _metadata_base_url(client)
+    url = f"{base_url}/properties/{property_code}/enumerationList"
+
+    response = requests.get(
+        url,
+        params={
+            "limit": limit,
+            "offset": offset,
+        },
+        headers={"Accept": "application/json"},
+        auth=client.auth,
+        timeout=REQUEST_TIMEOUT,
+    )
+
+    response.raise_for_status()
+    return response.json()
+
+
+def _fetch_property_enumerations(property_code: str) -> List[dict]:
+    client = OFSClient()
+
+    items = []
+    offset = 0
+
+    while True:
+        payload = _fetch_property_enumeration_page(
+            client=client,
+            property_code=property_code,
+            offset=offset,
+            limit=METADATA_ENUM_LIMIT,
+        )
+
+        page_items = payload.get("items") or []
+        has_more = bool(payload.get("hasMore"))
+
+        items.extend(page_items)
+
+        if not has_more or not page_items:
+            break
+
+        offset += len(page_items)
+
+    return items
+
+
+def sync_task_type_map(actor: dict = None) -> dict:
+    """
+    Atualiza a tabela local ofs_task_type_map com as enumerações da propriedade XA_TSK_TYP.
+    """
+    actor = actor or {}
+    started_at = datetime.now()
+
+    items = _fetch_property_enumerations(TASK_TYPE_PROPERTY_CODE)
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    total_items = 0
+
+    try:
+        for item in items:
+            label = _safe_text(item.get("label"))
+
+            if not label:
+                continue
+
+            name_br = _extract_br_translation(item)
+            active = 1 if bool(item.get("active")) else 0
+
+            cur.execute(
+                """
+                INSERT INTO ofs_task_type_map (
+                    property_code,
+                    label,
+                    name_br,
+                    active
+                )
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    name_br = VALUES(name_br),
+                    active = VALUES(active),
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    TASK_TYPE_PROPERTY_CODE,
+                    label,
+                    name_br,
+                    active,
+                ),
+            )
+
+            total_items += 1
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+        raise
+
+    finally:
+        cur.close()
+        conn.close()
+
+    try:
+        audit_log(
+            actor_user_id=actor.get("id"),
+            actor_username=actor.get("username"),
+            module="relatorios",
+            action="sync_task_type_map",
+            entity_type="ofs_property",
+            entity_ref=TASK_TYPE_PROPERTY_CODE,
+            summary="Atualizou mapa de tipos de tarefa do OFS",
+            meta={
+                "property_code": TASK_TYPE_PROPERTY_CODE,
+                "total_items": total_items,
+                "started_at": started_at.strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+        )
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "property_code": TASK_TYPE_PROPERTY_CODE,
+        "started_at": started_at.strftime("%Y-%m-%d %H:%M:%S"),
+        "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "total_items": total_items,
+    }
+
+
+def _load_task_type_name_map() -> Dict[str, str]:
+    """
+    Carrega o mapa local de XA_TSK_TYP:
+      label/ID -> name_br
+    """
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        cur.execute(
+            """
+            SELECT
+                label,
+                name_br
+            FROM ofs_task_type_map
+            WHERE property_code = %s
+              AND active = 1
+            """,
+            (TASK_TYPE_PROPERTY_CODE,),
+        )
+
+        rows = cur.fetchall() or []
+
+        mapping = {}
+
+        for row in rows:
+            label = _safe_text(row.get("label"))
+            name_br = _safe_text(row.get("name_br"))
+
+            if not label:
+                continue
+
+            mapping[label] = name_br or label
+
+        return mapping
+
+    finally:
+        cur.close()
+        conn.close()
 
 def _load_close_reason_name_map() -> Dict[Tuple[str, str], str]:
     """
@@ -827,6 +1050,7 @@ def _row_value(
     resource_name_map: Dict[str, str] = None,
     activity_type_label_map: Dict[str, str] = None,
     close_reason_name_map: Dict[Tuple[str, str], str] = None,
+    task_type_name_map: Dict[str, str] = None,
 ):
     if field_key == "customerName":
         return _first_name(item.get("customerName"))
@@ -872,7 +1096,16 @@ def _row_value(
             return activity_type_label_map[activity_code]
 
         return activity_code
+    if field_key == TASK_TYPE_PROPERTY_CODE:
+        raw_value = str(item.get(TASK_TYPE_PROPERTY_CODE) or "").strip()
 
+        if not raw_value:
+            return ""
+
+        if task_type_name_map and raw_value in task_type_name_map:
+            return task_type_name_map[raw_value]
+
+        return raw_value
     value = item.get(field_key)
 
     if value is None:
@@ -1006,7 +1239,11 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
         if "fechamento_atividade" in selected_fields
         else {}
     )
-
+    task_type_name_map = (
+        _load_task_type_name_map()
+        if TASK_TYPE_PROPERTY_CODE in selected_fields
+        else {}
+    )
     for item in rows:
         ws.append([
             _row_value(
@@ -1015,6 +1252,7 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
                 resource_name_map=resource_name_map,
                 activity_type_label_map=activity_type_label_map,
                 close_reason_name_map=close_reason_name_map,
+                task_type_name_map=task_type_name_map,
             )
             for key in selected_fields
         ])

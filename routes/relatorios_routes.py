@@ -1,5 +1,5 @@
 import os
-
+import requests
 from flask import render_template, request, jsonify, send_file, flash, redirect, url_for
 
 from core.auth import login_required, perm_required, current_actor, has_perm
@@ -15,6 +15,7 @@ from services.ofs_os_report_service import (
     read_job_status,
     start_report_job,
     sync_resources_from_ofs,
+    sync_task_type_map,
     validate_report_payload,
     start_resource_sync_job,
     read_resource_sync_job_status,
@@ -97,7 +98,38 @@ def init_app(app):
             "job": status,
         }), 200
 
+    @app.route("/relatorios/task-types/sync", methods=["POST"])
+    @login_required
+    @perm_required("relatorios.acessar")
+    def relatorios_task_types_sync():
+        actor = current_actor()
 
+        try:
+            result = sync_task_type_map(actor=actor)
+
+            return jsonify(result), 200
+
+        except requests.HTTPError as e:
+            response = getattr(e, "response", None)
+            detail = ""
+
+            if response is not None:
+                try:
+                    detail = response.text[:3000]
+                except Exception:
+                    detail = ""
+
+            return jsonify({
+                "ok": False,
+                "error": "Erro HTTP ao atualizar tipos de tarefa do OFS.",
+                "detail": detail or str(e),
+            }), 500
+
+        except Exception as e:
+            return jsonify({
+                "ok": False,
+                "error": f"Erro ao atualizar tipos de tarefa: {e}",
+            }), 500
     @app.route("/relatorios/ofs-os/iniciar", methods=["POST"])
     @login_required
     @perm_required("relatorios.acessar")

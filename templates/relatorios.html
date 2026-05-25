@@ -6,7 +6,8 @@
     data-ofs-os-download-url-base="{{ url_for('relatorios_ofs_os_download', job_id='__JOB_ID__') }}"
     data-ofs-os-discard-url-base="{{ url_for('relatorios_ofs_os_descartar', job_id='__JOB_ID__') }}"
     data-resource-sync-start-url="{{ url_for('relatorios_recursos_atualizar_iniciar') }}"
-    data-resource-sync-status-url-base="{{ url_for('relatorios_recursos_atualizar_status', job_id='__JOB_ID__') }}">
+    data-resource-sync-status-url-base="{{ url_for('relatorios_recursos_atualizar_status', job_id='__JOB_ID__') }}"
+    data-task-type-sync-url="{{ url_for('relatorios_task_types_sync') }}">
     {% if session.usuario_logado %}
     {% include 'includes/navbar.html' %}
     {% endif %}
@@ -93,7 +94,27 @@
             </div>
         </div>
         {% endif %}
+        <div class="resource-sync-row">
+            <div class="resource-sync-copy">
+                <strong>Tipos de tarefa</strong>
+                <span>Atualize o mapa local da propriedade XA_TSK_TYP para exportar o nome descritivo no XLSX.</span>
+            </div>
 
+            <button type="button" id="btnSyncTaskTypes" class="btn-secondary">
+                Atualizar tipos de tarefa
+            </button>
+
+            <div id="taskTypeSyncProgress" class="resource-sync-progress" style="display:none;">
+                <div class="resource-sync-progress-top">
+                    <span id="taskTypeSyncText">Preparando atualização...</span>
+                    <strong id="taskTypeSyncPercent">0%</strong>
+                </div>
+
+                <div class="resource-sync-bar">
+                    <div id="taskTypeSyncBarFill" class="resource-sync-bar-fill" style="width:0%;"></div>
+                </div>
+            </div>
+        </div>
         <form id="ofsOsReportForm">
             <div class="report-section">
                 <div class="report-section-title-row">

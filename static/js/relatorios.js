@@ -679,3 +679,76 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     })();
 });
+
+document.addEventListener("DOMContentLoaded", function () {
+    const body = document.body;
+
+    const taskTypeSyncUrl = body.dataset.taskTypeSyncUrl;
+
+    const btnSyncTaskTypes = document.getElementById("btnSyncTaskTypes");
+    const taskTypeSyncProgress = document.getElementById("taskTypeSyncProgress");
+    const taskTypeSyncText = document.getElementById("taskTypeSyncText");
+    const taskTypeSyncPercent = document.getElementById("taskTypeSyncPercent");
+    const taskTypeSyncBarFill = document.getElementById("taskTypeSyncBarFill");
+
+    if (!btnSyncTaskTypes || !taskTypeSyncUrl) {
+        return;
+    }
+
+    function setTaskTypeSyncProgress(percent, text, show = true) {
+        const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+
+        if (taskTypeSyncProgress) {
+            taskTypeSyncProgress.style.display = show ? "block" : "none";
+        }
+
+        if (taskTypeSyncText) {
+            taskTypeSyncText.textContent = text || "";
+        }
+
+        if (taskTypeSyncPercent) {
+            taskTypeSyncPercent.textContent = `${safePercent}%`;
+        }
+
+        if (taskTypeSyncBarFill) {
+            taskTypeSyncBarFill.style.width = `${safePercent}%`;
+        }
+    }
+
+    btnSyncTaskTypes.addEventListener("click", async function () {
+        btnSyncTaskTypes.disabled = true;
+        setTaskTypeSyncProgress(10, "Iniciando atualização dos tipos de tarefa...");
+
+        try {
+            setTaskTypeSyncProgress(35, "Consultando propriedade XA_TSK_TYP no OFS...");
+
+            const response = await fetch(taskTypeSyncUrl, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                },
+                credentials: "same-origin",
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error || data.detail || "Falha ao atualizar tipos de tarefa.");
+            }
+
+            setTaskTypeSyncProgress(
+                100,
+                `Tipos de tarefa atualizados com sucesso. Itens processados: ${data.total_items || 0}.`
+            );
+
+        } catch (error) {
+            setTaskTypeSyncProgress(
+                100,
+                error.message || "Erro ao atualizar tipos de tarefa."
+            );
+
+        } finally {
+            btnSyncTaskTypes.disabled = false;
+        }
+    });
+});
