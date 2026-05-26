@@ -130,68 +130,7 @@
   box-shadow: 0 14px 30px rgba(0, 127, 209, 0.30);
 }
 
-.modal-backdrop-custom {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(6, 8, 12, 0.74);
-  z-index: 9998;
-}
 
-.modal-custom {
-  display: none;
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  width: min(980px, 96vw);
-  max-height: 92vh;
-  overflow-y: auto;
-  transform: translate(-50%, -50%);
-  background: linear-gradient(180deg, #1b1d24 0%, #15171d 100%);
-  color: #f1f1f1;
-  padding: 22px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  z-index: 9999;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.48);
-}
-
-.modal-report {
-  width: min(1040px, 96vw);
-}
-
-.modal-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.modal-top-copy {
-  max-width: 700px;
-}
-
-.modal-top h3 {
-  margin: 0;
-  color: #f5f7fb;
-  font-size: 1.2rem;
-}
-
-.modal-subtitle {
-  margin: 8px 0 0;
-  color: #97a2b1;
-  font-size: 0.92rem;
-  line-height: 1.55;
-}
-
-.modal-top-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.modal-close,
 .btn-secondary,
 .btn-primary {
   border: none;
@@ -206,12 +145,9 @@
     background-color 0.18s ease;
 }
 
-.modal-close,
 .btn-secondary {
   background: #4a5562;
 }
-
-.modal-close:hover,
 .btn-secondary:hover {
   transform: translateY(-1px);
   background: #5a6674;
@@ -390,8 +326,6 @@
 }
 
 .resource-list {
-  max-height: 280px;
-  overflow-y: auto;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 12px;
   background: #171b22;
@@ -765,4 +699,93 @@
 
 .check-card-internal {
     border-color: rgba(245, 158, 11, 0.18);
+}
+
+.report-main-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-relatorio-ofs-os {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.report-page-top {
+  align-items: center;
+}
+
+.report-back-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #252b34;
+  color: #e8eef6;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.report-back-link:hover {
+  transform: translateY(-1px);
+  background: #313844;
+  border-color: rgba(0, 170, 255, 0.18);
+}
+
+.report-page-shell {
+  width: 100%;
+  padding: 22px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(24, 27, 34, 0.96) 0%, rgba(18, 20, 26, 0.96) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.30);
+}
+
+.report-tools-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.report-page-actions {
+  padding: 16px 0 0;
+  background: transparent;
+  z-index: auto;
+}
+@media (max-width: 768px) {
+  .report-page-top {
+    align-items: stretch;
+  }
+
+  .report-back-link {
+    width: 100%;
+  }
+
+  .report-page-shell {
+    padding: 14px;
+  }
+}
+/* Correção local: evita rolagem dupla apenas na página de extração OFS */
+body[data-ofs-os-start-url] {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+/* Lista de recursos com rolagem própria na página de extração OFS */
+.page-relatorio-ofs-os .resource-list-page {
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }

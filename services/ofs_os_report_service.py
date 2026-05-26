@@ -153,6 +153,13 @@ FIELD_CHOICES = [
         "xlsx_header": "Primeiro Nome do Cliente",
     },
     {
+        "key": "customerNameFull",
+        "label": "customerName (nome completo)",
+        "api_fields": ["customerName"],
+        "xlsx_header": "Nome completo do cliente",
+        "required_perm": EXTRA_REPORT_FIELDS_PERMISSION,
+    },
+    {
         "key": "city",
         "label": "city",
         "api_fields": ["city"],
@@ -1054,7 +1061,8 @@ def _row_value(
 ):
     if field_key == "customerName":
         return _first_name(item.get("customerName"))
-
+    if field_key == "customerNameFull":
+        return str(item.get("customerName") or "").strip()
     if field_key == "fechamento_atividade":
         for closure_field in CLOSURE_FIELDS:
             raw_value = item.get(closure_field)

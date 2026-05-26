@@ -1,5 +1,6 @@
 import os
 import requests
+
 from flask import render_template, request, jsonify, send_file, flash, redirect, url_for
 
 from core.auth import login_required, perm_required, current_actor, has_perm
@@ -14,7 +15,6 @@ from services.ofs_os_report_service import (
     list_resources_grouped,
     read_job_status,
     start_report_job,
-    sync_resources_from_ofs,
     sync_task_type_map,
     validate_report_payload,
     start_resource_sync_job,
@@ -25,6 +25,7 @@ from services.ofs_os_report_service import (
 def init_app(app):
     def _resource_sync_base_dir():
         return os.path.join(app.instance_path, "reports", "ofs_resources_sync")
+
     def _reports_base_dir():
         return os.path.join(app.instance_path, "reports", "ofs_os")
 
@@ -32,11 +33,27 @@ def init_app(app):
     @login_required
     @perm_required("relatorios.acessar")
     def relatorios():
+        """
+        Central leve de relatórios.
+        Não carrega recursos/campos pesados para evitar lentidão.
+        """
+
+        return render_template("relatorios.html")
+
+    @app.route("/relatorios/ofs-os", methods=["GET"])
+    @login_required
+    @perm_required("relatorios.acessar")
+    def relatorios_ofs_os_page():
+        """
+        Página dedicada da extração de OS do OFS.
+        Aqui ficam os filtros, recursos, campos e execução do relatório.
+        """
+
         resources_grouped = list_resources_grouped()
         can_view_extra_fields = has_perm("relatorios.campos_extras")
 
         return render_template(
-            "relatorios.html",
+            "relatorios_ofs_os.html",
             field_choices=list_report_field_choices(
                 can_view_extra_fields=can_view_extra_fields,
             ),
@@ -130,6 +147,7 @@ def init_app(app):
                 "ok": False,
                 "error": f"Erro ao atualizar tipos de tarefa: {e}",
             }), 500
+
     @app.route("/relatorios/ofs-os/iniciar", methods=["POST"])
     @login_required
     @perm_required("relatorios.acessar")
@@ -192,16 +210,16 @@ def init_app(app):
         status = read_job_status(_reports_base_dir(), job_id)
         if not status:
             flash("Extração não encontrada.", "danger")
-            return redirect(url_for("relatorios"))
+            return redirect(url_for("relatorios_ofs_os_page"))
 
         if status.get("status") != "completed":
             flash("A extração ainda não está concluída.", "danger")
-            return redirect(url_for("relatorios"))
+            return redirect(url_for("relatorios_ofs_os_page"))
 
         xlsx_path = get_xlsx_path(_reports_base_dir(), job_id)
         if not os.path.exists(xlsx_path):
             flash("Arquivo XLSX não encontrado. Será necessário extrair novamente.", "danger")
-            return redirect(url_for("relatorios"))
+            return redirect(url_for("relatorios_ofs_os_page"))
 
         actor = current_actor()
 
