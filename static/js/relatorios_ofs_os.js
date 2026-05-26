@@ -190,6 +190,143 @@ document.addEventListener("DOMContentLoaded", function () {
             .map(el => el.value)
             .filter(Boolean);
     }
+    function selectedCountLabel(count) {
+        const value = Number(count) || 0;
+        return value === 1 ? "1 selecionado" : `${value} selecionados`;
+    }
+
+    function getActiveResourceTypeLabel() {
+        const activeButton = getActiveResourceTypeButton();
+
+        if (!activeButton) {
+            return "-";
+        }
+
+        const clone = activeButton.cloneNode(true);
+        const span = clone.querySelector("span");
+
+        if (span) {
+            span.remove();
+        }
+
+        return clone.textContent.trim() || "-";
+    }
+
+    function updateReportSummary() {
+        const dateFrom = document.getElementById("dateFrom")?.value || "";
+        const dateTo = document.getElementById("dateTo")?.value || "";
+
+        const statuses = checkedValues("statuses");
+        const activityTypes = checkedValues("activityTypes");
+        const fields = checkedValues("fields");
+
+        const visibleResourceGroup = getVisibleResourceGroup();
+        const resources = checkedValuesInScope("resources", visibleResourceGroup);
+
+        const summaryPeriod = document.getElementById("summaryPeriod");
+        const summaryStatuses = document.getElementById("summaryStatuses");
+        const summaryActivityTypes = document.getElementById("summaryActivityTypes");
+        const summaryResourceGroup = document.getElementById("summaryResourceGroup");
+        const summaryResources = document.getElementById("summaryResources");
+        const summaryFields = document.getElementById("summaryFields");
+
+        if (summaryPeriod) {
+            summaryPeriod.textContent = dateFrom && dateTo ? `${dateFrom} até ${dateTo}` : "-";
+        }
+
+        if (summaryStatuses) {
+            summaryStatuses.textContent = selectedCountLabel(statuses.length);
+        }
+
+        if (summaryActivityTypes) {
+            summaryActivityTypes.textContent = selectedCountLabel(activityTypes.length);
+        }
+
+        if (summaryResourceGroup) {
+            summaryResourceGroup.textContent = getActiveResourceTypeLabel();
+        }
+
+        if (summaryResources) {
+            summaryResources.textContent = selectedCountLabel(resources.length);
+        }
+
+        if (summaryFields) {
+            summaryFields.textContent = selectedCountLabel(fields.length);
+        }
+    }
+
+    function normalizeResourceSearchText(value) {
+        return String(value || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .trim();
+    }
+
+    function getResourceSearchValue() {
+        return normalizeResourceSearchText(
+            document.getElementById("resourceSearchInput")?.value || ""
+        );
+    }
+
+    function getVisibleResourceRowsInActiveGroup() {
+        const activeGroup = getVisibleResourceGroup();
+
+        if (!activeGroup) {
+            return [];
+        }
+
+        return Array.from(activeGroup.querySelectorAll(".resource-check"))
+            .filter(row => row.style.display !== "none");
+    }
+
+    function updateResourceSearchCount() {
+        const activeGroup = getVisibleResourceGroup();
+        const countEl = document.getElementById("resourceSearchCount");
+
+        if (!activeGroup || !countEl) {
+            return;
+        }
+
+        const total = activeGroup.querySelectorAll(".resource-check").length;
+        const visible = getVisibleResourceRowsInActiveGroup().length;
+
+        const searchValue = getResourceSearchValue();
+
+        if (!searchValue) {
+            countEl.textContent = `${total} recursos nesta aba`;
+            return;
+        }
+
+        countEl.textContent = `${visible} de ${total} recursos encontrados`;
+    }
+
+    function applyResourceSearch() {
+        const activeGroup = getVisibleResourceGroup();
+
+        if (!activeGroup) {
+            updateResourceSearchCount();
+            return;
+        }
+
+        const searchValue = getResourceSearchValue();
+
+        activeGroup.querySelectorAll(".resource-check").forEach(row => {
+            const name = normalizeResourceSearchText(
+                row.querySelector(".resource-name")?.textContent || ""
+            );
+
+            const id = normalizeResourceSearchText(
+                row.querySelector(".resource-id")?.textContent || ""
+            );
+
+            const matches = !searchValue || name.includes(searchValue) || id.includes(searchValue);
+
+            row.style.display = matches ? "" : "none";
+        });
+
+        updateResourceSearchCount();
+    }
 
     function setChecked(name, checked, scope) {
         const root = scope || document;
@@ -262,34 +399,41 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.getElementById("btnSelectAllStatus")?.addEventListener("click", () => {
         setChecked("statuses", true);
+        updateReportSummary();
     });
 
     document.getElementById("btnClearStatus")?.addEventListener("click", () => {
         setChecked("statuses", false);
+        updateReportSummary();
     });
 
     document.getElementById("btnSelectAllActivityTypes")?.addEventListener("click", () => {
         document.querySelectorAll('input[name="activityTypes"]').forEach(el => {
             el.checked = el.dataset.category !== "internal";
         });
+        updateReportSummary();
     });
 
     document.getElementById("btnClearActivityTypes")?.addEventListener("click", () => {
         setChecked("activityTypes", false);
+        updateReportSummary();
     });
-
     document.getElementById("btnSelectAllFields")?.addEventListener("click", () => {
         setChecked("fields", true);
+        updateReportSummary();
     });
 
     document.getElementById("btnClearFields")?.addEventListener("click", () => {
         setChecked("fields", false);
+        updateReportSummary();
     });
 
     document.querySelectorAll(".resource-type-btn").forEach(btn => {
         btn.addEventListener("click", function () {
             const type = btn.dataset.resourceType;
             activateResourceGroup(type);
+            applyResourceSearch();
+            updateReportSummary();
         });
     });
 
@@ -299,15 +443,30 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     document.getElementById("btnSelectVisibleResources")?.addEventListener("click", () => {
-        const visibleGroup = getVisibleResourceGroup();
-        if (visibleGroup) setChecked("resources", true, visibleGroup);
+        const rows = getVisibleResourceRowsInActiveGroup();
+
+        rows.forEach(row => {
+            const checkbox = row.querySelector('input[name="resources"]');
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        });
+
+        updateReportSummary();
     });
 
     document.getElementById("btnClearVisibleResources")?.addEventListener("click", () => {
-        const visibleGroup = getVisibleResourceGroup();
-        if (visibleGroup) setChecked("resources", false, visibleGroup);
-    });
+        const rows = getVisibleResourceRowsInActiveGroup();
 
+        rows.forEach(row => {
+            const checkbox = row.querySelector('input[name="resources"]');
+            if (checkbox) {
+                checkbox.checked = false;
+            }
+        });
+
+        updateReportSummary();
+    });
     async function pollJob(jobId) {
         const statusUrl = statusUrlBase.replace("__JOB_ID__", encodeURIComponent(jobId));
 
@@ -757,8 +916,27 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     }
+    if (form) {
+        form.addEventListener("change", updateReportSummary);
+        form.addEventListener("input", updateReportSummary);
+    }
+    document.getElementById("resourceSearchInput")?.addEventListener("input", function () {
+        applyResourceSearch();
+    });
 
+    document.getElementById("btnClearResourceSearch")?.addEventListener("click", function () {
+        const input = document.getElementById("resourceSearchInput");
+
+        if (input) {
+            input.value = "";
+            input.focus();
+        }
+
+        applyResourceSearch();
+    });
     setDefaultDates();
+    applyResourceSearch();
+    updateReportSummary();
     initResourceSync();
     initTaskTypeSync();
 });

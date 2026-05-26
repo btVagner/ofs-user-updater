@@ -43,7 +43,8 @@
                 <div class="resource-sync-row">
                     <div class="resource-sync-copy">
                         <strong>Base local de recursos</strong>
-                        <span>Atualize a lista antes da extração quando precisar refletir mudanças recentes do OFS.</span>
+                        <span>Atualize a lista antes da extração quando precisar refletir mudanças recentes do
+                            OFS.</span>
                     </div>
 
                     <button type="button" id="btnSyncResources" class="btn-secondary">
@@ -66,7 +67,8 @@
                 <div class="resource-sync-row">
                     <div class="resource-sync-copy">
                         <strong>Tipos de tarefa</strong>
-                        <span>Atualize o mapa local da propriedade XA_TSK_TYP para exportar o nome descritivo no XLSX.</span>
+                        <span>Atualize o mapa local da propriedade XA_TSK_TYP para exportar o nome descritivo no
+                            XLSX.</span>
                     </div>
 
                     <button type="button" id="btnSyncTaskTypes" class="btn-secondary">
@@ -118,7 +120,8 @@
                     <div class="checkbox-grid">
                         {% for status in status_options %}
                         <label class="check-card">
-                            <input type="checkbox" name="statuses" value="{{ status }}" {% if status=='completed' %}checked{% endif %}>
+                            <input type="checkbox" name="statuses" value="{{ status }}" {% if status=='completed'
+                                %}checked{% endif %}>
                             <span>{{ status }}</span>
                         </label>
                         {% endfor %}
@@ -135,7 +138,8 @@
                         </div>
 
                         <div class="mini-actions">
-                            <button type="button" class="btn-mini" id="btnSelectAllActivityTypes">Selecionar operacionais</button>
+                            <button type="button" class="btn-mini" id="btnSelectAllActivityTypes">Selecionar
+                                operacionais</button>
                             <button type="button" class="btn-mini" id="btnClearActivityTypes">Desmarcar tudo</button>
                         </div>
                     </div>
@@ -162,7 +166,8 @@
                     <div class="activity-type-block activity-type-block-internal">
                         <div class="activity-type-group-title">
                             <strong>Atividades internas</strong>
-                            <span>Marque apenas quando quiser incluir intervalo, reunião, manutenção ou atividades administrativas.</span>
+                            <span>Marque apenas quando quiser incluir intervalo, reunião, manutenção ou atividades
+                                administrativas.</span>
                         </div>
 
                         <div class="checkbox-grid fields-grid">
@@ -190,11 +195,27 @@
                         <h4>Recursos</h4>
 
                         <div class="mini-actions">
-                            <button type="button" class="btn-mini" id="btnSelectVisibleResources">Selecionar visíveis</button>
-                            <button type="button" class="btn-mini" id="btnClearVisibleResources">Desmarcar visíveis</button>
+                            <button type="button" class="btn-mini" id="btnSelectVisibleResources">Selecionar
+                                visíveis</button>
+                            <button type="button" class="btn-mini" id="btnClearVisibleResources">Desmarcar
+                                visíveis</button>
                         </div>
                     </div>
+                    <div class="resource-search-row">
+                        <div class="resource-search-field">
+                            <label for="resourceSearchInput">Buscar recurso</label>
+                            <input type="text" id="resourceSearchInput"
+                                placeholder="Digite nome ou ID do recurso da aba ativa..." autocomplete="off">
+                        </div>
 
+                        <button type="button" id="btnClearResourceSearch" class="btn-mini">
+                            Limpar busca
+                        </button>
+
+                        <span id="resourceSearchCount" class="resource-search-count">
+                            -
+                        </span>
+                    </div>
                     <div class="resource-type-tabs">
                         {% for code, label in resource_types.items() %}
                         <button type="button" class="resource-type-btn {% if loop.first %}active{% endif %}"
@@ -245,6 +266,47 @@
                             <span>{{ field.xlsx_header or field.label }}</span>
                         </label>
                         {% endfor %}
+                    </div>
+                </div>
+
+                <div class="report-summary-box" id="reportSummaryBox">
+                    <div class="report-summary-header">
+                        <div>
+                            <strong>Resumo da extração</strong>
+                            <span>Confira os filtros antes de iniciar o relatório.</span>
+                        </div>
+                    </div>
+
+                    <div class="report-summary-grid">
+                        <div class="report-summary-item">
+                            <span>Período</span>
+                            <strong id="summaryPeriod">-</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Status</span>
+                            <strong id="summaryStatuses">0 selecionados</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Tipos de atividade</span>
+                            <strong id="summaryActivityTypes">0 selecionados</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Aba de recursos</span>
+                            <strong id="summaryResourceGroup">-</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Recursos</span>
+                            <strong id="summaryResources">0 selecionados</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Campos do XLSX</span>
+                            <strong id="summaryFields">0 selecionados</strong>
+                        </div>
                     </div>
                 </div>
 
