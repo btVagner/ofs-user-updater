@@ -1,82 +1,120 @@
 <nav class="sidebar">
-  <div class="sidebar-logo">
-    <a href="{{ url_for('home') }}" class="logo">OFS Painel</a>
-    <span class="sidebar-logo-subtitle">Operações e administração</span>
-  </div>
+  <div class="sidebar-top">
+    <div class="sidebar-logo">
+      <a href="{{ url_for('home') }}" class="logo">OFS Painel</a>
+      <span class="sidebar-logo-subtitle">Operações e administração</span>
+    </div>
 
-  <div class="sidebar-section">
-    <span class="sidebar-section-title">Status</span>
-    <div class="online-indicator">
-      <span class="online-dot"></span>
-      <span class="online-text">{{ usuarios_online_count or 0 }} online</span>
+    <div class="sidebar-status-card">
+      <span class="sidebar-section-title">Status</span>
+      <div class="online-indicator">
+        <span class="online-dot"></span>
+        <span class="online-text">{{ usuarios_online_count or 0 }} online</span>
+      </div>
     </div>
   </div>
 
   {% if session.usuario_logado and session.nome_usuario %}
-  <div class="sidebar-section">
-    <span class="sidebar-section-title">Geral</span>
+  <div class="sidebar-main">
+    <div class="sidebar-section">
+      <span class="sidebar-section-title">Principal</span>
 
-    <a href="{{ url_for('home') }}" class="sidebar-link {% if request.endpoint == 'home' %}active{% endif %}">
-      Dashboard
-    </a>
-    {% if has_perm('bi_activities.acessar') %}
-    <a href="{{ url_for('bi_activities_page') }}"
-      class="sidebar-link {% if request.endpoint in ['bi_activities_page', 'bi_activities_jobs', 'bi_activities_coletar'] %}active{% endif %}">
-      BI Atividades OFS
-    </a>
-    {% endif %}
-    {% if has_perm('adapter.fechar_os') %}
-    <a href="{{ url_for('fechar_os_adapter') }}"
-      class="sidebar-link {% if request.endpoint == 'fechar_os_adapter' %}active{% endif %}">
-      Fechar OS Adapter
-    </a>
-    {% endif %}
+      <a href="{{ url_for('home') }}"
+        class="sidebar-link {% if request.endpoint == 'home' %}active{% endif %}">
+        <span class="sidebar-icon">D</span>
+        <span class="sidebar-text">Dashboard</span>
+      </a>
 
-    {% if has_perm('perfis.gerenciar') %}
-    <a href="{{ url_for('perfis_view') }}"
-      class="sidebar-link {% if request.endpoint == 'perfis_view' %}active{% endif %}">
-      Gerenciar Perfis
-    </a>
-    {% endif %}
+      {% if has_perm('relatorios.acessar') %}
+      <a href="{{ url_for('relatorios') }}"
+        class="sidebar-link {% if request.endpoint in ['relatorios', 'relatorios_ofs_os_page'] %}active{% endif %}">
+        <span class="sidebar-icon">R</span>
+        <span class="sidebar-text">Relatórios</span>
+      </a>
+      {% endif %}
+    </div>
 
-    {% if has_perm('logs.visualizar') %}
-    <a href="{{ url_for('logs_view') }}" class="sidebar-link {% if request.endpoint == 'logs_view' %}active{% endif %}">
-      Log do sistema
-    </a>
-    {% endif %}
+    <div class="sidebar-section">
+      <span class="sidebar-section-title">Operações</span>
 
-    {% if has_perm('usuarios.criar') %}
-    <a href="{{ url_for('usuarios_painel') }}"
-      class="sidebar-link {% if request.endpoint == 'usuarios_painel' %}active{% endif %}">
-      Usuários do painel
-    </a>
-    {% endif %}
+      {% if has_perm('bi_activities.acessar') %}
+      <a href="{{ url_for('bi_activities_page') }}"
+        class="sidebar-link {% if request.endpoint in ['bi_activities_page', 'bi_activities_jobs', 'bi_activities_coletar'] %}active{% endif %}">
+        <span class="sidebar-icon">BI</span>
+        <span class="sidebar-text">BI Atividades OFS</span>
+      </a>
+      {% endif %}
 
-    <a href="https://docs.oracle.com/en/cloud/saas/field-service/index.html" target="_blank" rel="noopener noreferrer"
-      class="sidebar-link sidebar-link-external">
-      Documentação Oracle
-    </a>
+      {% if has_perm('adapter.fechar_os') %}
+      <a href="{{ url_for('fechar_os_adapter') }}"
+        class="sidebar-link {% if request.endpoint == 'fechar_os_adapter' %}active{% endif %}">
+        <span class="sidebar-icon">OS</span>
+        <span class="sidebar-text">Fechar OS Adapter</span>
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-section-title">Administração</span>
+
+      {% if has_perm('perfis.gerenciar') %}
+      <a href="{{ url_for('perfis_view') }}"
+        class="sidebar-link {% if request.endpoint == 'perfis_view' %}active{% endif %}">
+        <span class="sidebar-icon">P</span>
+        <span class="sidebar-text">Gerenciar Perfis</span>
+      </a>
+      {% endif %}
+
+      {% if has_perm('usuarios.criar') %}
+      <a href="{{ url_for('usuarios_painel') }}"
+        class="sidebar-link {% if request.endpoint == 'usuarios_painel' %}active{% endif %}">
+        <span class="sidebar-icon">U</span>
+        <span class="sidebar-text">Usuários do painel</span>
+      </a>
+
+      <a href="{{ url_for('criar_usuario') }}"
+        class="sidebar-link {% if request.endpoint == 'criar_usuario' %}active{% endif %}">
+        <span class="sidebar-icon">+</span>
+        <span class="sidebar-text">Criar novo usuário</span>
+      </a>
+      {% endif %}
+
+      {% if has_perm('logs.visualizar') %}
+      <a href="{{ url_for('logs_view') }}"
+        class="sidebar-link {% if request.endpoint in ['logs_view', 'logs_dashboard'] %}active{% endif %}">
+        <span class="sidebar-icon">L</span>
+        <span class="sidebar-text">Log do sistema</span>
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="sidebar-section">
+      <span class="sidebar-section-title">Ajuda</span>
+
+      <a href="https://docs.oracle.com/en/cloud/saas/field-service/index.html" target="_blank" rel="noopener noreferrer"
+        class="sidebar-link sidebar-link-external">
+        <span class="sidebar-icon">?</span>
+        <span class="sidebar-text">Documentação Oracle</span>
+      </a>
+    </div>
   </div>
 
-  <div class="sidebar-section">
-    <span class="sidebar-section-title">Conta</span>
-    <span class="sidebar-user-label">Usuário: {{ session.nome_usuario }}</span>
+  <div class="sidebar-footer">
+    <div class="sidebar-account-card">
+      <span class="sidebar-account-label">Conta</span>
+      <strong class="sidebar-account-name">{{ session.nome_usuario }}</strong>
 
-    <a href="{{ url_for('trocar_senha') }}"
-      class="sidebar-link {% if request.endpoint == 'trocar_senha' %}active{% endif %}">
-      Trocar senha
-    </a>
+      <a href="{{ url_for('trocar_senha') }}"
+        class="sidebar-link sidebar-link-account {% if request.endpoint == 'trocar_senha' %}active{% endif %}">
+        <span class="sidebar-icon">S</span>
+        <span class="sidebar-text">Trocar senha</span>
+      </a>
 
-    {% if has_perm('usuarios.criar') %}
-    <a href="{{ url_for('criar_usuario') }}"
-      class="sidebar-link {% if request.endpoint == 'criar_usuario' %}active{% endif %}">
-      Criar novo usuário
-    </a>
-    {% endif %}
-
-    <a href="{{ url_for('logout') }}" class="sidebar-link sidebar-link-danger">
-      Sair
-    </a>
+      <a href="{{ url_for('logout') }}" class="sidebar-link sidebar-link-danger">
+        <span class="sidebar-icon">X</span>
+        <span class="sidebar-text">Sair</span>
+      </a>
+    </div>
   </div>
   {% endif %}
 </nav>
