@@ -3,7 +3,7 @@ import os
 import time
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 
 import requests
@@ -942,7 +942,15 @@ def _validate_dates(date_from: str, date_to: str):
 def _valid_activity_type_codes() -> set:
     return {item["code"] for item in list_activity_types()}
 
+def _iter_date_strings(date_from: str, date_to: str) -> List[str]:
+    start = datetime.strptime(date_from, "%Y-%m-%d").date()
+    end = datetime.strptime(date_to, "%Y-%m-%d").date()
 
+    current = start
+
+    while current <= end:
+        yield current.strftime("%Y-%m-%d")
+        current += timedelta(days=1)
 def _validate_activity_types(activity_types: list) -> List[str]:
     cleaned = []
     valid_codes = _valid_activity_type_codes()
@@ -1205,7 +1213,7 @@ def _fetch_activities(client: OFSClient, config: dict, base_dir: str, job_id: st
 
     api_fields = _api_fields_for_selected(config["fields"])
 
-    for required_field in ("activityId", "status", "activityType"):
+    for required_field in ("activityId", "status", "activityType", "date"):
         if required_field not in api_fields:
             api_fields.append(required_field)
 
@@ -1216,73 +1224,132 @@ def _fetch_activities(client: OFSClient, config: dict, base_dir: str, job_id: st
 
     # IMPORTANTE:
     # O OFS deve receber apenas UM parâmetro q contendo a expressão completa.
-    # Enviar q separado para status e q separado para activityType faz o filtro se comportar errado.
     combined_query = f"{status_query} and {activity_type_query}"
 
     all_items = []
     seen_activity_ids = set()
 
-    offset = 0
-    page = 1
+    daily_counts = {}
+    daily_raw_counts = {}
+    duplicate_activity_ids = 0
+    total_raw_rows = 0
+    total_pages_processed = 0
 
-    while True:
-        params = [
-            ("dateFrom", config["date_from"]),
-            ("dateTo", config["date_to"]),
-            ("resources", resources_param),
-            ("q", combined_query),
-            ("fields", ",".join(api_fields)),
-            ("limit", str(API_LIMIT)),
-            ("offset", str(offset)),
-        ]
+    date_list = list(_iter_date_strings(config["date_from"], config["date_to"]))
+    total_days = len(date_list)
 
-        status_payload.update({
-            "status": "running",
-            "phase": f"Consultando OFS - página {page}, offset {offset}",
-            "rows_so_far": len(all_items),
-            "q": combined_query,
-            "offset": offset,
-            "page": page,
-        })
-        _write_job_status(base_dir, job_id, status_payload)
+    for day_index, day in enumerate(date_list, start=1):
+        offset = 0
+        page = 1
+        day_count = 0
+        day_raw_count = 0
 
-        resp = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            auth=client.auth,
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
+        while True:
+            params = [
+                ("dateFrom", day),
+                ("dateTo", day),
+                ("resources", resources_param),
+                ("q", combined_query),
+                ("fields", ",".join(api_fields)),
+                ("limit", str(API_LIMIT)),
+                ("offset", str(offset)),
+            ]
 
-        data = resp.json()
-        items = _normalize_items_payload(data)
+            status_payload.update({
+                "status": "running",
+                "phase": f"Consultando OFS - {day} - página {page}, offset {offset}",
+                "rows_so_far": len(all_items),
+                "raw_rows_so_far": total_raw_rows,
+                "q": combined_query,
+                "current_day": day,
+                "current_day_index": day_index,
+                "total_days": total_days,
+                "offset": offset,
+                "page": page,
+                "total_pages_processed": total_pages_processed,
+                "daily_counts": daily_counts,
+                "daily_raw_counts": daily_raw_counts,
+                "duplicate_activity_ids": duplicate_activity_ids,
+            })
+            _write_job_status(base_dir, job_id, status_payload)
 
-        for item in items:
-            activity_id = str(item.get("activityId") or "").strip()
-
-            if activity_id:
-                if activity_id in seen_activity_ids:
-                    continue
-                seen_activity_ids.add(activity_id)
-
-            all_items.append(item)
-
-        has_more = bool(data.get("hasMore")) if isinstance(data, dict) else False
-
-        if not has_more:
-            break
-
-        returned_count = len(items)
-
-        if returned_count <= 0:
-            raise RuntimeError(
-                "A API informou hasMore=true, mas não retornou itens. "
-                "A consulta pode estar pesada demais ou excedendo o tempo limite do OFS."
+            resp = requests.get(
+                url,
+                headers=headers,
+                params=params,
+                auth=client.auth,
+                timeout=REQUEST_TIMEOUT,
             )
+            resp.raise_for_status()
 
-        offset += returned_count
-        page += 1
+            data = resp.json()
+            items = _normalize_items_payload(data)
+
+            returned_count = len(items)
+            day_raw_count += returned_count
+            total_raw_rows += returned_count
+            total_pages_processed += 1
+
+            for item in items:
+                activity_id = str(item.get("activityId") or "").strip()
+
+                if activity_id:
+                    if activity_id in seen_activity_ids:
+                        duplicate_activity_ids += 1
+                        continue
+
+                    seen_activity_ids.add(activity_id)
+
+                all_items.append(item)
+                day_count += 1
+
+            daily_counts[day] = day_count
+            daily_raw_counts[day] = day_raw_count
+
+            status_payload.update({
+                "status": "running",
+                "phase": f"Processando OFS - {day} - página {page}",
+                "rows_so_far": len(all_items),
+                "raw_rows_so_far": total_raw_rows,
+                "current_day": day,
+                "current_day_index": day_index,
+                "total_days": total_days,
+                "offset": offset,
+                "page": page,
+                "total_pages_processed": total_pages_processed,
+                "daily_counts": daily_counts,
+                "daily_raw_counts": daily_raw_counts,
+                "duplicate_activity_ids": duplicate_activity_ids,
+            })
+            _write_job_status(base_dir, job_id, status_payload)
+
+            has_more = bool(data.get("hasMore")) if isinstance(data, dict) else False
+
+            if not has_more:
+                break
+
+            if returned_count <= 0:
+                raise RuntimeError(
+                    f"A API informou hasMore=true para o dia {day}, mas não retornou itens. "
+                    "A consulta pode estar pesada demais ou excedendo o tempo limite do OFS."
+                )
+
+            offset += returned_count
+            page += 1
+
+    status_payload.update({
+        "status": "running",
+        "phase": "Consulta OFS concluída. Preparando XLSX.",
+        "rows_so_far": len(all_items),
+        "total_rows": len(all_items),
+        "raw_rows_so_far": total_raw_rows,
+        "total_raw_rows": total_raw_rows,
+        "total_pages_processed": total_pages_processed,
+        "daily_counts": daily_counts,
+        "daily_raw_counts": daily_raw_counts,
+        "duplicate_activity_ids": duplicate_activity_ids,
+    })
+    _write_job_status(base_dir, job_id, status_payload)
 
     return all_items
 
@@ -1399,6 +1466,11 @@ def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
             "phase": "Gerando XLSX",
             "rows_so_far": len(rows),
             "total_rows": len(rows),
+            "total_raw_rows": status_payload.get("total_raw_rows"),
+            "duplicate_activity_ids": status_payload.get("duplicate_activity_ids"),
+            "total_pages_processed": status_payload.get("total_pages_processed"),
+            "daily_counts": status_payload.get("daily_counts"),
+            "daily_raw_counts": status_payload.get("daily_raw_counts"),
         })
         _write_job_status(base_dir, job_id, status_payload)
 
@@ -1431,6 +1503,11 @@ def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
                 "activity_types": config["activity_types"],
                 "fields": config["fields"],
                 "total_rows": len(rows),
+                "total_raw_rows": status_payload.get("total_raw_rows"),
+                "duplicate_activity_ids": status_payload.get("duplicate_activity_ids"),
+                "total_pages_processed": status_payload.get("total_pages_processed"),
+                "daily_counts": status_payload.get("daily_counts"),
+                "daily_raw_counts": status_payload.get("daily_raw_counts"),
                 "filename": filename,
             },
         )
