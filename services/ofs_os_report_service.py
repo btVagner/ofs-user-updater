@@ -81,6 +81,12 @@ FIELD_CHOICES = [
         "xlsx_header": "Nome do técnico",
     },
     {
+        "key": "resourceStatus",
+        "label": "Status do recurso",
+        "api_fields": ["resourceId"],
+        "xlsx_header": "Status do recurso",
+    },
+    {
         "key": "XA_REQ_CRE_DAT",
         "label": "XA_REQ_CRE_DAT",
         "api_fields": ["XA_REQ_CRE_DAT"],
@@ -319,6 +325,43 @@ def _load_resource_name_map() -> Dict[str, str]:
                 continue
 
             mapping[resource_id] = name or "Técnico não encontrado na base"
+
+        return mapping
+
+    finally:
+        cur.close()
+        conn.close()
+
+def _load_resource_status_map() -> Dict[str, str]:
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        cur.execute("""
+            SELECT
+                resource_id,
+                status
+            FROM relatorios_ofs_resources
+        """)
+        rows = cur.fetchall()
+
+        mapping = {}
+
+        for row in rows:
+            resource_id = str(row.get("resource_id") or "").strip()
+            status = str(row.get("status") or "").strip().lower()
+
+            if not resource_id:
+                continue
+
+            if status == "active":
+                mapping[resource_id] = "Ativo"
+            elif status == "inactive":
+                mapping[resource_id] = "Inativo"
+            elif status:
+                mapping[resource_id] = status
+            else:
+                mapping[resource_id] = "Não informado"
 
         return mapping
 
@@ -652,8 +695,11 @@ def list_resources_grouped() -> Dict[str, List[dict]]:
                 name,
                 status
             FROM relatorios_ofs_resources
-            WHERE status = 'active'
-            ORDER BY resource_type_label ASC, name ASC, resource_id ASC
+            ORDER BY
+                resource_type_label ASC,
+                CASE WHEN status = 'active' THEN 1 ELSE 2 END,
+                name ASC,
+                resource_id ASC
         """)
         rows = cur.fetchall()
 
@@ -762,8 +808,8 @@ def sync_resources_from_ofs(actor: dict) -> Tuple[int, int]:
 
     raw_total = 0
     active_total = 0
+    inactive_total = 0
     allowed_type_total = 0
-    ignored_inactive = 0
     ignored_type = {}
 
     while True:
@@ -792,18 +838,20 @@ def sync_resources_from_ofs(actor: dict) -> Tuple[int, int]:
 
         for item in items:
             resource_id = str(item.get("resourceId") or "").strip()
-            status = str(item.get("status") or "").strip()
+            status = str(item.get("status") or "").strip().lower()
             resource_type = str(item.get("resourceType") or "").strip()
             name = str(item.get("name") or "").strip()
 
             if not resource_id:
                 continue
 
-            if status.lower() != "active":
-                ignored_inactive += 1
-                continue
+            if not status:
+                status = "unknown"
 
-            active_total += 1
+            if status == "active":
+                active_total += 1
+            else:
+                inactive_total += 1
 
             if resource_type not in RESOURCE_TYPES_OFS:
                 ignored_type[resource_type or "-"] = ignored_type.get(resource_type or "-", 0) + 1
@@ -816,7 +864,7 @@ def sync_resources_from_ofs(actor: dict) -> Tuple[int, int]:
                 "resource_type": resource_type,
                 "resource_type_label": RESOURCE_TYPES_OFS[resource_type],
                 "name": name or None,
-                "status": "active",
+                "status": status,
             })
 
         if len(items) < limit:
@@ -871,11 +919,11 @@ def sync_resources_from_ofs(actor: dict) -> Tuple[int, int]:
         meta={
             "raw_total_from_api": raw_total,
             "active_total": active_total,
+            "inactive_total": inactive_total,
             "allowed_type_total": allowed_type_total,
             "inserted_total": len(all_rows),
-            "ignored_inactive": ignored_inactive,
             "ignored_type": ignored_type,
-            "resource_types_allowed": list(RESOURCE_TYPES.keys()),
+            "resource_types_allowed": list(RESOURCE_TYPES_OFS.keys()),
             "limit": limit,
             "last_offset": offset,
         },
@@ -978,8 +1026,7 @@ def _validate_resources(resource_ids: list) -> List[str]:
         cur.execute(f"""
             SELECT resource_id
             FROM relatorios_ofs_resources
-            WHERE status = 'active'
-              AND resource_id IN ({placeholders})
+            WHERE resource_id IN ({placeholders})
         """, selected)
 
         valid = {row[0] for row in cur.fetchall()}
@@ -990,10 +1037,9 @@ def _validate_resources(resource_ids: list) -> List[str]:
 
     invalid = [rid for rid in selected if rid not in valid]
     if invalid:
-        raise ValueError("Um ou mais recursos selecionados não existem na lista ativa. Atualize a lista de recursos.")
+        raise ValueError("Um ou mais recursos selecionados não existem na lista local. Atualize a lista de recursos.")
 
     return selected
-
 
 def validate_report_payload(payload: dict, can_view_extra_fields: bool = False) -> dict:
     date_from = str(payload.get("dateFrom") or "").strip()
@@ -1055,6 +1101,7 @@ def _row_value(
     item: dict,
     field_key: str,
     resource_name_map: Dict[str, str] = None,
+    resource_status_map: Dict[str, str] = None,
     activity_type_label_map: Dict[str, str] = None,
     close_reason_name_map: Dict[Tuple[str, str], str] = None,
     task_type_name_map: Dict[str, str] = None,
@@ -1093,6 +1140,17 @@ def _row_value(
             return resource_name_map[resource_id] or "Técnico não encontrado na base"
 
         return "Técnico não encontrado na base"
+
+    if field_key == "resourceStatus":
+        resource_id = str(item.get("resourceId") or "").strip()
+
+        if not resource_id:
+            return "Não encontrado"
+
+        if resource_status_map and resource_id in resource_status_map:
+            return resource_status_map[resource_id]
+
+        return "Não encontrado"
 
     if field_key == "activityType":
         activity_code = str(item.get("activityType") or "").strip()
@@ -1237,6 +1295,11 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
     ws.append(headers)
 
     resource_name_map = _load_resource_name_map()
+    resource_status_map = (
+        _load_resource_status_map()
+        if "resourceStatus" in selected_fields
+        else {}
+    )
     activity_type_label_map = (
         _load_activity_type_label_map()
         if "activityType" in selected_fields
@@ -1258,6 +1321,7 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
                 item,
                 key,
                 resource_name_map=resource_name_map,
+                resource_status_map=resource_status_map,
                 activity_type_label_map=activity_type_label_map,
                 close_reason_name_map=close_reason_name_map,
                 task_type_name_map=task_type_name_map,
@@ -1527,8 +1591,8 @@ def _sync_resources_from_ofs_with_progress(base_dir: str, job_id: str, actor: di
 
     raw_total = 0
     active_total = 0
+    inactive_total = 0
     allowed_type_total = 0
-    ignored_inactive = 0
     ignored_type = {}
     total_expected = None
 
@@ -1574,18 +1638,20 @@ def _sync_resources_from_ofs_with_progress(base_dir: str, job_id: str, actor: di
 
         for item in items:
             resource_id = str(item.get("resourceId") or "").strip()
-            status = str(item.get("status") or "").strip()
+            status = str(item.get("status") or "").strip().lower()
             resource_type = str(item.get("resourceType") or "").strip()
             name = str(item.get("name") or "").strip()
 
             if not resource_id:
                 continue
 
-            if status.lower() != "active":
-                ignored_inactive += 1
-                continue
+            if not status:
+                status = "unknown"
 
-            active_total += 1
+            if status == "active":
+                active_total += 1
+            else:
+                inactive_total += 1
 
             if resource_type not in RESOURCE_TYPES_OFS:
                 ignored_type[resource_type or "-"] = ignored_type.get(resource_type or "-", 0) + 1
@@ -1598,7 +1664,7 @@ def _sync_resources_from_ofs_with_progress(base_dir: str, job_id: str, actor: di
                 "resource_type": resource_type,
                 "resource_type_label": RESOURCE_TYPES_OFS[resource_type],
                 "name": name or None,
-                "status": "active",
+                "status": status,
             })
 
         status_payload.update({
@@ -1610,6 +1676,8 @@ def _sync_resources_from_ofs_with_progress(base_dir: str, job_id: str, actor: di
             "page": page,
             "offset": offset,
             "total_expected": total_expected,
+            "active_total": active_total,
+            "inactive_total": inactive_total,
         })
         _write_job_status(base_dir, job_id, status_payload)
 
@@ -1628,6 +1696,8 @@ def _sync_resources_from_ofs_with_progress(base_dir: str, job_id: str, actor: di
         "percent": 96,
         "raw_total_from_api": raw_total,
         "inserted_so_far": len(all_rows),
+        "active_total": active_total,
+        "inactive_total": inactive_total,
     })
     _write_job_status(base_dir, job_id, status_payload)
 
@@ -1676,17 +1746,15 @@ def _sync_resources_from_ofs_with_progress(base_dir: str, job_id: str, actor: di
     return {
         "raw_total_from_api": raw_total,
         "active_total": active_total,
+        "inactive_total": inactive_total,
         "allowed_type_total": allowed_type_total,
         "inserted_total": len(all_rows),
-        "ignored_inactive": ignored_inactive,
         "ignored_type": ignored_type,
-        "resource_types_allowed": list(RESOURCE_TYPES.keys()),
+        "resource_types_allowed": list(RESOURCE_TYPES_OFS.keys()),
         "limit": limit,
         "last_offset": offset,
         "total_expected": total_expected,
     }
-
-
 def _run_resource_sync_job(base_dir: str, job_id: str, actor: dict):
     status_payload = {
         "status": "running",

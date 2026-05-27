@@ -216,6 +216,25 @@
                             -
                         </span>
                     </div>
+                    <div class="resource-status-filter-row">
+                        <span class="resource-status-filter-label">Status do recurso</span>
+
+                        <div class="resource-status-filter-actions">
+                            <button type="button" class="resource-status-filter-btn active"
+                                data-resource-status-filter="active">
+                                Ativos
+                            </button>
+
+                            <button type="button" class="resource-status-filter-btn"
+                                data-resource-status-filter="inactive">
+                                Inativos
+                            </button>
+
+                            <button type="button" class="resource-status-filter-btn" data-resource-status-filter="all">
+                                Todos
+                            </button>
+                        </div>
+                    </div>
                     <div class="resource-type-tabs">
                         {% for code, label in resource_types.items() %}
                         <button type="button" class="resource-type-btn {% if loop.first %}active{% endif %}"
@@ -233,12 +252,12 @@
                             data-resource-group="{{ code }}">
                             {% if group|length == 0 %}
                             <div class="empty-resources">
-                                Nenhum recurso ativo carregado para {{ label }}.
+                                Nenhum recurso carregado para {{ label }}.
                             </div>
                             {% endif %}
 
                             {% for r in group %}
-                            <label class="resource-check">
+                            <label class="resource-check" data-resource-status="{{ r.status or 'unknown' }}">
                                 <input type="checkbox" name="resources" value="{{ r.resource_id }}">
                                 <span class="resource-name">{{ r.name or '-' }}</span>
                                 <span class="resource-id">{{ r.resource_id }}</span>

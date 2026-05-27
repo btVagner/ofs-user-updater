@@ -268,7 +268,29 @@ document.addEventListener("DOMContentLoaded", function () {
             document.getElementById("resourceSearchInput")?.value || ""
         );
     }
+    function getResourceStatusFilterValue() {
+        const activeBtn = document.querySelector(".resource-status-filter-btn.active");
+        return activeBtn?.dataset.resourceStatusFilter || "active";
+    }
 
+    function resourceMatchesStatusFilter(row) {
+        const filterValue = getResourceStatusFilterValue();
+        const rowStatus = String(row.dataset.resourceStatus || "unknown").toLowerCase();
+
+        if (filterValue === "all") {
+            return true;
+        }
+
+        if (filterValue === "active") {
+            return rowStatus === "active";
+        }
+
+        if (filterValue === "inactive") {
+            return rowStatus !== "active";
+        }
+
+        return true;
+    }
     function getVisibleResourceRowsInActiveGroup() {
         const activeGroup = getVisibleResourceGroup();
 
@@ -288,12 +310,32 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        const total = activeGroup.querySelectorAll(".resource-check").length;
+        const rows = Array.from(activeGroup.querySelectorAll(".resource-check"));
+        const total = rows.length;
         const visible = getVisibleResourceRowsInActiveGroup().length;
 
-        const searchValue = getResourceSearchValue();
+        const activeTotal = rows.filter(row => {
+            return String(row.dataset.resourceStatus || "").toLowerCase() === "active";
+        }).length;
 
-        if (!searchValue) {
+        const inactiveTotal = rows.filter(row => {
+            return String(row.dataset.resourceStatus || "").toLowerCase() !== "active";
+        }).length;
+
+        const searchValue = getResourceSearchValue();
+        const statusFilter = getResourceStatusFilterValue();
+
+        if (statusFilter === "active" && !searchValue) {
+            countEl.textContent = `${activeTotal} recursos ativos nesta aba`;
+            return;
+        }
+
+        if (statusFilter === "inactive" && !searchValue) {
+            countEl.textContent = `${inactiveTotal} recursos inativos nesta aba`;
+            return;
+        }
+
+        if (statusFilter === "all" && !searchValue) {
             countEl.textContent = `${total} recursos nesta aba`;
             return;
         }
@@ -320,12 +362,14 @@ document.addEventListener("DOMContentLoaded", function () {
                 row.querySelector(".resource-id")?.textContent || ""
             );
 
-            const matches = !searchValue || name.includes(searchValue) || id.includes(searchValue);
+            const matchesSearch = !searchValue || name.includes(searchValue) || id.includes(searchValue);
+            const matchesStatus = resourceMatchesStatusFilter(row);
 
-            row.style.display = matches ? "" : "none";
+            row.style.display = matchesSearch && matchesStatus ? "" : "none";
         });
 
         updateResourceSearchCount();
+        updateReportSummary();
     }
 
     function setChecked(name, checked, scope) {
@@ -710,12 +754,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
                         const insertedTotal = job.inserted_total || insertedSoFar || 0;
 
-                        finishResourceProgress(`Concluído. Recursos ativos carregados: ${insertedTotal}.`);
+                        const result = job.result || {};
+                        const activeTotal = result.active_total || 0;
+                        const inactiveTotal = result.inactive_total || 0;
+
+                        finishResourceProgress(
+                            `Concluído. Recursos carregados: ${insertedTotal}. Ativos: ${activeTotal}. Inativos: ${inactiveTotal}.`
+                        );
 
                         showToast(
                             "success",
                             "Lista de recursos atualizada",
-                            `Recursos ativos carregados: ${insertedTotal}. Recarregue esta página para ver a lista atualizada.`
+                            `Recursos carregados: ${insertedTotal}. Ativos: ${activeTotal}. Inativos: ${inactiveTotal}. Recarregue esta página para ver a lista atualizada.`
                         );
 
                         return;
@@ -920,6 +970,16 @@ document.addEventListener("DOMContentLoaded", function () {
         form.addEventListener("change", updateReportSummary);
         form.addEventListener("input", updateReportSummary);
     }
+    document.querySelectorAll(".resource-status-filter-btn").forEach(btn => {
+        btn.addEventListener("click", function () {
+            document.querySelectorAll(".resource-status-filter-btn").forEach(item => {
+                item.classList.toggle("active", item === btn);
+            });
+
+            applyResourceSearch();
+            updateReportSummary();
+        });
+    });
     document.getElementById("resourceSearchInput")?.addEventListener("input", function () {
         applyResourceSearch();
     });
