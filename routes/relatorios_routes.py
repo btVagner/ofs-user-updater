@@ -62,6 +62,7 @@ def init_app(app):
             status_options=STATUS_OPTIONS,
             activity_types=list_activity_types(),
             can_update_resources=has_perm("relatorios.recursos_atualizar"),
+            can_update_task_types=has_perm("relatorios.task_types_atualizar"),
         )
 
     @app.route("/relatorios/recursos/atualizar/iniciar", methods=["POST"])
@@ -117,7 +118,7 @@ def init_app(app):
 
     @app.route("/relatorios/task-types/sync", methods=["POST"])
     @login_required
-    @perm_required("relatorios.acessar")
+    @perm_required("relatorios.task_types_atualizar")
     def relatorios_task_types_sync():
         actor = current_actor()
 
