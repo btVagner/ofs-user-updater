@@ -40,6 +40,23 @@
                     Abrir extração
                 </a>
             </div>
+
+            {% if has_perm('relatorios.redes_acessar') %}
+            <div class="report-entry-card report-entry-card-redes">
+                <div class="report-entry-copy">
+                    <span class="report-entry-badge">Redes</span>
+                    <h3>Relatório de Redes</h3>
+                    <p>
+                        Extração direcionada para atividades de infraestrutura e manutenção de rede,
+                        com resumo visual por status, técnico e tipo de atividade.
+                    </p>
+                </div>
+
+                <a href="{{ url_for('relatorios_redes_page') }}" class="report-main-btn">
+                    Abrir Redes
+                </a>
+            </div>
+            {% endif %}
         </div>
     </div>
 

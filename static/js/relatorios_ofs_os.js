@@ -177,7 +177,83 @@ document.addEventListener("DOMContentLoaded", function () {
 
         container.appendChild(toast);
     }
+    function renderRedesSummary(summary) {
+        const wrap = document.getElementById("redesResultSummary");
+        if (!wrap || !summary) return;
 
+        const totalEl = document.getElementById("redesTotalActivities");
+        const statusGrid = document.getElementById("redesStatusGrid");
+        const activityTypeGrid = document.getElementById("redesActivityTypeGrid");
+        const resourceTable = document.getElementById("redesResourceTable");
+
+        if (totalEl) {
+            totalEl.textContent = String(summary.total || 0);
+        }
+
+        if (statusGrid) {
+            const items = Array.isArray(summary.by_status_list) ? summary.by_status_list : [];
+
+            if (items.length === 0) {
+                statusGrid.innerHTML = `<div class="redes-empty">Nenhum status encontrado.</div>`;
+            } else {
+                statusGrid.innerHTML = items.map(item => `
+                    <div class="redes-mini-card">
+                        <span>${escapeHtml(item.status || "Não informado")}</span>
+                        <strong>${escapeHtml(item.total || 0)}</strong>
+                    </div>
+                `).join("");
+            }
+        }
+
+        if (activityTypeGrid) {
+            const items = Array.isArray(summary.by_activity_type) ? summary.by_activity_type : [];
+
+            if (items.length === 0) {
+                activityTypeGrid.innerHTML = `<div class="redes-empty">Nenhum tipo encontrado.</div>`;
+            } else {
+                activityTypeGrid.innerHTML = items.map(item => `
+                    <div class="redes-mini-card">
+                        <span>${escapeHtml(item.label || "Não informado")}</span>
+                        <strong>${escapeHtml(item.total || 0)}</strong>
+                    </div>
+                `).join("");
+            }
+        }
+
+        if (resourceTable) {
+            const resources = Array.isArray(summary.by_resource) ? summary.by_resource : [];
+
+            if (resources.length === 0) {
+                resourceTable.innerHTML = `
+                    <tr>
+                        <td colspan="4">Nenhum técnico encontrado.</td>
+                    </tr>
+                `;
+            } else {
+                resourceTable.innerHTML = resources.map(item => {
+                    const byStatus = item.by_status || {};
+                    const statusText = Object.entries(byStatus)
+                        .map(([status, total]) => `${status}: ${total}`)
+                        .join(" | ");
+
+                    return `
+                        <tr>
+                            <td>${escapeHtml(item.resource_name || "-")}</td>
+                            <td>${escapeHtml(item.resource_id || "-")}</td>
+                            <td><strong>${escapeHtml(item.total || 0)}</strong></td>
+                            <td>${escapeHtml(statusText || "-")}</td>
+                        </tr>
+                    `;
+                }).join("");
+            }
+        }
+
+        wrap.style.display = "block";
+        wrap.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
+    }
     function checkedValues(name) {
         return Array.from(document.querySelectorAll(`input[name="${name}"]:checked`))
             .map(el => el.value)
@@ -535,6 +611,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     clearInterval(interval);
                     setStatusBox(`Extração concluída. Linhas extraídas: ${job.total_rows || 0}.`, "info");
                     if (btnStart) btnStart.disabled = false;
+                    renderRedesSummary(job.summary);
                     showPersistentExtractionToast(job);
                     return;
                 }

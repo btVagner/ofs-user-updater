@@ -772,7 +772,7 @@ def list_activity_types() -> List[dict]:
 
             category = str(row.get("category") or "customer_home").strip().lower()
 
-            if category not in {"customer_home", "internal"}:
+            if category not in {"customer_home", "internal","redes"}:
                 category = "customer_home"
 
             activity_types.append({
@@ -794,6 +794,95 @@ def _normalize_items_payload(data):
         return data
     return []
 
+def list_ofs_os_activity_types() -> List[dict]:
+    """
+    Lista tipos usados no relatório geral de OS do OFS.
+
+    Importante:
+    Tipos de Redes ficam fora da extração geral para não misturar visões.
+    """
+    return [
+        item for item in list_activity_types()
+        if item.get("category") in {"customer_home", "internal"}
+    ]
+
+
+def list_redes_activity_types() -> List[dict]:
+    """
+    Lista somente tipos de atividade classificados como Redes.
+    """
+    return [
+        item for item in list_activity_types()
+        if item.get("category") == "redes"
+    ]
+
+
+def _valid_activity_type_codes_by_category(allowed_categories: set) -> set:
+    valid_codes = set()
+
+    for item in list_activity_types():
+        category = str(item.get("category") or "").strip().lower()
+        code = str(item.get("code") or "").strip()
+
+        if code and category in allowed_categories:
+            valid_codes.add(code)
+
+    return valid_codes
+
+
+def validate_ofs_os_report_payload(payload: dict, can_view_extra_fields: bool = False) -> dict:
+    """
+    Valida payload do relatório geral de OS.
+
+    Bloqueia tipos de Redes para manter a tela geral separada da visão de Redes.
+    """
+    config = validate_report_payload(
+        payload,
+        can_view_extra_fields=can_view_extra_fields,
+    )
+
+    allowed_codes = _valid_activity_type_codes_by_category({"customer_home", "internal"})
+    invalid = [
+        code for code in config["activity_types"]
+        if code not in allowed_codes
+    ]
+
+    if invalid:
+        raise ValueError(
+            "O relatório geral de OS não permite tipos de atividade de Redes. "
+            "Use o relatório específico de Redes."
+        )
+
+    return config
+
+
+def validate_redes_report_payload(payload: dict, can_view_extra_fields: bool = False) -> dict:
+    """
+    Valida payload do relatório de Redes.
+
+    Mesmo que alguém altere o payload pelo navegador, somente activityTypes com
+    category='redes' serão aceitos.
+    """
+    config = validate_report_payload(
+        payload,
+        can_view_extra_fields=can_view_extra_fields,
+    )
+
+    allowed_codes = _valid_activity_type_codes_by_category({"redes"})
+    invalid = [
+        code for code in config["activity_types"]
+        if code not in allowed_codes
+    ]
+
+    if invalid:
+        raise ValueError(
+            "O relatório de Redes permite apenas tipos de atividade de Redes."
+        )
+
+    if not config["activity_types"]:
+        raise ValueError("Nenhum tipo de atividade de Redes foi selecionado.")
+
+    return config
 
 def sync_resources_from_ofs(actor: dict) -> Tuple[int, int]:
     client = OFSClient()
@@ -1353,6 +1442,80 @@ def _fetch_activities(client: OFSClient, config: dict, base_dir: str, job_id: st
 
     return all_items
 
+def _build_activity_report_summary(rows: List[dict]) -> dict:
+    """
+    Monta resumo visual para relatórios operacionais.
+
+    Usado inicialmente no relatório de Redes.
+    """
+    resource_name_map = _load_resource_name_map()
+    activity_type_label_map = _load_activity_type_label_map()
+
+    by_status = {}
+    by_resource = {}
+    by_activity_type = {}
+
+    for item in rows:
+        status = str(item.get("status") or "Não informado").strip() or "Não informado"
+        resource_id = str(item.get("resourceId") or "").strip()
+        activity_type_code = str(item.get("activityType") or "").strip()
+
+        by_status[status] = by_status.get(status, 0) + 1
+
+        activity_type_label = activity_type_label_map.get(activity_type_code, activity_type_code or "Não informado")
+        by_activity_type[activity_type_label] = by_activity_type.get(activity_type_label, 0) + 1
+
+        resource_key = resource_id or "sem_resource"
+        resource_name = resource_name_map.get(resource_id, "Técnico não encontrado na base")
+
+        if resource_key not in by_resource:
+            by_resource[resource_key] = {
+                "resource_id": resource_id or "-",
+                "resource_name": resource_name,
+                "total": 0,
+                "by_status": {},
+            }
+
+        by_resource[resource_key]["total"] += 1
+        by_resource[resource_key]["by_status"][status] = (
+            by_resource[resource_key]["by_status"].get(status, 0) + 1
+        )
+
+    by_resource_list = list(by_resource.values())
+    by_resource_list.sort(
+        key=lambda item: (
+            int(item.get("total") or 0),
+            str(item.get("resource_name") or "")
+        ),
+        reverse=True,
+    )
+
+    by_activity_type_list = [
+        {
+            "label": label,
+            "total": total,
+        }
+        for label, total in by_activity_type.items()
+    ]
+    by_activity_type_list.sort(key=lambda item: item["total"], reverse=True)
+
+    by_status_list = [
+        {
+            "status": status,
+            "total": total,
+        }
+        for status, total in by_status.items()
+    ]
+    by_status_list.sort(key=lambda item: item["total"], reverse=True)
+
+    return {
+        "total": len(rows),
+        "by_status": by_status,
+        "by_status_list": by_status_list,
+        "by_resource": by_resource_list,
+        "by_activity_type": by_activity_type_list,
+    }
+
 def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
     wb = Workbook()
     ws = wb.active
@@ -1540,6 +1703,169 @@ def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
             },
         )
 
+def _run_redes_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
+    filename = f"relatorio_redes_{config['date_from']}_{config['date_to']}_{job_id[:8]}.xlsx"
+
+    status_payload = {
+        "status": "running",
+        "phase": "Iniciando extração de Redes",
+        "created_at": _now_iso(),
+        "finished_at": None,
+        "rows_so_far": 0,
+        "total_rows": 0,
+        "filename": filename,
+        "dateFrom": config["date_from"],
+        "dateTo": config["date_to"],
+        "statuses": config["statuses"],
+        "resources": config["resources"],
+        "activity_types": config["activity_types"],
+        "fields": config["fields"],
+        "summary": None,
+        "error": None,
+    }
+
+    _write_job_status(base_dir, job_id, status_payload)
+
+    try:
+        audit_log(
+            actor_user_id=actor.get("id"),
+            actor_username=actor.get("username"),
+            module="relatorios",
+            action="start_redes_report",
+            entity_type="report",
+            entity_ref=job_id,
+            summary="Iniciou extração do Relatório de Redes",
+            meta={
+                "dateFrom": config["date_from"],
+                "dateTo": config["date_to"],
+                "statuses": config["statuses"],
+                "resources": config["resources"],
+                "activity_types": config["activity_types"],
+                "fields": config["fields"],
+            },
+        )
+
+        client = OFSClient()
+
+        rows = _fetch_activities(client, config, base_dir, job_id, status_payload)
+
+        status_payload.update({
+            "status": "running",
+            "phase": "Gerando resumo de Redes",
+            "rows_so_far": len(rows),
+            "total_rows": len(rows),
+            "total_raw_rows": status_payload.get("total_raw_rows"),
+            "duplicate_activity_ids": status_payload.get("duplicate_activity_ids"),
+            "total_pages_processed": status_payload.get("total_pages_processed"),
+            "daily_counts": status_payload.get("daily_counts"),
+            "daily_raw_counts": status_payload.get("daily_raw_counts"),
+        })
+        _write_job_status(base_dir, job_id, status_payload)
+
+        summary_payload = _build_activity_report_summary(rows)
+
+        status_payload.update({
+            "status": "running",
+            "phase": "Gerando XLSX",
+            "summary": summary_payload,
+        })
+        _write_job_status(base_dir, job_id, status_payload)
+
+        output_path = _job_xlsx_path(base_dir, job_id)
+        _build_xlsx(rows, config["fields"], output_path)
+
+        status_payload.update({
+            "status": "completed",
+            "phase": "Extração de Redes concluída",
+            "finished_at": _now_iso(),
+            "rows_so_far": len(rows),
+            "total_rows": len(rows),
+            "summary": summary_payload,
+            "download_ready": True,
+        })
+        _write_job_status(base_dir, job_id, status_payload)
+
+        audit_log(
+            actor_user_id=actor.get("id"),
+            actor_username=actor.get("username"),
+            module="relatorios",
+            action="finish_redes_report",
+            entity_type="report",
+            entity_ref=job_id,
+            summary="Concluiu extração do Relatório de Redes",
+            meta={
+                "dateFrom": config["date_from"],
+                "dateTo": config["date_to"],
+                "statuses": config["statuses"],
+                "resources": config["resources"],
+                "activity_types": config["activity_types"],
+                "fields": config["fields"],
+                "total_rows": len(rows),
+                "total_raw_rows": status_payload.get("total_raw_rows"),
+                "duplicate_activity_ids": status_payload.get("duplicate_activity_ids"),
+                "total_pages_processed": status_payload.get("total_pages_processed"),
+                "daily_counts": status_payload.get("daily_counts"),
+                "daily_raw_counts": status_payload.get("daily_raw_counts"),
+                "filename": filename,
+                "summary": summary_payload,
+            },
+        )
+
+    except Exception as e:
+        status_payload.update({
+            "status": "failed",
+            "phase": "Falha na extração de Redes",
+            "finished_at": _now_iso(),
+            "error": str(e),
+        })
+        _write_job_status(base_dir, job_id, status_payload)
+
+        audit_log(
+            actor_user_id=actor.get("id"),
+            actor_username=actor.get("username"),
+            module="relatorios",
+            action="fail_redes_report",
+            entity_type="report",
+            entity_ref=job_id,
+            summary="Falha na extração do Relatório de Redes",
+            meta={
+                "dateFrom": config["date_from"],
+                "dateTo": config["date_to"],
+                "statuses": config["statuses"],
+                "resources": config["resources"],
+                "activity_types": config["activity_types"],
+                "fields": config["fields"],
+                "error": str(e),
+            },
+        )
+
+
+def start_redes_report_job(base_dir: str, actor: dict, config: dict) -> str:
+    _ensure_dir(base_dir)
+
+    job_id = uuid.uuid4().hex
+
+    initial_payload = {
+        "status": "queued",
+        "phase": "Extração de Redes na fila",
+        "created_at": _now_iso(),
+        "finished_at": None,
+        "rows_so_far": 0,
+        "total_rows": 0,
+        "filename": None,
+        "summary": None,
+        "error": None,
+    }
+    _write_job_status(base_dir, job_id, initial_payload)
+
+    thread = threading.Thread(
+        target=_run_redes_report_job,
+        args=(base_dir, job_id, actor, config),
+        daemon=True,
+    )
+    thread.start()
+
+    return job_id
 
 def start_report_job(base_dir: str, actor: dict, config: dict) -> str:
     _ensure_dir(base_dir)

@@ -1,0 +1,306 @@
+{% set page_css_files = ['css/relatorios.css'] %}
+{% include 'includes/head.html' %}
+
+<body data-ofs-os-start-url="{{ url_for('relatorios_redes_iniciar') }}"
+    data-ofs-os-status-url-base="{{ url_for('relatorios_redes_status', job_id='__JOB_ID__') }}"
+    data-ofs-os-download-url-base="{{ url_for('relatorios_redes_download', job_id='__JOB_ID__') }}"
+    data-ofs-os-discard-url-base="{{ url_for('relatorios_redes_descartar', job_id='__JOB_ID__') }}">
+    {% if session.usuario_logado %}
+    {% include 'includes/navbar.html' %}
+    {% endif %}
+
+    <div class="page-relatorios page-relatorio-ofs-os page-relatorio-redes fade-in">
+        <div class="page-header-relatorios report-page-top">
+            <div class="page-header-copy">
+                <span class="page-kicker-relatorios">Extração Redes</span>
+                <h2>Relatório de Redes</h2>
+                <p class="page-subtitle-relatorios">
+                    Extração exclusiva para atividades de infraestrutura e manutenção de rede, com resumo visual após a conclusão.
+                </p>
+            </div>
+
+            <a href="{{ url_for('relatorios') }}" class="report-back-link">
+                Voltar para relatórios
+            </a>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">
+            {{ message }}
+        </p>
+        {% endfor %}
+        {% endwith %}
+
+        <div class="report-page-shell">
+            <div id="reportStatusBox" class="report-status-box" style="display:none;"></div>
+
+            <form id="ofsOsReportForm">
+                <div class="report-section">
+                    <div class="report-section-title-row">
+                        <h4>Período</h4>
+                    </div>
+
+                    <div class="report-grid">
+                        <div>
+                            <label for="dateFrom">De</label>
+                            <input type="date" id="dateFrom" required>
+                        </div>
+
+                        <div>
+                            <label for="dateTo">Até</label>
+                            <input type="date" id="dateTo" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="report-section">
+                    <div class="report-section-title-row">
+                        <h4>Status</h4>
+
+                        <div class="mini-actions">
+                            <button type="button" class="btn-mini" id="btnSelectAllStatus">Selecionar tudo</button>
+                            <button type="button" class="btn-mini" id="btnClearStatus">Desmarcar tudo</button>
+                        </div>
+                    </div>
+
+                    <div class="checkbox-grid">
+                        {% for status in status_options %}
+                        <label class="check-card">
+                            <input type="checkbox" name="statuses" value="{{ status }}" {% if status == 'completed' %}checked{% endif %}>
+                            <span>{{ status }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="report-section">
+                    <div class="report-section-title-row">
+                        <div>
+                            <h4>Tipos de atividade de Redes</h4>
+                            <p class="report-section-hint">
+                                Esta extração aceita somente tipos classificados como Redes no banco.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="checkbox-grid fields-grid">
+                        {% for activity_type in activity_types %}
+                        <label class="check-card check-card-redes">
+                            <input type="checkbox" name="activityTypes" value="{{ activity_type.code }}"
+                                data-category="{{ activity_type.category }}" checked>
+                            <span>{{ activity_type.label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+
+                    {% if activity_types|length == 0 %}
+                    <div class="empty-resources">
+                        Nenhum tipo de atividade de Redes encontrado na tabela ofs_activity_type_map.
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="report-section">
+                    <div class="report-section-title-row">
+                        <h4>Recursos</h4>
+
+                        <div class="mini-actions">
+                            <button type="button" class="btn-mini" id="btnSelectVisibleResources">Selecionar visíveis</button>
+                            <button type="button" class="btn-mini" id="btnClearVisibleResources">Desmarcar visíveis</button>
+                        </div>
+                    </div>
+
+                    <div class="resource-search-row">
+                        <div class="resource-search-field">
+                            <label for="resourceSearchInput">Buscar recurso</label>
+                            <input type="text" id="resourceSearchInput"
+                                placeholder="Digite nome ou ID do recurso da aba ativa..." autocomplete="off">
+                        </div>
+
+                        <button type="button" id="btnClearResourceSearch" class="btn-mini">
+                            Limpar busca
+                        </button>
+
+                        <span id="resourceSearchCount" class="resource-search-count">
+                            -
+                        </span>
+                    </div>
+
+                    <div class="resource-status-filter-row">
+                        <span class="resource-status-filter-label">Status do recurso</span>
+
+                        <div class="resource-status-filter-actions">
+                            <button type="button" class="resource-status-filter-btn active"
+                                data-resource-status-filter="active">
+                                Ativos
+                            </button>
+
+                            <button type="button" class="resource-status-filter-btn"
+                                data-resource-status-filter="inactive">
+                                Inativos
+                            </button>
+
+                            <button type="button" class="resource-status-filter-btn" data-resource-status-filter="all">
+                                Todos
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="resource-type-tabs">
+                        {% for code, label in resource_types.items() %}
+                        <button type="button" class="resource-type-btn {% if loop.first %}active{% endif %}"
+                            data-resource-type="{{ code }}">
+                            {{ label }}
+                            <span>{{ resources_grouped.get(code, [])|length }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+
+                    <div class="resource-list resource-list-page">
+                        {% for code, label in resource_types.items() %}
+                        {% set group = resources_grouped.get(code, []) %}
+                        <div class="resource-group {% if not loop.first %}hidden{% endif %}"
+                            data-resource-group="{{ code }}">
+                            {% if group|length == 0 %}
+                            <div class="empty-resources">
+                                Nenhum recurso carregado para {{ label }}.
+                            </div>
+                            {% endif %}
+
+                            {% for r in group %}
+                            <label class="resource-check" data-resource-status="{{ r.status or 'unknown' }}">
+                                <input type="checkbox" name="resources" value="{{ r.resource_id }}">
+                                <span class="resource-name">{{ r.name or '-' }}</span>
+                                <span class="resource-id">{{ r.resource_id }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="report-section">
+                    <div class="report-section-title-row">
+                        <h4>Campos do XLSX</h4>
+
+                        <div class="mini-actions">
+                            <button type="button" class="btn-mini" id="btnSelectAllFields">Selecionar tudo</button>
+                            <button type="button" class="btn-mini" id="btnClearFields">Desmarcar tudo</button>
+                        </div>
+                    </div>
+
+                    <div class="checkbox-grid fields-grid">
+                        {% for field in field_choices %}
+                        <label class="check-card" title="{{ field.key }}">
+                            <input type="checkbox" name="fields" value="{{ field.key }}" checked>
+                            <span>{{ field.xlsx_header or field.label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="report-summary-box" id="reportSummaryBox">
+                    <div class="report-summary-header">
+                        <div>
+                            <strong>Resumo da extração</strong>
+                            <span>Confira os filtros antes de iniciar o relatório de Redes.</span>
+                        </div>
+                    </div>
+
+                    <div class="report-summary-grid">
+                        <div class="report-summary-item">
+                            <span>Período</span>
+                            <strong id="summaryPeriod">-</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Status</span>
+                            <strong id="summaryStatuses">0 selecionados</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Tipos de atividade</span>
+                            <strong id="summaryActivityTypes">0 selecionados</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Aba de recursos</span>
+                            <strong id="summaryResourceGroup">-</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Recursos</span>
+                            <strong id="summaryResources">0 selecionados</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Campos do XLSX</span>
+                            <strong id="summaryFields">0 selecionados</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="redesResultSummary" class="redes-result-summary" style="display:none;">
+                    <div class="redes-result-header">
+                        <div>
+                            <span class="page-kicker-relatorios">Resultado</span>
+                            <h3>Resumo das atividades de Redes</h3>
+                            <p>Visão gerada após a conclusão da extração.</p>
+                        </div>
+                    </div>
+
+                    <div class="redes-kpi-grid">
+                        <div class="redes-kpi-card">
+                            <span>Total de atividades</span>
+                            <strong id="redesTotalActivities">0</strong>
+                        </div>
+                    </div>
+
+                    <div class="redes-summary-block">
+                        <h4>Status geral</h4>
+                        <div id="redesStatusGrid" class="redes-status-grid"></div>
+                    </div>
+
+                    <div class="redes-summary-block">
+                        <h4>Tipos de atividade</h4>
+                        <div id="redesActivityTypeGrid" class="redes-status-grid"></div>
+                    </div>
+
+                    <div class="redes-summary-block">
+                        <h4>Atividades por técnico</h4>
+                        <div class="redes-table-wrap">
+                            <table class="redes-summary-table">
+                                <thead>
+                                    <tr>
+                                        <th>Técnico</th>
+                                        <th>ID</th>
+                                        <th>Total</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="redesResourceTable">
+                                    <tr>
+                                        <td colspan="4">Nenhum dado carregado.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-actions report-page-actions">
+                    <button type="submit" id="btnStartOfsOsReport" class="btn-primary">
+                        Iniciar extração de Redes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="{{ url_for('static', filename='js/relatorios_ofs_os.js') }}"></script>
+
+    {% include 'includes/footer.html' %}
+</body>
