@@ -40,6 +40,133 @@ class OFSClient:
         )
         return resp
 
+    def get_resources_hierarchy_map(self, progress_callback=None) -> dict:
+        """
+        Lista recursos do OFS paginando e monta a hierarquia em memória.
+
+        Estrutura gerada por usuário/recurso:
+        - Bucket ID
+        - Bucket Nome
+        - Recurso acima do bucket ID
+        - Recurso acima do bucket Nome
+        - Segundo nível acima do bucket ID
+        - Segundo nível acima do bucket Nome
+
+        Não faz consulta individual por recurso.
+        Busca todos os recursos uma vez e cruza tudo em memória.
+        """
+        resources = {}
+        offset = 0
+        limit = 100
+
+        fields = ",".join([
+            "resourceId",
+            "name",
+            "parentResourceId",
+            "XR_PARENT_RESOURCE",
+            "resourceType",
+        ])
+
+        loaded = 0
+
+        while True:
+            url = f"{self.base_url}/resources?limit={limit}&offset={offset}&fields={fields}"
+            response = self.authenticated_get(url)
+
+            items = response.get("items") or []
+
+            if not items:
+                break
+
+            for item in items:
+                resource_id = (
+                    item.get("resourceId")
+                    or item.get("id")
+                    or item.get("resource_id")
+                )
+
+                if not resource_id:
+                    continue
+
+                resource_id = str(resource_id)
+
+                resources[resource_id] = {
+                    "resourceId": resource_id,
+                    "name": item.get("name") or "-",
+                    "parentResourceId": item.get("parentResourceId") or "-",
+                    "XR_PARENT_RESOURCE": item.get("XR_PARENT_RESOURCE") or "-",
+                    "resourceType": item.get("resourceType") or "-",
+                }
+
+            loaded += len(items)
+
+            if progress_callback:
+                progress_callback(loaded)
+
+            offset += limit
+
+        bucket_by_resource = {}
+        bucket_name_by_resource = {}
+
+        bucket_parent_by_resource = {}
+        bucket_parent_name_by_resource = {}
+
+        bucket_grandparent_by_resource = {}
+        bucket_grandparent_name_by_resource = {}
+
+        for resource_id, resource in resources.items():
+            bucket_id = (
+                resource.get("XR_PARENT_RESOURCE")
+                if resource.get("XR_PARENT_RESOURCE") not in (None, "", "-")
+                else resource.get("parentResourceId")
+            )
+
+            if not bucket_id or bucket_id == "-":
+                bucket_by_resource[resource_id] = "-"
+                bucket_name_by_resource[resource_id] = "-"
+
+                bucket_parent_by_resource[resource_id] = "-"
+                bucket_parent_name_by_resource[resource_id] = "-"
+
+                bucket_grandparent_by_resource[resource_id] = "-"
+                bucket_grandparent_name_by_resource[resource_id] = "-"
+                continue
+
+            bucket_id = str(bucket_id)
+            bucket = resources.get(bucket_id, {})
+
+            bucket_parent_id = bucket.get("parentResourceId") or "-"
+            bucket_parent = (
+                resources.get(str(bucket_parent_id), {})
+                if bucket_parent_id and bucket_parent_id != "-"
+                else {}
+            )
+
+            bucket_grandparent_id = bucket_parent.get("parentResourceId") or "-"
+            bucket_grandparent = (
+                resources.get(str(bucket_grandparent_id), {})
+                if bucket_grandparent_id and bucket_grandparent_id != "-"
+                else {}
+            )
+
+            bucket_by_resource[resource_id] = bucket_id
+            bucket_name_by_resource[resource_id] = bucket.get("name") or "-"
+
+            bucket_parent_by_resource[resource_id] = bucket_parent_id
+            bucket_parent_name_by_resource[resource_id] = bucket_parent.get("name") or "-"
+
+            bucket_grandparent_by_resource[resource_id] = bucket_grandparent_id
+            bucket_grandparent_name_by_resource[resource_id] = bucket_grandparent.get("name") or "-"
+
+        return {
+            "resources": resources,
+            "bucket_by_resource": bucket_by_resource,
+            "bucket_name_by_resource": bucket_name_by_resource,
+            "bucket_parent_by_resource": bucket_parent_by_resource,
+            "bucket_parent_name_by_resource": bucket_parent_name_by_resource,
+            "bucket_grandparent_by_resource": bucket_grandparent_by_resource,
+            "bucket_grandparent_name_by_resource": bucket_grandparent_name_by_resource,
+        }
     # ======== MÉTODOS JÁ UTILIZADOS NO PROJETO ========
     def authenticated_get(self, url: str) -> dict:
         """GET autenticado genérico que retorna JSON (com raise em erro HTTP)."""
@@ -87,6 +214,8 @@ class OFSClient:
         url = f"{self.base_url}/resources/{resource_id}"
         data = self.authenticated_get(url)
         return data.get("XR_PARENT_RESOURCE") or "-"
+
+
 
     # ======== CRIAÇÃO (RECURSO -> USUÁRIO) ========
     def create_resource(self, id_sap: str, parent_resource_id: str, name: str, email: str):
