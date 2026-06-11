@@ -60,6 +60,7 @@ def init_app(app):
             "relatorios_ofs_os.html",
             field_choices=list_report_field_choices(
                 can_view_extra_fields=can_view_extra_fields,
+                report_type="ofs_os",
             ),
             resource_types=RESOURCE_TYPES,
             resources_grouped=resources_grouped,
@@ -85,6 +86,7 @@ def init_app(app):
             "relatorios_redes.html",
             field_choices=list_report_field_choices(
                 can_view_extra_fields=can_view_extra_fields,
+                report_type="redes",
             ),
             resource_types=RESOURCE_TYPES,
             resources_grouped=resources_grouped,

@@ -63,6 +63,11 @@ CLOSURE_FIELDS = [
     "XA_SER_CLO_INP_NG",
 ]
 
+REDES_CLOSURE_FIELDS = [
+    "XA_SER_CLO_PRO_HLX",
+    "XA_SER_CLO_IMP_HLX",
+]
+
 TASK_TYPE_PROPERTY_CODE = "XA_TSK_TYP"
 METADATA_ENUM_LIMIT = 100
 
@@ -215,11 +220,34 @@ FIELD_CHOICES = [
         "xlsx_header": "Contrato do cliente",
         "required_perm": EXTRA_REPORT_FIELDS_PERMISSION,
     },
+    {
+        "key": "XA_PRO_COD_SAP",
+        "label": "XA_PRO_COD_SAP",
+        "api_fields": ["XA_PRO_COD_SAP"],
+        "xlsx_header": "Código SAP do Produto",
+        "redes_only": True,
+    },
 ]
 
 FIELD_MAP = {f["key"]: f for f in FIELD_CHOICES}
 
-def _field_allowed_for_user(field_config: dict, can_view_extra_fields: bool = False) -> bool:
+def _field_allowed_for_user(
+    field_config: dict,
+    can_view_extra_fields: bool = False,
+    report_type: str = "ofs_os",
+) -> bool:
+    """
+    Controla visibilidade/permissão dos campos de relatório.
+
+    report_type:
+      - ofs_os: relatório geral de OS
+      - redes: relatório específico de Redes
+    """
+    report_type = str(report_type or "ofs_os").strip().lower()
+
+    if field_config.get("redes_only") and report_type != "redes":
+        return False
+
     required_perm = field_config.get("required_perm")
 
     if not required_perm:
@@ -231,17 +259,24 @@ def _field_allowed_for_user(field_config: dict, can_view_extra_fields: bool = Fa
     return False
 
 
-def list_report_field_choices(can_view_extra_fields: bool = False) -> List[dict]:
+def list_report_field_choices(
+    can_view_extra_fields: bool = False,
+    report_type: str = "ofs_os",
+) -> List[dict]:
     """
     Lista os campos disponíveis para o usuário na tela de relatório.
 
-    Campos sem required_perm são públicos para quem acessa o relatório.
+    Campos com redes_only=True aparecem somente no relatório de Redes.
     Campos com required_perm só aparecem para quem possui a permissão necessária.
     """
     visible_fields = []
 
     for field in FIELD_CHOICES:
-        if _field_allowed_for_user(field, can_view_extra_fields=can_view_extra_fields):
+        if _field_allowed_for_user(
+            field,
+            can_view_extra_fields=can_view_extra_fields,
+            report_type=report_type,
+        ):
             visible_fields.append(field)
 
     return visible_fields
@@ -829,7 +864,6 @@ def _valid_activity_type_codes_by_category(allowed_categories: set) -> set:
 
     return valid_codes
 
-
 def validate_ofs_os_report_payload(payload: dict, can_view_extra_fields: bool = False) -> dict:
     """
     Valida payload do relatório geral de OS.
@@ -839,7 +873,10 @@ def validate_ofs_os_report_payload(payload: dict, can_view_extra_fields: bool = 
     config = validate_report_payload(
         payload,
         can_view_extra_fields=can_view_extra_fields,
+        report_type="ofs_os",
     )
+
+    config["report_type"] = "ofs_os"
 
     allowed_codes = _valid_activity_type_codes_by_category({"customer_home", "internal"})
     invalid = [
@@ -855,7 +892,6 @@ def validate_ofs_os_report_payload(payload: dict, can_view_extra_fields: bool = 
 
     return config
 
-
 def validate_redes_report_payload(payload: dict, can_view_extra_fields: bool = False) -> dict:
     """
     Valida payload do relatório de Redes.
@@ -866,7 +902,10 @@ def validate_redes_report_payload(payload: dict, can_view_extra_fields: bool = F
     config = validate_report_payload(
         payload,
         can_view_extra_fields=can_view_extra_fields,
+        report_type="redes",
     )
+
+    config["report_type"] = "redes"
 
     allowed_codes = _valid_activity_type_codes_by_category({"redes"})
     invalid = [
@@ -1070,7 +1109,11 @@ def _validate_statuses(statuses: list) -> List[str]:
     return cleaned
 
 
-def _validate_fields(fields: list, can_view_extra_fields: bool = False) -> List[str]:
+def _validate_fields(
+    fields: list,
+    can_view_extra_fields: bool = False,
+    report_type: str = "ofs_os",
+) -> List[str]:
     cleaned = []
     allowed = set(FIELD_MAP.keys())
 
@@ -1090,6 +1133,7 @@ def _validate_fields(fields: list, can_view_extra_fields: bool = False) -> List[
         if not _field_allowed_for_user(
             field_config,
             can_view_extra_fields=can_view_extra_fields,
+            report_type=report_type,
         ):
             denied_fields.append(
                 field_config.get("xlsx_header")
@@ -1099,7 +1143,7 @@ def _validate_fields(fields: list, can_view_extra_fields: bool = False) -> List[
 
     if denied_fields:
         raise ValueError(
-            "Você não tem permissão para extrair os seguintes campos: "
+            "Você não tem permissão para extrair os seguintes campos neste relatório: "
             + ", ".join(denied_fields)
         )
 
@@ -1138,7 +1182,13 @@ def _validate_resources(resource_ids: list) -> List[str]:
 
     return selected
 
-def validate_report_payload(payload: dict, can_view_extra_fields: bool = False) -> dict:
+def validate_report_payload(
+    payload: dict,
+    can_view_extra_fields: bool = False,
+    report_type: str = "ofs_os",
+) -> dict:
+    report_type = str(report_type or "ofs_os").strip().lower()
+
     date_from = str(payload.get("dateFrom") or "").strip()
     date_to = str(payload.get("dateTo") or "").strip()
 
@@ -1149,10 +1199,12 @@ def validate_report_payload(payload: dict, can_view_extra_fields: bool = False) 
     selected_fields = _validate_fields(
         payload.get("fields") or [],
         can_view_extra_fields=can_view_extra_fields,
+        report_type=report_type,
     )
     resource_ids = _validate_resources(payload.get("resources") or [])
 
     return {
+        "report_type": report_type,
         "date_from": date_from,
         "date_to": date_to,
         "statuses": statuses,
@@ -1161,18 +1213,31 @@ def validate_report_payload(payload: dict, can_view_extra_fields: bool = False) 
         "resources": resource_ids,
     }
 
+def _closure_fields_for_report(report_type: str = "ofs_os") -> List[str]:
+    report_type = str(report_type or "ofs_os").strip().lower()
 
-def _api_fields_for_selected(selected_fields: List[str]) -> List[str]:
+    if report_type == "redes":
+        return REDES_CLOSURE_FIELDS
+
+    return CLOSURE_FIELDS
+def _api_fields_for_selected(
+    selected_fields: List[str],
+    report_type: str = "ofs_os",
+) -> List[str]:
     api_fields = []
 
     for key in selected_fields:
-        cfg = FIELD_MAP[key]
-        for api_field in cfg["api_fields"]:
+        if key == "fechamento_atividade":
+            fields = _closure_fields_for_report(report_type)
+        else:
+            cfg = FIELD_MAP[key]
+            fields = cfg["api_fields"]
+
+        for api_field in fields:
             if api_field not in api_fields:
                 api_fields.append(api_field)
 
     return api_fields
-
 
 def _first_name(value):
     value = str(value or "").strip()
@@ -1202,13 +1267,14 @@ def _row_value(
     activity_type_label_map: Dict[str, str] = None,
     close_reason_name_map: Dict[Tuple[str, str], str] = None,
     task_type_name_map: Dict[str, str] = None,
+    report_type: str = "ofs_os",
 ):
     if field_key == "customerName":
         return _first_name(item.get("customerName"))
     if field_key == "customerNameFull":
         return str(item.get("customerName") or "").strip()
     if field_key == "fechamento_atividade":
-        for closure_field in CLOSURE_FIELDS:
+        for closure_field in _closure_fields_for_report(report_type):
             raw_value = item.get(closure_field)
 
             if raw_value is None:
@@ -1300,8 +1366,12 @@ def _fetch_activities(client: OFSClient, config: dict, base_dir: str, job_id: st
     url = f"{client.base_url}/activities/"
     headers = {"Accept": "application/json"}
 
-    api_fields = _api_fields_for_selected(config["fields"])
+    api_fields = _api_fields_for_selected(
+        config["fields"],
+        report_type=config.get("report_type", "ofs_os"),
+    )
 
+    status_payload["api_fields"] = api_fields
     for required_field in ("activityId", "status", "activityType", "date"):
         if required_field not in api_fields:
             api_fields.append(required_field)
@@ -1516,7 +1586,12 @@ def _build_activity_report_summary(rows: List[dict]) -> dict:
         "by_activity_type": by_activity_type_list,
     }
 
-def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
+def _build_xlsx(
+    rows: List[dict],
+    selected_fields: List[str],
+    output_path: str,
+    report_type: str = "ofs_os",
+):
     wb = Workbook()
     ws = wb.active
     ws.title = "Relatório OS OFS"
@@ -1555,6 +1630,7 @@ def _build_xlsx(rows: List[dict], selected_fields: List[str], output_path: str):
                 activity_type_label_map=activity_type_label_map,
                 close_reason_name_map=close_reason_name_map,
                 task_type_name_map=task_type_name_map,
+                report_type=report_type,
             )
             for key in selected_fields
         ])
@@ -1621,7 +1697,7 @@ def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
         )
 
         client = OFSClient()
-
+        config["report_type"] = "ofs_os"
         rows = _fetch_activities(client, config, base_dir, job_id, status_payload)
 
         status_payload.update({
@@ -1638,7 +1714,7 @@ def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
         _write_job_status(base_dir, job_id, status_payload)
 
         output_path = _job_xlsx_path(base_dir, job_id)
-        _build_xlsx(rows, config["fields"], output_path)
+        _build_xlsx(rows, config["fields"], output_path, report_type="ofs_os")
 
         status_payload.update({
             "status": "completed",
@@ -1746,7 +1822,7 @@ def _run_redes_report_job(base_dir: str, job_id: str, actor: dict, config: dict)
         )
 
         client = OFSClient()
-
+        config["report_type"] = "redes"
         rows = _fetch_activities(client, config, base_dir, job_id, status_payload)
 
         status_payload.update({
@@ -1772,7 +1848,7 @@ def _run_redes_report_job(base_dir: str, job_id: str, actor: dict, config: dict)
         _write_job_status(base_dir, job_id, status_payload)
 
         output_path = _job_xlsx_path(base_dir, job_id)
-        _build_xlsx(rows, config["fields"], output_path)
+        _build_xlsx(rows, config["fields"], output_path, report_type="redes")
 
         status_payload.update({
             "status": "completed",
