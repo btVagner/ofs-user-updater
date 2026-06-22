@@ -227,8 +227,21 @@ FIELD_CHOICES = [
         "xlsx_header": "Código SAP do Produto",
         "redes_only": True,
     },
+    {
+        "key": "XA_RES_API_NG_STA",
+        "label": "XA_RES_API_NG_STA",
+        "api_fields": ["XA_RES_API_NG_STA"],
+        "xlsx_header": "Status da API NG",
+        "ofs_os_only": True,
+    },
+    {
+        "key": "XA_RES_API_NG_RESPONSE",
+        "label": "XA_RES_API_NG_RESPONSE",
+        "api_fields": ["XA_RES_API_NG_RESPONSE"],
+        "xlsx_header": "Response API NG",
+        "ofs_os_only": True,
+    },
 ]
-
 FIELD_MAP = {f["key"]: f for f in FIELD_CHOICES}
 
 def _field_allowed_for_user(
@@ -246,6 +259,9 @@ def _field_allowed_for_user(
     report_type = str(report_type or "ofs_os").strip().lower()
 
     if field_config.get("redes_only") and report_type != "redes":
+        return False
+
+    if field_config.get("ofs_os_only") and report_type != "ofs_os":
         return False
 
     required_perm = field_config.get("required_perm")
