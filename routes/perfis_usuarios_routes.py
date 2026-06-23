@@ -246,6 +246,9 @@ def init_app(app):
         conn = get_connection()
         cur = conn.cursor(dictionary=True)
 
+        actor = current_actor()
+        can_manage_user_profiles = actor.get("tipo_id") == 1
+
         cur.execute("SELECT id, nome FROM perfis ORDER BY nome")
         perfis = cur.fetchall()
 
@@ -255,12 +258,14 @@ def init_app(app):
             SELECT u.id,
                    u.nome,
                    u.username,
+                   u.tipo_id,
                    p.nome AS perfil_nome,
                    u.last_login
             FROM usuarios u
             LEFT JOIN perfis p ON p.id = u.tipo_id
         """
         params = []
+
         if perfil_id:
             query += " WHERE u.tipo_id = %s"
             params.append(perfil_id)
@@ -278,4 +283,104 @@ def init_app(app):
             usuarios=usuarios,
             perfis=perfis,
             perfil_id_selecionado=perfil_id,
+            can_manage_user_profiles=can_manage_user_profiles,
         )
+
+    @app.route("/usuarios/<int:usuario_id>/perfil", methods=["POST"])
+    @login_required
+    @perm_required("usuarios.criar")
+    def alterar_perfil_usuario_painel(usuario_id):
+        actor = current_actor()
+
+        if actor.get("tipo_id") != 1:
+            flash("Apenas administradores podem alterar o perfil de usuários.", "danger")
+            return redirect(url_for("usuarios_painel"))
+
+        perfil_id_raw = (request.form.get("perfil_id") or "").strip()
+        filtro_perfil_id = request.form.get("filtro_perfil_id", type=int)
+
+        try:
+            novo_perfil_id = int(perfil_id_raw)
+        except ValueError:
+            flash("Perfil informado é inválido.", "danger")
+            return redirect(url_for("usuarios_painel", perfil_id=filtro_perfil_id))
+
+        conn = get_connection()
+        cur = conn.cursor(dictionary=True)
+
+        try:
+            cur.execute("""
+                SELECT u.id,
+                       u.nome,
+                       u.username,
+                       u.tipo_id,
+                       p.nome AS perfil_nome
+                FROM usuarios u
+                LEFT JOIN perfis p ON p.id = u.tipo_id
+                WHERE u.id = %s
+            """, (usuario_id,))
+            usuario_before = cur.fetchone()
+
+            if not usuario_before:
+                flash("Usuário não encontrado.", "danger")
+                return redirect(url_for("usuarios_painel", perfil_id=filtro_perfil_id))
+
+            cur.execute(
+                "SELECT id, nome, slug FROM perfis WHERE id = %s",
+                (novo_perfil_id,),
+            )
+            novo_perfil = cur.fetchone()
+
+            if not novo_perfil:
+                flash("Perfil selecionado não existe.", "danger")
+                return redirect(url_for("usuarios_painel", perfil_id=filtro_perfil_id))
+
+            if usuario_before.get("tipo_id") == novo_perfil_id:
+                flash("O usuário já está neste perfil.", "info")
+                return redirect(url_for("usuarios_painel", perfil_id=filtro_perfil_id))
+
+            cur.execute(
+                "UPDATE usuarios SET tipo_id = %s WHERE id = %s",
+                (novo_perfil_id, usuario_id),
+            )
+            conn.commit()
+
+            audit_log(
+                actor_user_id=actor.get("id"),
+                actor_username=actor.get("username"),
+                module="usuarios",
+                action="update_profile",
+                entity_type="usuario",
+                entity_id=usuario_id,
+                entity_ref=usuario_before.get("username"),
+                summary=(
+                    f"Alterou perfil do usuário {usuario_before.get('username')} "
+                    f"de {usuario_before.get('perfil_nome') or '-'} para {novo_perfil.get('nome')}"
+                ),
+                before={
+                    "id": usuario_before.get("id"),
+                    "nome": usuario_before.get("nome"),
+                    "username": usuario_before.get("username"),
+                    "tipo_id": usuario_before.get("tipo_id"),
+                    "perfil_nome": usuario_before.get("perfil_nome"),
+                },
+                after={
+                    "id": usuario_before.get("id"),
+                    "nome": usuario_before.get("nome"),
+                    "username": usuario_before.get("username"),
+                    "tipo_id": novo_perfil.get("id"),
+                    "perfil_nome": novo_perfil.get("nome"),
+                },
+            )
+
+            flash("Perfil do usuário atualizado com sucesso.", "success")
+
+        except Exception:
+            conn.rollback()
+            raise
+
+        finally:
+            cur.close()
+            conn.close()
+
+        return redirect(url_for("usuarios_painel", perfil_id=filtro_perfil_id))

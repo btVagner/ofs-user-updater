@@ -1831,3 +1831,320 @@ body.login-page {
 
 /* ===== LOGS DASHBOARD AND PAGINATION - END ===== */
 
+/* ===== Usuários do painel ===== */
+
+.usuarios-page {
+    max-width: 1180px;
+}
+
+.usuarios-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    align-items: flex-start;
+    margin-bottom: 22px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.usuarios-kicker {
+    display: inline-block;
+    margin-bottom: 10px;
+    color: #9aa7b4;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.usuarios-header h2 {
+    margin: 0;
+    color: #f5f7fb;
+    font-size: 2rem;
+}
+
+.usuarios-header p {
+    max-width: 720px;
+    margin: 10px 0 0;
+    color: #9aa4b2;
+    line-height: 1.6;
+}
+
+.usuarios-total-card {
+    min-width: 170px;
+    padding: 18px;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(29, 31, 38, 0.96), rgba(20, 22, 29, 0.96));
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.24);
+}
+
+.usuarios-total-card span {
+    display: block;
+    color: #9aa4b2;
+    font-size: 0.86rem;
+}
+
+.usuarios-total-card strong {
+    display: block;
+    margin-top: 10px;
+    color: #f8fafc;
+    font-size: 2rem;
+}
+
+.usuarios-toolbar {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 18px 0;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(24, 24, 24, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+.usuarios-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 240px;
+}
+
+.usuarios-filter-field label {
+    color: #cbd5e1;
+    font-size: 0.84rem;
+}
+
+.usuarios-filter-field select,
+.usuarios-profile-form select {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background-color: #2b2b2b;
+    color: #f1f1f1;
+}
+
+.usuarios-admin-note {
+    margin: 12px 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    color: #dbeafe;
+    background: rgba(0, 170, 255, 0.10);
+    border: 1px solid rgba(0, 170, 255, 0.20);
+    font-size: 0.9rem;
+}
+
+.usuarios-table-card {
+    overflow-x: auto;
+    margin-top: 18px;
+    border-radius: 16px;
+    background: rgba(24, 24, 24, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.065);
+    box-shadow: 0 12px 26px rgba(0, 0, 0, 0.22);
+}
+
+.usuarios-table {
+    margin: 0;
+    border: none;
+}
+
+.usuarios-table th,
+.usuarios-table td {
+    border-color: rgba(255, 255, 255, 0.075);
+    vertical-align: middle;
+}
+
+.usuarios-table th {
+    background: rgba(255, 255, 255, 0.045);
+    color: #dbeafe;
+}
+
+.usuarios-id {
+    color: #cbd5e1;
+    font-weight: 700;
+}
+
+.usuarios-profile-form {
+    margin: 0;
+    min-width: 190px;
+}
+
+.usuarios-profile-pill {
+    display: inline-flex;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(0, 170, 255, 0.10);
+    border: 1px solid rgba(0, 170, 255, 0.18);
+    color: #dbeafe;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.usuarios-footer-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+@media (max-width: 820px) {
+    .usuarios-header {
+        flex-direction: column;
+    }
+
+    .usuarios-total-card {
+        width: 100%;
+    }
+}
+/* ===== Sidebar compacta para telas menores ===== */
+
+.sidebar {
+    padding: 12px 10px;
+    gap: 8px;
+}
+
+.sidebar-logo {
+    padding: 4px 6px 10px;
+}
+
+.logo {
+    font-size: 1rem;
+}
+
+.sidebar-logo-subtitle {
+    margin-top: 5px;
+    font-size: 0.72rem;
+}
+
+.sidebar-status-card {
+    margin-top: 8px;
+    padding: 8px;
+    border-radius: 12px;
+}
+
+.sidebar-section {
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.sidebar-section-title {
+    padding: 0 7px;
+    margin-bottom: 3px;
+    font-size: 0.64rem;
+}
+
+.sidebar-link {
+    min-height: 34px;
+    padding: 7px 8px;
+    gap: 8px;
+    border-radius: 10px;
+    font-size: 0.84rem;
+}
+
+.sidebar-icon {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    border-radius: 8px;
+    font-size: 0.66rem;
+}
+
+.sidebar-main {
+    padding-right: 3px;
+}
+
+.sidebar-footer {
+    padding-top: 7px;
+}
+
+.sidebar-account-card {
+    padding: 7px;
+    border-radius: 12px;
+}
+
+.sidebar-account-label {
+    margin-bottom: 2px;
+    font-size: 0.62rem;
+}
+
+.sidebar-account-name {
+    margin-bottom: 6px;
+    font-size: 0.8rem;
+    line-height: 1.2;
+}
+
+.sidebar-link-account,
+.sidebar-link-danger {
+    min-height: 32px;
+    margin-bottom: 4px;
+    font-size: 0.78rem;
+}
+
+.sidebar-link-account .sidebar-icon,
+.sidebar-link-danger .sidebar-icon {
+    width: 23px;
+    height: 23px;
+    flex-basis: 23px;
+}
+
+.online-indicator {
+    margin-top: 4px;
+    font-size: 0.78rem;
+}
+
+.online-dot {
+    width: 8px;
+    height: 8px;
+    flex-basis: 8px;
+}
+
+@media (max-height: 760px) {
+    .sidebar {
+        padding-top: 9px;
+        padding-bottom: 9px;
+    }
+
+    .sidebar-logo-subtitle {
+        display: none;
+    }
+
+    .sidebar-logo {
+        padding-bottom: 8px;
+    }
+
+    .sidebar-section {
+        margin-top: 6px;
+    }
+
+    .sidebar-link {
+        min-height: 31px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+    }
+
+    .sidebar-icon {
+        width: 22px;
+        height: 22px;
+        flex-basis: 22px;
+    }
+
+    .sidebar-account-card {
+        padding: 6px;
+    }
+
+    .sidebar-account-label {
+        display: none;
+    }
+
+    .sidebar-account-name {
+        margin-bottom: 4px;
+        font-size: 0.76rem;
+    }
+
+    .sidebar-link-account,
+    .sidebar-link-danger {
+        min-height: 29px;
+        margin-bottom: 3px;
+    }
+}

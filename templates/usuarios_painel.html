@@ -4,44 +4,85 @@
 {% endif %}
 
 <body>
-  <div class="menu-container" style="max-width: 1000px;">
-    <h2>Usuários do painel</h2>
+  <div class="menu-container usuarios-page">
+    <div class="usuarios-header">
+      <div>
+        <span class="usuarios-kicker">Administração</span>
+        <h2>Usuários do painel</h2>
+        <p>Consulte usuários, filtre por perfil e ajuste permissões de acesso quando necessário.</p>
+      </div>
 
-    <p style="margin-top:8px; font-size:0.95rem;">
-      Total de usuários: <strong>{{ usuarios|length }}</strong>
-    </p>
+      <div class="usuarios-total-card">
+        <span>Total de usuários</span>
+        <strong>{{ usuarios|length }}</strong>
+      </div>
+    </div>
 
-    <!-- Filtro por perfil -->
-    <form method="get" class="usuarios-filtro">
-      <label for="perfil_id" style="font-size:0.9rem;">Filtrar por perfil:</label>
-      <select id="perfil_id" name="perfil_id" onchange="this.form.submit()">
-        <option value="">Todos os perfis</option>
-        {% for p in perfis %}
-          <option value="{{ p.id }}" {% if perfil_id_selecionado == p.id %}selected{% endif %}>
-            {{ p.nome }}
-          </option>
-        {% endfor %}
-      </select>
+    <form method="get" class="usuarios-toolbar">
+      <div class="usuarios-filter-field">
+        <label for="perfil_id">Filtrar por perfil</label>
+        <select id="perfil_id" name="perfil_id" onchange="this.form.submit()">
+          <option value="">Todos os perfis</option>
+          {% for p in perfis %}
+            <option value="{{ p.id }}" {% if perfil_id_selecionado == p.id %}selected{% endif %}>
+              {{ p.nome }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% if perfil_id_selecionado %}
+        <a href="{{ url_for('usuarios_painel') }}" class="btn-secondary-link">Limpar filtro</a>
+      {% endif %}
     </form>
 
-    <div class="tabela-container" style="margin-top:24px;">
-      <table class="tabela-usuarios">
+    {% if can_manage_user_profiles %}
+      <div class="usuarios-admin-note">
+        Você está acessando como administrador. Alterações de perfil são salvas individualmente por usuário.
+      </div>
+    {% endif %}
+
+    <div class="usuarios-table-card">
+      <table class="tabela-usuarios usuarios-table">
         <thead>
           <tr>
             <th>ID</th>
             <th>Nome</th>
-            <th>Login (username)</th>
+            <th>Login</th>
             <th>Perfil</th>
             <th>Last login</th>
+            {% if can_manage_user_profiles %}
+              <th>Ação</th>
+            {% endif %}
           </tr>
         </thead>
         <tbody>
           {% for u in usuarios %}
             <tr>
-              <td>{{ u.id }}</td>
+              <td class="usuarios-id">{{ u.id }}</td>
               <td>{{ u.nome }}</td>
               <td>{{ u.username }}</td>
-              <td>{{ u.perfil_nome or '-' }}</td>
+              <td>
+                {% if can_manage_user_profiles %}
+                  <form
+                    id="perfil-form-{{ u.id }}"
+                    method="post"
+                    action="{{ url_for('alterar_perfil_usuario_painel', usuario_id=u.id) }}"
+                    class="usuarios-profile-form"
+                  >
+                    <input type="hidden" name="filtro_perfil_id" value="{{ perfil_id_selecionado or '' }}">
+                    <select name="perfil_id" aria-label="Perfil de {{ u.nome }}">
+                      {% for p in perfis %}
+                        <option value="{{ p.id }}" {% if u.tipo_id == p.id %}selected{% endif %}>
+                          {{ p.nome }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </form>
+                {% else %}
+                  <span class="usuarios-profile-pill">{{ u.perfil_nome or '-' }}</span>
+                {% endif %}
+              </td>
               <td>
                 {% if u.last_login %}
                   {{ u.last_login.strftime('%d/%m/%Y %H:%M') }}
@@ -49,20 +90,29 @@
                   -
                 {% endif %}
               </td>
+              {% if can_manage_user_profiles %}
+                <td>
+                  <button type="submit" form="perfil-form-{{ u.id }}" class="btn-primary btn-sm">
+                    Salvar
+                  </button>
+                </td>
+              {% endif %}
             </tr>
           {% endfor %}
 
           {% if usuarios|length == 0 %}
             <tr>
-              <td colspan="5">Nenhum usuário encontrado para esse filtro.</td>
+              <td colspan="{% if can_manage_user_profiles %}6{% else %}5{% endif %}">
+                Nenhum usuário encontrado para esse filtro.
+              </td>
             </tr>
           {% endif %}
         </tbody>
       </table>
     </div>
 
-    <div style="text-align:center; margin-top:18px;">
-      <a href="{{ url_for('perfis_view') }}" class="btn-voltar">
+    <div class="usuarios-footer-actions">
+      <a href="{{ url_for('perfis_view') }}" class="btn-link-strong">
         Voltar para perfis
       </a>
     </div>
