@@ -373,14 +373,18 @@ def _fetch_dashboard_activities(date_from: str, date_to: str, activity_codes: Li
 
     fields = [
         "activityId",
+        "apptNumber",
         "activityType",
         "status",
         "resourceId",
         "city",
         "date",
         "endTime",
+        "XA_AV_CLI",
+        "XA_AV_CLI_CAT",
+        "XA_AV_CLI_SUB_CAT",
+        "XA_AV_CLI_CON",
     ]
-
     q = (
         f"{_build_or_equals_query('status', STATUS_OPTIONS)} "
         f"and {_build_or_equals_query('activityType', activity_codes)}"
@@ -524,6 +528,120 @@ def _list_from_counter(counter, key_name, total_name="total", limit=None):
     rows.sort(key=lambda item: item[total_name], reverse=True)
     return rows[:limit] if limit else rows
 
+def _clean_text(value, fallback="Não informado"):
+    value = str(value or "").strip()
+    return value if value else fallback
+
+
+def _parse_customer_rating(value):
+    value = str(value or "").strip()
+
+    if not value:
+        return None
+
+    try:
+        rating = int(float(value))
+    except ValueError:
+        return None
+
+    if rating < 1 or rating > 5:
+        return None
+
+    return rating
+
+
+def _is_customer_evaluation_completed(value):
+    return str(value or "").strip() == "1"
+
+
+def _build_customer_thermometer(rows, today_text):
+    rating_distribution = {rating: 0 for rating in range(1, 6)}
+    categories = defaultdict(lambda: {"category": "", "total": 0, "critical": 0})
+    subcategories = defaultdict(lambda: {
+        "category": "",
+        "subcategory": "",
+        "total": 0,
+        "critical": 0,
+    })
+
+    total = 0
+    rating_sum = 0
+    satisfied = 0
+    critical = 0
+    critical_rows = []
+
+    for item in rows:
+        if str(item.get("date") or "").strip() != today_text:
+            continue
+
+        rating = _parse_customer_rating(item.get("XA_AV_CLI"))
+        if rating is None:
+            continue
+
+        category = _clean_text(item.get("XA_AV_CLI_CAT"))
+        subcategory = _clean_text(item.get("XA_AV_CLI_SUB_CAT"))
+
+        total += 1
+        rating_sum += rating
+        rating_distribution[rating] += 1
+
+        if rating >= 4:
+            satisfied += 1
+        else:
+            critical += 1
+
+        if rating <= 3:
+            if category and category != "Não informado":
+                categories[category]["category"] = category
+                categories[category]["total"] += 1
+                categories[category]["critical"] += 1
+
+            if subcategory and subcategory != "Não informado":
+                sub_key = (category, subcategory)
+                subcategories[sub_key]["category"] = category
+                subcategories[sub_key]["subcategory"] = subcategory
+                subcategories[sub_key]["total"] += 1
+                subcategories[sub_key]["critical"] += 1
+            critical_rows.append({
+                "apptNumber": _clean_text(item.get("apptNumber"), "-"),
+                "rating": rating,
+                "category": category,
+                "subcategory": subcategory,
+                "endTime": str(item.get("endTime") or "").strip(),
+            })
+
+    average_rating = round(rating_sum / total, 2) if total else 0
+    satisfied_percent = round((satisfied / total) * 100, 1) if total else 0
+    critical_percent = round((critical / total) * 100, 1) if total else 0
+
+    category_rows = list(categories.values())
+    category_rows.sort(key=lambda item: item["total"], reverse=True)
+
+    subcategory_rows = list(subcategories.values())
+    subcategory_rows.sort(key=lambda item: item["total"], reverse=True)
+
+    critical_rows.sort(key=lambda item: (item["rating"], item["endTime"] or ""))
+
+    return {
+        "summary": {
+            "total": total,
+            "average_rating": average_rating,
+            "satisfied": satisfied,
+            "satisfied_percent": satisfied_percent,
+            "critical": critical,
+            "critical_percent": critical_percent,
+        },
+        "rating_distribution": [
+            {
+                "rating": rating,
+                "total": rating_distribution.get(rating, 0),
+            }
+            for rating in range(1, 6)
+        ],
+        "categories": category_rows[:8],
+        "subcategories": subcategory_rows[:10],
+        "critical_rows": critical_rows[:12],
+    }
 
 def _build_payload(rows, activity_maps):
     now = _now()
@@ -560,6 +678,11 @@ def _build_payload(rows, activity_maps):
             "activityTypeLabel": labels.get(activity_type, activity_type or "Não informado"),
             "city": city,
             "endTime": str(item.get("endTime") or "").strip(),
+            "apptNumber": str(item.get("apptNumber") or "").strip(),
+            "customerRating": str(item.get("XA_AV_CLI") or "").strip(),
+            "customerRatingCategory": str(item.get("XA_AV_CLI_CAT") or "").strip(),
+            "customerRatingSubcategory": str(item.get("XA_AV_CLI_SUB_CAT") or "").strip(),
+            "customerRatingCompleted": str(item.get("XA_AV_CLI_CON") or "").strip(),
             "group": (
                 "redes"
                 if activity_type in redes_codes
@@ -705,6 +828,7 @@ def _build_payload(rows, activity_maps):
         "top_cities": top_cities[:10],
         "activity_options": activity_options,
         "dashboard_rows": dashboard_rows,
+        "customer_thermometer": _build_customer_thermometer(rows, today_text),
     }
 
 

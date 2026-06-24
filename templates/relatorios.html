@@ -41,6 +41,23 @@
                 </a>
             </div>
 
+            {% if has_perm('relatorios.termometro_acessar') %}
+            <div class="report-entry-card">
+                <div class="report-entry-copy">
+                    <span class="report-entry-badge">Cliente</span>
+                    <h3>Relatório do Termômetro do Cliente</h3>
+                    <p>
+                        Exportação das avaliações recebidas no OFS, com nota, categoria,
+                        subcategoria, técnico, cidade, turno, tipo de atividade e observações finais.
+                    </p>
+                </div>
+
+                <a href="{{ url_for('relatorios_termometro_cliente_page') }}" class="report-main-btn">
+                    Abrir Termômetro
+                </a>
+            </div>
+            {% endif %}
+
             {% if has_perm('relatorios.redes_acessar') %}
             <div class="report-entry-card report-entry-card-redes">
                 <div class="report-entry-copy">

@@ -1,0 +1,218 @@
+{% set page_css_files = ['css/relatorios.css'] %}
+{% include 'includes/head.html' %}
+
+<body data-thermometer-start-url="{{ url_for('relatorios_termometro_cliente_iniciar') }}"
+    data-thermometer-status-url-base="{{ url_for('relatorios_termometro_cliente_status', job_id='__JOB_ID__') }}"
+    data-thermometer-download-url-base="{{ url_for('relatorios_termometro_cliente_download', job_id='__JOB_ID__') }}"
+    data-thermometer-discard-url-base="{{ url_for('relatorios_termometro_cliente_descartar', job_id='__JOB_ID__') }}">
+    {% if session.usuario_logado %}
+    {% include 'includes/navbar.html' %}
+    {% endif %}
+
+    <div class="page-relatorios page-relatorio-ofs-os fade-in">
+        <div class="page-header-relatorios report-page-top">
+            <div class="page-header-copy">
+                <span class="page-kicker-relatorios">Extração Cliente</span>
+                <h2>Relatório do Termômetro do Cliente</h2>
+                <p class="page-subtitle-relatorios">
+                    Exporte avaliações recebidas no OFS com nota, categoria, subcategoria,
+                    técnico, cidade, turno, tipo de atividade e observações finais.
+                </p>
+            </div>
+
+            <a href="{{ url_for('relatorios') }}" class="report-back-link">
+                Voltar para relatórios
+            </a>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <p class="{{ 'success-msg' if category == 'success' else 'error-msg' }}">
+            {{ message }}
+        </p>
+        {% endfor %}
+        {% endwith %}
+
+        <div class="report-page-shell">
+            <div id="reportStatusBox" class="report-status-box" style="display:none;"></div>
+
+            <form id="thermometerReportForm">
+                <div class="report-section">
+                    <div class="report-section-title-row">
+                        <h4>Período</h4>
+                    </div>
+
+                    <div class="report-grid">
+                        <div>
+                            <label for="dateFrom">De</label>
+                            <input type="date" id="dateFrom" required>
+                        </div>
+
+                        <div>
+                            <label for="dateTo">Até</label>
+                            <input type="date" id="dateTo" required>
+                        </div>
+                    </div>
+                </div>
+                <div class="report-section">
+                    <div class="report-section-title-row">
+                        <div>
+                            <h4>Tipos de atividade B2C</h4>
+                            <p class="report-section-hint">
+                                Selecione os tipos de casa cliente que devem entrar no relatório.
+                            </p>
+                        </div>
+
+                        <div class="mini-actions">
+                            <button type="button" class="btn-mini" id="btnSelectAllActivityTypes">
+                                Selecionar tudo
+                            </button>
+                            <button type="button" class="btn-mini" id="btnClearActivityTypes">
+                                Desmarcar tudo
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="checkbox-grid fields-grid">
+                        {% for activity_type in activity_types %}
+                        {% if activity_type.category == 'customer_home' %}
+                        <label class="check-card">
+                            <input type="checkbox" name="activityTypes" value="{{ activity_type.code }}" checked>
+                            <span>{{ activity_type.label }}</span>
+                        </label>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="report-section">
+                    <div class="report-section-title-row">
+                        <h4>Recursos</h4>
+
+                        <div class="mini-actions">
+                            <button type="button" class="btn-mini" id="btnSelectVisibleResources">
+                                Selecionar visíveis
+                            </button>
+                            <button type="button" class="btn-mini" id="btnClearVisibleResources">
+                                Desmarcar visíveis
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="resource-search-row">
+                        <div class="resource-search-field">
+                            <label for="resourceSearchInput">Buscar recurso</label>
+                            <input type="text" id="resourceSearchInput"
+                                placeholder="Digite nome ou ID do recurso da aba ativa..." autocomplete="off">
+                        </div>
+
+                        <button type="button" id="btnClearResourceSearch" class="btn-mini">
+                            Limpar busca
+                        </button>
+
+                        <span id="resourceSearchCount" class="resource-search-count">
+                            -
+                        </span>
+                    </div>
+
+                    <div class="resource-status-filter-row">
+                        <span class="resource-status-filter-label">Status do recurso</span>
+
+                        <div class="resource-status-filter-actions">
+                            <button type="button" class="resource-status-filter-btn active"
+                                data-resource-status-filter="active">
+                                Ativos
+                            </button>
+
+                            <button type="button" class="resource-status-filter-btn"
+                                data-resource-status-filter="inactive">
+                                Inativos
+                            </button>
+
+                            <button type="button" class="resource-status-filter-btn" data-resource-status-filter="all">
+                                Todos
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="resource-type-tabs">
+                        {% for code, label in resource_types.items() %}
+                        <button type="button" class="resource-type-btn {% if loop.first %}active{% endif %}"
+                            data-resource-type="{{ code }}">
+                            {{ label }}
+                            <span>{{ resources_grouped.get(code, [])|length }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+
+                    <div class="resource-list resource-list-page">
+                        {% for code, label in resource_types.items() %}
+                        {% set group = resources_grouped.get(code, []) %}
+                        <div class="resource-group {% if not loop.first %}hidden{% endif %}"
+                            data-resource-group="{{ code }}">
+                            {% if group|length == 0 %}
+                            <div class="empty-resources">
+                                Nenhum recurso carregado para {{ label }}.
+                            </div>
+                            {% endif %}
+
+                            {% for r in group %}
+                            <label class="resource-check" data-resource-status="{{ r.status or 'unknown' }}">
+                                <input type="checkbox" name="resources" value="{{ r.resource_id }}">
+                                <span class="resource-name">{{ r.name or '-' }}</span>
+                                <span class="resource-id">{{ r.resource_id }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="report-summary-box" id="reportSummaryBox">
+                    <div class="report-summary-header">
+                        <div>
+                            <strong>Resumo da extração</strong>
+                            <span>O XLSX exportará somente atividades com avaliação do cliente preenchida.</span>
+                        </div>
+                    </div>
+
+                    <div class="report-summary-grid">
+                        <div class="report-summary-item">
+                            <span>Período</span>
+                            <strong id="summaryPeriod">-</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Aba de recursos</span>
+                            <strong id="summaryResourceGroup">-</strong>
+                        </div>
+
+                        <div class="report-summary-item">
+                            <span>Recursos</span>
+                            <strong id="summaryResources">0 selecionados</strong>
+                        </div>
+                        <div class="report-summary-item">
+                            <span>Tipos de atividade</span>
+                            <strong id="summaryActivityTypes">0 selecionados</strong>
+                        </div>
+                        <div class="report-summary-item">
+                            <span>Campos do XLSX</span>
+                            <strong>12 campos fixos</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-actions report-page-actions">
+                    <button type="submit" id="btnStartThermometerReport" class="btn-primary">
+                        Iniciar extração do Termômetro
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="{{ url_for('static', filename='js/relatorios_termometro_cliente.js') }}"></script>
+
+    {% include 'includes/footer.html' %}
+</body>

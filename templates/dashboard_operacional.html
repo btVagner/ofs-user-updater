@@ -7,7 +7,8 @@
   {% set kpis = payload.get('kpis') or {} %}
   {% set periods = payload.get('periods') or {} %}
   {% set activity_options = payload.get('activity_options') or [] %}
-
+  {% set thermometer = payload.get('customer_thermometer') or {} %}
+  {% set thermometer_summary = thermometer.get('summary') or {} %}
   <main id="dashboard-root" class="dashboard-page fade-in" data-status-url="{{ url_for('dashboard_status') }}"
     data-unlock-url="{{ url_for('dashboard_unlock') }}" data-can-unlock="{{ '1' if is_admin else '0' }}"
     data-current-updated-at="{{ snapshot.updated_at or '' }}">
@@ -88,14 +89,16 @@
           data-kpi-card="success" data-group="b2c">
           <span>B2C vs semana passada</span>
           <strong>{{ kpis.get('b2c_variation_percent', 0) }}%</strong>
-          <small>{{ kpis.get('b2c_completed_last_week_same_day', 0) }} no mesmo dia até {{ periods.get('comparison_until_time') or '-' }}</small>
+          <small>{{ kpis.get('b2c_completed_last_week_same_day', 0) }} no mesmo dia até {{
+            periods.get('comparison_until_time') or '-' }}</small>
         </article>
 
         <article class="dashboard-kpi-card {% if (kpis.get('redes_variation_percent', 0) or 0) < 0 %}warning{% endif %}"
           data-kpi-card="success" data-group="redes">
           <span>Redes vs semana passada</span>
           <strong>{{ kpis.get('redes_variation_percent', 0) }}%</strong>
-          <small>{{ kpis.get('redes_completed_last_week_same_day', 0) }} no mesmo dia até {{ periods.get('comparison_until_time') or '-' }}</small>
+          <small>{{ kpis.get('redes_completed_last_week_same_day', 0) }} no mesmo dia até {{
+            periods.get('comparison_until_time') or '-' }}</small>
         </article>
       </div>
     </section>
@@ -129,7 +132,8 @@
           data-kpi-card="notdone" data-group="b2c">
           <span>B2C improdutivas vs semana passada</span>
           <strong>{{ kpis.get('b2c_notdone_variation_percent', 0) }}%</strong>
-          <small>{{ kpis.get('b2c_notdone_last_week_same_day', 0) }} no mesmo dia até {{ periods.get('comparison_until_time') or '-' }}</small>
+          <small>{{ kpis.get('b2c_notdone_last_week_same_day', 0) }} no mesmo dia até {{
+            periods.get('comparison_until_time') or '-' }}</small>
         </article>
 
         <article
@@ -137,7 +141,8 @@
           data-kpi-card="notdone" data-group="redes">
           <span>Redes improdutivas vs semana passada</span>
           <strong>{{ kpis.get('redes_notdone_variation_percent', 0) }}%</strong>
-          <small>{{ kpis.get('redes_notdone_last_week_same_day', 0) }} no mesmo dia até {{ periods.get('comparison_until_time') or '-' }}</small>
+          <small>{{ kpis.get('redes_notdone_last_week_same_day', 0) }} no mesmo dia até {{
+            periods.get('comparison_until_time') or '-' }}</small>
         </article>
       </div>
     </section>
@@ -254,6 +259,73 @@
           </div>
         </article>
       </section>
+    </section>
+    <section class="dashboard-kpi-shell dashboard-customer-thermometer">
+      <div class="dashboard-kpi-shell-header">
+        <div>
+          <h2>Termômetro do Cliente</h2>
+          <p class="dashboard-muted">Avaliações recebidas hoje pelo plugin de atendimento.</p>
+        </div>
+      </div>
+
+      <div class="dashboard-kpi-grid dashboard-kpi-grid-compact">
+        <article class="dashboard-kpi-card">
+          <span>Avaliações hoje</span>
+          <strong>{{ thermometer_summary.get('total', 0) }}</strong>
+          <small>Total com avaliação preenchida</small>
+        </article>
+
+        <article class="dashboard-kpi-card success">
+          <span>Nota média</span>
+          <strong>{{ thermometer_summary.get('average_rating', 0) }}</strong>
+          <small>Escala de 1 a 5</small>
+        </article>
+
+        <article class="dashboard-kpi-card success">
+          <span>Clientes satisfeitos</span>
+          <strong>{{ thermometer_summary.get('satisfied_percent', 0) }}%</strong>
+          <small>{{ thermometer_summary.get('satisfied', 0) }} avaliações com nota 4 ou 5</small>
+        </article>
+
+        <article
+          class="dashboard-kpi-card {% if (thermometer_summary.get('critical', 0) or 0) > 0 %}warning{% endif %}">
+          <span>Clientes críticos</span>
+          <strong>{{ thermometer_summary.get('critical_percent', 0) }}%</strong>
+          <small>{{ thermometer_summary.get('critical', 0) }} avaliações com nota 1 a 3</small>
+        </article>
+      </div>
+
+      <div class="dashboard-grid">
+        <article class="dashboard-panel">
+          <h2>Distribuição por nota</h2>
+          <div class="dashboard-status-chart dashboard-compact-chart" data-dashboard-rating-chart>
+            <p class="dashboard-muted">Carregando gráfico...</p>
+          </div>
+        </article>
+      </div>
+
+      <div class="dashboard-grid">
+        <article class="dashboard-panel">
+          <h2>Categorias mais citadas nas críticas</h2>
+          <div class="dashboard-status-chart dashboard-compact-chart" data-dashboard-rating-categories>
+            <p class="dashboard-muted">Carregando gráfico...</p>
+          </div>
+        </article>
+
+        <article class="dashboard-panel">
+          <h2>Subcategorias mais citadas nas críticas</h2>
+          <div class="dashboard-status-chart dashboard-compact-chart" data-dashboard-rating-subcategories>
+            <p class="dashboard-muted">Carregando gráfico...</p>
+          </div>
+        </article>
+      </div>
+
+      <article class="dashboard-panel">
+        <h2>Avaliações críticas recentes</h2>
+        <div class="dashboard-table-wrap" data-dashboard-critical-ratings>
+          <p class="dashboard-muted">Carregando avaliações...</p>
+        </div>
+      </article>
     </section>
     {% endif %}
   </main>

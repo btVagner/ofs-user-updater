@@ -22,6 +22,8 @@ from services.ofs_os_report_service import (
     validate_redes_report_payload,
     start_resource_sync_job,
     read_resource_sync_job_status,
+    start_thermometer_report_job,
+    validate_thermometer_report_payload,
 )
 
 
@@ -31,8 +33,12 @@ def init_app(app):
 
     def _reports_base_dir():
         return os.path.join(app.instance_path, "reports", "ofs_os")
+
     def _redes_reports_base_dir():
         return os.path.join(app.instance_path, "reports", "redes")
+
+    def _thermometer_reports_base_dir():
+        return os.path.join(app.instance_path, "reports", "termometro_cliente")
     @app.route("/relatorios", methods=["GET"])
     @login_required
     @perm_required("relatorios.acessar")
@@ -43,7 +49,112 @@ def init_app(app):
         """
 
         return render_template("relatorios.html")
+    @app.route("/relatorios/termometro-cliente", methods=["GET"])
+    @login_required
+    @perm_required("relatorios.termometro_acessar")
+    def relatorios_termometro_cliente_page():
+        return render_template(
+            "relatorios_termometro_cliente.html",
+            resource_types=RESOURCE_TYPES,
+            resources_grouped=list_resources_grouped(),
+            activity_types=list_ofs_os_activity_types(),
+        )
 
+    @app.route("/relatorios/termometro-cliente/iniciar", methods=["POST"])
+    @login_required
+    @perm_required("relatorios.termometro_acessar")
+    def relatorios_termometro_cliente_iniciar():
+        payload = request.get_json(silent=True) or {}
+
+        try:
+            config = validate_thermometer_report_payload(payload)
+            job_id = start_thermometer_report_job(
+                base_dir=_thermometer_reports_base_dir(),
+                actor=current_actor(),
+                config=config,
+            )
+
+            return jsonify({
+                "ok": True,
+                "jobId": job_id,
+            }), 202
+
+        except ValueError as e:
+            return jsonify({
+                "ok": False,
+                "error": str(e),
+            }), 400
+
+        except Exception as e:
+            return jsonify({
+                "ok": False,
+                "error": f"Erro ao iniciar relatório do termômetro: {e}",
+            }), 500
+
+    @app.route("/relatorios/termometro-cliente/status/<job_id>", methods=["GET"])
+    @login_required
+    @perm_required("relatorios.termometro_acessar")
+    def relatorios_termometro_cliente_status(job_id):
+        job_id = str(job_id or "").strip()
+
+        if not job_id:
+            return jsonify({"ok": False, "error": "job_id inválido"}), 400
+
+        status = read_job_status(_thermometer_reports_base_dir(), job_id)
+
+        if not status:
+            return jsonify({
+                "ok": False,
+                "error": "Relatório do termômetro não encontrado.",
+            }), 404
+
+        return jsonify({
+            "ok": True,
+            "job": status,
+        }), 200
+
+    @app.route("/relatorios/termometro-cliente/download/<job_id>", methods=["GET"])
+    @login_required
+    @perm_required("relatorios.termometro_acessar")
+    def relatorios_termometro_cliente_download(job_id):
+        job_id = str(job_id or "").strip()
+
+        status = read_job_status(_thermometer_reports_base_dir(), job_id)
+        if not status:
+            flash("Relatório do termômetro não encontrado.", "danger")
+            return redirect(url_for("relatorios_termometro_cliente_page"))
+
+        if status.get("status") != "completed":
+            flash("Relatório do termômetro ainda não está concluído.", "danger")
+            return redirect(url_for("relatorios_termometro_cliente_page"))
+
+        xlsx_path = get_xlsx_path(_thermometer_reports_base_dir(), job_id)
+        if not os.path.exists(xlsx_path):
+            flash("Arquivo XLSX não encontrado. Será necessário extrair novamente.", "danger")
+            return redirect(url_for("relatorios_termometro_cliente_page"))
+
+        return send_file(
+            xlsx_path,
+            as_attachment=True,
+            download_name=status.get("filename") or f"relatorio_termometro_cliente_{job_id}.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    @app.route("/relatorios/termometro-cliente/descartar/<job_id>", methods=["POST"])
+    @login_required
+    @perm_required("relatorios.termometro_acessar")
+    def relatorios_termometro_cliente_descartar(job_id):
+        job_id = str(job_id or "").strip()
+
+        try:
+            discard_job(_thermometer_reports_base_dir(), job_id)
+            return jsonify({"ok": True}), 200
+
+        except Exception as e:
+            return jsonify({
+                "ok": False,
+                "error": f"Erro ao descartar relatório: {e}",
+            }), 500
     @app.route("/relatorios/ofs-os", methods=["GET"])
     @login_required
     @perm_required("relatorios.acessar")

@@ -243,7 +243,299 @@ FIELD_CHOICES = [
     },
 ]
 FIELD_MAP = {f["key"]: f for f in FIELD_CHOICES}
+THERMOMETER_API_FIELDS = [
+    "activityId",
+    "apptNumber",
+    "XA_AV_CLI",
+    "XA_AV_CLI_CAT",
+    "XA_AV_CLI_SUB_CAT",
+    "XA_AV_CLI_CON",
+    "city",
+    "resourceId",
+    "timeSlot",
+    "activityType",
+    "XA_TSK_NOT",
+    "date",
+    "XA_REQ_CRE_DAT",
+    "status",
+]
 
+THERMOMETER_HEADERS = [
+    "Código da OS",
+    "Avaliação do cliente",
+    "Categoria da avaliação",
+    "Subcategoria da avaliação",
+    "Conclusão da avaliação",
+    "Cidade",
+    "Nome do técnico",
+    "Turno",
+    "Tipo de atividade",
+    "Observações finais",
+    "Data",
+    "Data da criação da OS",
+]
+
+
+def validate_thermometer_report_payload(payload: dict) -> dict:
+    date_from = str(payload.get("dateFrom") or "").strip()
+    date_to = str(payload.get("dateTo") or "").strip()
+
+    _validate_dates(date_from, date_to)
+    resource_ids = _validate_resources(payload.get("resources") or [])
+    activity_types = _validate_activity_types(payload.get("activityTypes") or [])
+
+    allowed_codes = _valid_activity_type_codes_by_category({"customer_home"})
+    invalid = [
+        code for code in activity_types
+        if code not in allowed_codes
+    ]
+
+    if invalid:
+        raise ValueError(
+            "O relatório do termômetro permite apenas tipos de atividade B2C/casa cliente."
+        )
+
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "resources": resource_ids,
+        "statuses": STATUS_OPTIONS,
+        "activity_types": activity_types,
+        "fields": THERMOMETER_API_FIELDS,
+    }
+
+
+def _has_customer_rating(item: dict) -> bool:
+    value = str(item.get("XA_AV_CLI") or "").strip()
+    return value in {"1", "2", "3", "4", "5"}
+
+
+def _thermometer_conclusion(value):
+    value = str(value or "").strip()
+    if value == "1":
+        return "Concluída"
+    return value
+
+
+def _fetch_thermometer_activities(client: OFSClient, config: dict, base_dir: str, job_id: str, status_payload: dict) -> List[dict]:
+    url = f"{client.base_url}/activities/"
+    headers = {"Accept": "application/json"}
+    resources_param = ",".join(config["resources"])
+    status_query = _build_or_equals_query("status", config["statuses"])
+    activity_type_query = _build_or_equals_query("activityType", config["activity_types"])
+    combined_query = f"{status_query} and {activity_type_query}"
+
+    all_items = []
+    seen_activity_ids = set()
+    date_list = list(_iter_date_strings(config["date_from"], config["date_to"]))
+    total_days = len(date_list)
+
+    for day_index, day in enumerate(date_list, start=1):
+        offset = 0
+        page = 1
+
+        while True:
+            params = [
+                ("dateFrom", day),
+                ("dateTo", day),
+                ("resources", resources_param),
+                ("q", combined_query),
+                ("fields", ",".join(THERMOMETER_API_FIELDS)),
+                ("limit", str(API_LIMIT)),
+                ("offset", str(offset)),
+            ]
+
+            status_payload.update({
+                "status": "running",
+                "phase": f"Consultando termômetro - {day} - página {page}",
+                "rows_so_far": len(all_items),
+                "current_day": day,
+                "current_day_index": day_index,
+                "total_days": total_days,
+                "offset": offset,
+                "page": page,
+            })
+            _write_job_status(base_dir, job_id, status_payload)
+
+            resp = requests.get(
+                url,
+                headers=headers,
+                params=params,
+                auth=client.auth,
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+
+            data = resp.json()
+            items = _normalize_items_payload(data)
+
+            if not items:
+                break
+
+            for item in items:
+                activity_id = str(item.get("activityId") or "").strip()
+
+                if activity_id:
+                    if activity_id in seen_activity_ids:
+                        continue
+                    seen_activity_ids.add(activity_id)
+
+                if _has_customer_rating(item):
+                    all_items.append(item)
+
+            has_more = bool(data.get("hasMore")) if isinstance(data, dict) else False
+            if not has_more:
+                break
+
+            offset += len(items)
+            page += 1
+
+    return all_items
+
+
+def _build_thermometer_xlsx(rows: List[dict], output_path: str):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Termômetro Cliente"
+    ws.append(THERMOMETER_HEADERS)
+
+    resource_name_map = _load_resource_name_map()
+    activity_type_label_map = _load_activity_type_label_map()
+
+    for item in rows:
+        resource_id = str(item.get("resourceId") or "").strip()
+        activity_type = str(item.get("activityType") or "").strip()
+
+        ws.append([
+            item.get("apptNumber") or "",
+            item.get("XA_AV_CLI") or "",
+            item.get("XA_AV_CLI_CAT") or "",
+            item.get("XA_AV_CLI_SUB_CAT") or "",
+            _thermometer_conclusion(item.get("XA_AV_CLI_CON")),
+            item.get("city") or "",
+            resource_name_map.get(resource_id, "Técnico não encontrado na base"),
+            item.get("timeSlot") or "",
+            activity_type_label_map.get(activity_type, activity_type),
+            item.get("XA_TSK_NOT") or "",
+            item.get("date") or "",
+            item.get("XA_REQ_CRE_DAT") or "",
+        ])
+
+    header_fill = PatternFill("solid", fgColor="1F4E78")
+    header_font = Font(color="FFFFFF", bold=True)
+    thin = Side(style="thin", color="D9E2F3")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+
+    for row in ws.iter_rows(min_row=2):
+        for cell in row:
+            cell.border = border
+            cell.alignment = Alignment(vertical="top")
+
+    ws.freeze_panes = "A2"
+    xlsx_auto_width(ws)
+    wb.save(output_path)
+
+
+def _run_thermometer_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
+    filename = f"relatorio_termometro_cliente_{config['date_from']}_{config['date_to']}_{job_id[:8]}.xlsx"
+
+    status_payload = {
+        "status": "running",
+        "phase": "Iniciando extração do termômetro",
+        "created_at": _now_iso(),
+        "finished_at": None,
+        "rows_so_far": 0,
+        "total_rows": 0,
+        "filename": filename,
+        "dateFrom": config["date_from"],
+        "dateTo": config["date_to"],
+        "resources": config["resources"],
+        "error": None,
+    }
+
+    _write_job_status(base_dir, job_id, status_payload)
+
+    try:
+        client = OFSClient()
+        rows = _fetch_thermometer_activities(client, config, base_dir, job_id, status_payload)
+
+        status_payload.update({
+            "status": "running",
+            "phase": "Gerando XLSX",
+            "rows_so_far": len(rows),
+            "total_rows": len(rows),
+        })
+        _write_job_status(base_dir, job_id, status_payload)
+
+        output_path = _job_xlsx_path(base_dir, job_id)
+        _build_thermometer_xlsx(rows, output_path)
+
+        status_payload.update({
+            "status": "completed",
+            "phase": "Relatório do termômetro concluído",
+            "finished_at": _now_iso(),
+            "rows_so_far": len(rows),
+            "total_rows": len(rows),
+            "download_ready": True,
+        })
+        _write_job_status(base_dir, job_id, status_payload)
+
+        audit_log(
+            actor_user_id=actor.get("id"),
+            actor_username=actor.get("username"),
+            module="relatorios",
+            action="finish_thermometer_report",
+            entity_type="report",
+            entity_ref=job_id,
+            summary="Concluiu relatório do Termômetro do Cliente",
+            meta={
+                "dateFrom": config["date_from"],
+                "dateTo": config["date_to"],
+                "resources": config["resources"],
+                "total_rows": len(rows),
+                "filename": filename,
+            },
+        )
+
+    except Exception as e:
+        status_payload.update({
+            "status": "failed",
+            "phase": "Falha na extração do termômetro",
+            "finished_at": _now_iso(),
+            "error": str(e),
+        })
+        _write_job_status(base_dir, job_id, status_payload)
+
+
+def start_thermometer_report_job(base_dir: str, actor: dict, config: dict) -> str:
+    _ensure_dir(base_dir)
+    job_id = uuid.uuid4().hex
+
+    _write_job_status(base_dir, job_id, {
+        "status": "queued",
+        "phase": "Relatório do termômetro na fila",
+        "created_at": _now_iso(),
+        "finished_at": None,
+        "rows_so_far": 0,
+        "total_rows": 0,
+        "filename": None,
+        "error": None,
+    })
+
+    thread = threading.Thread(
+        target=_run_thermometer_report_job,
+        args=(base_dir, job_id, actor, config),
+        daemon=True,
+    )
+    thread.start()
+
+    return job_id
 def _field_allowed_for_user(
     field_config: dict,
     can_view_extra_fields: bool = False,

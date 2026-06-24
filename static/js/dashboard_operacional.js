@@ -24,6 +24,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const btnSelectRedes = document.querySelector("[data-dashboard-select-redes]");
     const unlockUrl = root.dataset.unlockUrl;
     const canUnlock = root.dataset.canUnlock === "1";
+    const ratingChart = document.querySelector("[data-dashboard-rating-chart]");
+    const ratingCategoriesChart = document.querySelector("[data-dashboard-rating-categories]");
+    const ratingSubcategoriesChart = document.querySelector("[data-dashboard-rating-subcategories]");
+    const criticalRatingsTable = document.querySelector("[data-dashboard-critical-ratings]");
     if (!statusUrl) return;
 
     function setRefreshMessage(type, title, subtitle, progressPercent, progressMessage, showUnlock) {
@@ -201,7 +205,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window.setInterval(checkStatus, 15000);
 
     renderFilteredBlocks();
-
+    renderCustomerThermometer();
     function parsePayload(script) {
         if (!script) return {};
 
@@ -563,6 +567,98 @@ document.addEventListener("DOMContentLoaded", function () {
             entries,
             emptyMessage
         });
+    }
+    function renderCustomerThermometer() {
+        const thermometer = payload.customer_thermometer || {};
+
+        renderRatingDistribution(thermometer.rating_distribution || []);
+        renderThermometerBarList(
+            ratingCategoriesChart,
+            thermometer.categories || [],
+            "category",
+            "Nenhuma categoria encontrada hoje."
+        );
+        renderThermometerBarList(
+            ratingSubcategoriesChart,
+            thermometer.subcategories || [],
+            "subcategory",
+            "Nenhuma subcategoria encontrada hoje."
+        );
+        renderCriticalRatingsTable(thermometer.critical_rows || []);
+    }
+
+    function renderRatingDistribution(rows) {
+        if (!ratingChart) return;
+
+        const entries = rows.map((row) => ({
+            label: `${row.rating} estrela${Number(row.rating) === 1 ? "" : "s"}`,
+            value: Number(row.total || 0)
+        }));
+
+        renderBarChart(ratingChart, {
+            total: entries.reduce((sum, item) => sum + item.value, 0),
+            totalLabel: "avaliações hoje",
+            entries,
+            emptyMessage: "Nenhuma avaliação encontrada hoje."
+        });
+    }
+
+    function renderThermometerBarList(target, rows, labelKey, emptyMessage) {
+        if (!target) return;
+
+        const entries = rows.map((row) => {
+            const critical = Number(row.critical || 0);
+            const total = Number(row.total || 0);
+            const suffix = critical > 0 ? ` - ${critical} crítica${critical === 1 ? "" : "s"}` : "";
+
+            return {
+                label: `${row[labelKey] || "Não informado"}${suffix}`,
+                value: total
+            };
+        });
+
+        renderBarChart(target, {
+            total: entries.reduce((sum, item) => sum + item.value, 0),
+            totalLabel: "citações hoje",
+            entries,
+            emptyMessage
+        });
+    }
+
+    function renderCriticalRatingsTable(rows) {
+        if (!criticalRatingsTable) return;
+
+        if (!rows.length) {
+            criticalRatingsTable.innerHTML = `<p class="dashboard-muted">Nenhuma avaliação crítica encontrada hoje.</p>`;
+            return;
+        }
+
+        criticalRatingsTable.innerHTML = `
+                <table class="dashboard-table dashboard-rating-table">
+                    <thead>
+                        <tr>
+                            <th>OS</th>
+                            <th>Nota</th>
+                            <th>Categoria</th>
+                            <th>Subcategoria</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows.map((row) => `
+                            <tr>
+                                <td>${escapeHtml(row.apptNumber || "-")}</td>
+                                <td>
+                                    <span class="dashboard-rating-badge rating-${escapeHtml(row.rating || "")}">
+                                        ${escapeHtml(row.rating || "-")}
+                                    </span>
+                                </td>
+                                <td>${escapeHtml(row.category || "-")}</td>
+                                <td>${escapeHtml(row.subcategory || "-")}</td>
+                            </tr>
+                        `).join("")}
+                    </tbody>
+                </table>
+            `;
     }
     document.querySelectorAll("[data-kpi-filter]").forEach((filter) => {
         filter.addEventListener("click", function (event) {
