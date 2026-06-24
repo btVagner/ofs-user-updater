@@ -4,7 +4,7 @@ import threading
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import List
-
+from zoneinfo import ZoneInfo
 import requests
 
 from database.connection import get_connection
@@ -35,10 +35,14 @@ STATUS_OPTIONS = [
 ]
 
 REDES_CODES = {"INF_COR", "INF_PRE", "MAN_COR", "MAN_PRE"}
-
+DASHBOARD_TIMEZONE = os.getenv("DASHBOARD_TIMEZONE", "America/Sao_Paulo")
 
 def _now():
-    return datetime.now()
+    return datetime.now(ZoneInfo(DASHBOARD_TIMEZONE)).replace(tzinfo=None)
+
+
+def _today():
+    return _now().date()
 
 
 def _dt_text(value):
@@ -502,7 +506,7 @@ def _list_from_counter(counter, key_name, total_name="total", limit=None):
 
 
 def _build_payload(rows, activity_maps):
-    today = date.today()
+    today = _today()
     last_week_same_day = today - timedelta(days=7)
     last_7_from = today - timedelta(days=6)
 
@@ -663,7 +667,7 @@ def refresh_dashboard_snapshot():
         activity_maps = _load_activity_type_maps()
         activity_codes = sorted(activity_maps["b2c_codes"].union(activity_maps["redes_codes"]))
 
-        today = date.today()
+        today = _today()
         date_from = _date_text(today - timedelta(days=7))
         date_to = _date_text(today)
 
