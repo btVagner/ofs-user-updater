@@ -1,6 +1,13 @@
 (function () {
   function atualizarStatusOnline() {
-    fetch("/status-online", { cache: "no-store" })
+    const sidebar = document.querySelector(".sidebar");
+    const statusUrl = sidebar ? sidebar.dataset.onlineStatusUrl : "";
+
+    if (!statusUrl) {
+      return;
+    }
+
+    fetch(statusUrl, { cache: "no-store" })
       .then(response => {
         if (!response.ok) {
           throw new Error("Erro ao buscar status online");

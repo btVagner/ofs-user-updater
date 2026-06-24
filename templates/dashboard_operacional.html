@@ -1,0 +1,263 @@
+{% set page_css_files = [] %}
+{% include 'includes/head.html' %}
+
+<body>
+  {% include 'includes/navbar.html' %}
+
+  {% set kpis = payload.get('kpis') or {} %}
+  {% set periods = payload.get('periods') or {} %}
+  {% set activity_options = payload.get('activity_options') or [] %}
+
+  <main id="dashboard-root" class="dashboard-page fade-in" data-status-url="{{ url_for('dashboard_status') }}"
+    data-unlock-url="{{ url_for('dashboard_unlock') }}" data-can-unlock="{{ '1' if is_admin else '0' }}"
+    data-current-updated-at="{{ snapshot.updated_at or '' }}">
+    <section class="dashboard-header">
+      <div>
+        <span class="dashboard-kicker">Visão operacional</span>
+        <h1>Dashboard Operacional</h1>
+        <p>
+          Acompanhe o dia atual, compare com o mesmo dia da semana passada e veja os principais pontos da operação.
+        </p>
+      </div>
+
+      <div class="dashboard-refresh-card" data-dashboard-refresh-card>
+        {% if snapshot.status == 'running' and snapshot.has_payload %}
+        <span class="dashboard-refresh-status running">Atualizando em segundo plano</span>
+        <small>Exibindo última versão disponível.</small>
+        {% elif snapshot.status == 'running' %}
+        <span class="dashboard-refresh-status running">Preparando dashboard</span>
+        <small>A primeira carga está em andamento.</small>
+        {% elif snapshot.status == 'failed' and snapshot.has_payload %}
+        <span class="dashboard-refresh-status failed">Não foi possível atualizar agora</span>
+        <small>Exibindo última versão disponível.</small>
+        {% elif snapshot.status == 'failed' %}
+        <span class="dashboard-refresh-status failed">Falha ao preparar dashboard</span>
+        <small>Verifique a conexão com o OFS e a tabela de snapshot.</small>
+        {% else %}
+        <span class="dashboard-refresh-status">Dados atualizados</span>
+        <small>{{ snapshot.updated_at or '-' }}</small>
+        {% endif %}
+      </div>
+    </section>
+
+    <div class="dashboard-new-data hidden" data-dashboard-new-data>
+      <span>Novos dados disponíveis.</span>
+      <button type="button" data-dashboard-reload>Atualizar tela</button>
+    </div>
+
+    {% if not snapshot.has_payload %}
+    <section class="dashboard-empty-state">
+      <h2>Preparando dashboard...</h2>
+      <p>
+        A primeira consulta ao OFS está em andamento. Esta tela vai avisar quando os dados estiverem disponíveis.
+      </p>
+    </section>
+    {% else %}
+    <section class="dashboard-period">
+      <span>Hoje: {{ periods.get('today') or '-' }}</span>
+      <span>Comparativo: {{ periods.get('same_weekday_last_week') or '-' }}</span>
+      <span>Últimos 7 dias: {{ periods.get('last_7_days_from') or '-' }} até {{ periods.get('last_7_days_to') or '-'
+        }}</span>
+    </section>
+
+    <section class="dashboard-kpi-shell">
+      <div class="dashboard-kpi-shell-header">
+        <h2>Sucesso</h2>
+
+        <div class="dashboard-kpi-filter" data-kpi-filter="success">
+          <button type="button" class="active" data-kpi-group="all">Todos</button>
+          <button type="button" data-kpi-group="b2c">B2C</button>
+          <button type="button" data-kpi-group="redes">B2B/Redes</button>
+        </div>
+      </div>
+
+      <div class="dashboard-kpi-grid dashboard-kpi-grid-compact">
+        <article class="dashboard-kpi-card success" data-kpi-card="success" data-group="b2c">
+          <span>B2C concluídas hoje</span>
+          <strong>{{ kpis.get('b2c_completed_today', 0) }}</strong>
+          <small>Casa cliente, sem retirada</small>
+        </article>
+
+        <article class="dashboard-kpi-card success" data-kpi-card="success" data-group="redes">
+          <span>Redes/B2B realizadas hoje</span>
+          <strong>{{ kpis.get('redes_completed_today', 0) }}</strong>
+          <small>INF/MAN corretiva e preventiva</small>
+        </article>
+
+        <article class="dashboard-kpi-card {% if (kpis.get('b2c_variation_percent', 0) or 0) < 0 %}warning{% endif %}"
+          data-kpi-card="success" data-group="b2c">
+          <span>B2C vs semana passada</span>
+          <strong>{{ kpis.get('b2c_variation_percent', 0) }}%</strong>
+          <small>{{ kpis.get('b2c_completed_last_week_same_day', 0) }} no mesmo dia anterior</small>
+        </article>
+
+        <article class="dashboard-kpi-card {% if (kpis.get('redes_variation_percent', 0) or 0) < 0 %}warning{% endif %}"
+          data-kpi-card="success" data-group="redes">
+          <span>Redes vs semana passada</span>
+          <strong>{{ kpis.get('redes_variation_percent', 0) }}%</strong>
+          <small>{{ kpis.get('redes_completed_last_week_same_day', 0) }} no mesmo dia anterior</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="dashboard-kpi-shell dashboard-kpi-shell-danger">
+      <div class="dashboard-kpi-shell-header">
+        <h2>Improdutivas</h2>
+
+        <div class="dashboard-kpi-filter" data-kpi-filter="notdone">
+          <button type="button" class="active" data-kpi-group="all">Todos</button>
+          <button type="button" data-kpi-group="b2c">B2C</button>
+          <button type="button" data-kpi-group="redes">B2B/Redes</button>
+        </div>
+      </div>
+
+      <div class="dashboard-kpi-grid dashboard-kpi-grid-compact">
+        <article class="dashboard-kpi-card warning" data-kpi-card="notdone" data-group="b2c">
+          <span>B2C improdutivas hoje</span>
+          <strong>{{ kpis.get('b2c_notdone_today', 0) }}</strong>
+          <small>Atividades notdone casa cliente</small>
+        </article>
+
+        <article class="dashboard-kpi-card warning" data-kpi-card="notdone" data-group="redes">
+          <span>Redes/B2B improdutivas hoje</span>
+          <strong>{{ kpis.get('redes_notdone_today', 0) }}</strong>
+          <small>Atividades notdone de Redes</small>
+        </article>
+
+        <article
+          class="dashboard-kpi-card {% if (kpis.get('b2c_notdone_variation_percent', 0) or 0) > 0 %}warning{% endif %}"
+          data-kpi-card="notdone" data-group="b2c">
+          <span>B2C improdutivas vs semana passada</span>
+          <strong>{{ kpis.get('b2c_notdone_variation_percent', 0) }}%</strong>
+          <small>{{ kpis.get('b2c_notdone_last_week_same_day', 0) }} no mesmo dia anterior</small>
+        </article>
+
+        <article
+          class="dashboard-kpi-card {% if (kpis.get('redes_notdone_variation_percent', 0) or 0) > 0 %}warning{% endif %}"
+          data-kpi-card="notdone" data-group="redes">
+          <span>Redes improdutivas vs semana passada</span>
+          <strong>{{ kpis.get('redes_notdone_variation_percent', 0) }}%</strong>
+          <small>{{ kpis.get('redes_notdone_last_week_same_day', 0) }} no mesmo dia anterior</small>
+        </article>
+      </div>
+    </section>
+    <section class="dashboard-grid two-cols">
+      <article class="dashboard-panel">
+        <h2>Tipos B2C hoje</h2>
+        <div class="dashboard-status-chart dashboard-compact-chart" data-dashboard-b2c-types-chart>
+          <p class="dashboard-muted">Carregando gráfico...</p>
+        </div>
+      </article>
+
+      <article class="dashboard-panel">
+        <h2>Tipos Redes/B2B hoje</h2>
+        <div class="dashboard-status-chart dashboard-compact-chart" data-dashboard-redes-types-chart>
+          <p class="dashboard-muted">Carregando gráfico...</p>
+        </div>
+      </article>
+    </section>
+
+    <section class="dashboard-filter-scope">
+      <div class="dashboard-filter-scope-header">
+        <div>
+          <span class="dashboard-filter-scope-kicker">Área filtrável</span>
+          <h2>Filtros aplicados aos gráficos abaixo</h2>
+          <p>
+            Selecione os tipos de serviço que devem entrar em status, evolução e top cidades.
+          </p>
+        </div>
+      </div>
+
+      <details class="dashboard-filter-panel">
+        <summary>
+          <span>Tipos de serviço</span>
+          <strong data-dashboard-filter-count>Todos selecionados</strong>
+        </summary>
+
+        <div class="dashboard-filter-body">
+          <div class="dashboard-filter-toolbar">
+            <input type="search" placeholder="Buscar tipo de serviço..." data-dashboard-filter-search>
+
+            <div class="dashboard-filter-actions">
+              <button type="button" data-dashboard-select-all>Todos</button>
+              <button type="button" data-dashboard-select-b2c>B2C</button>
+              <button type="button" data-dashboard-select-redes>B2B/Redes</button>
+              <button type="button" data-dashboard-clear-all>Limpar</button>
+            </div>
+          </div>
+          <div class="dashboard-type-filter dashboard-type-filter-split" data-dashboard-type-filter>
+            <div class="dashboard-type-column">
+              <div class="dashboard-type-column-title">
+                <span>B2C</span>
+              </div>
+
+              <div class="dashboard-type-column-list">
+                {% for item in activity_options %}
+                {% if item.group == 'b2c' %}
+                <label class="dashboard-type-chip" data-group="{{ item.group }}">
+                  <input type="checkbox" value="{{ item.code }}" checked>
+                  <span>{{ item.label }}</span>
+                </label>
+                {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="dashboard-type-column">
+              <div class="dashboard-type-column-title">
+                <span>B2B / Redes</span>
+              </div>
+
+              <div class="dashboard-type-column-list">
+                {% for item in activity_options %}
+                {% if item.group == 'redes' %}
+                <label class="dashboard-type-chip" data-group="{{ item.group }}">
+                  <input type="checkbox" value="{{ item.code }}" checked>
+                  <span>{{ item.label }}</span>
+                </label>
+                {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <section class="dashboard-grid two-cols">
+        <article class="dashboard-panel">
+          <h2>Atividades por status hoje</h2>
+          <div class="dashboard-status-chart" data-dashboard-status-chart>
+            <p class="dashboard-muted">Carregando gráfico...</p>
+          </div>
+        </article>
+
+        <article class="dashboard-panel">
+          <h2>Evolução últimos 7 dias</h2>
+          <div class="dashboard-line-chart" data-dashboard-line-chart>
+            <p class="dashboard-muted">Carregando gráfico...</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="dashboard-grid two-cols">
+        <article class="dashboard-panel">
+          <h2>Top cidades B2C hoje</h2>
+          <div class="dashboard-status-chart dashboard-compact-chart" data-dashboard-b2c-cities-chart>
+            <p class="dashboard-muted">Carregando gráfico...</p>
+          </div>
+        </article>
+
+        <article class="dashboard-panel">
+          <h2>Top cidades Redes/B2B hoje</h2>
+          <div class="dashboard-status-chart dashboard-compact-chart" data-dashboard-redes-cities-chart>
+            <p class="dashboard-muted">Carregando gráfico...</p>
+          </div>
+        </article>
+      </section>
+    </section>
+    {% endif %}
+  </main>
+
+  <script id="dashboard-payload" type="application/json">{{ payload|tojson }}</script>
+  <script defer src="{{ url_for('static', filename='js/dashboard_operacional.js') }}"></script>
+  {% include 'includes/footer.html' %}

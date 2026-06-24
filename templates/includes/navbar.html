@@ -1,7 +1,8 @@
-<nav class="sidebar">
+<nav class="sidebar" data-online-status-url="{{ url_for('status_online') }}">
   <div class="sidebar-top">
     <div class="sidebar-logo">
-      <a href="{{ url_for('home') }}" class="logo">OFS Painel</a>
+      <a href="{{ url_for('home') if has_perm('dashboard.operacional_acessar') else url_for('menu') }}" class="logo">OFS
+        Painel</a>
       <span class="sidebar-logo-subtitle">Operações e administração</span>
     </div>
 
@@ -21,7 +22,14 @@
     <div class="sidebar-section">
       <span class="sidebar-section-title">Principal</span>
 
+      {% if has_perm('dashboard.operacional_acessar') %}
       <a href="{{ url_for('home') }}" class="sidebar-link {% if request.endpoint == 'home' %}active{% endif %}">
+        <span class="sidebar-icon">D</span>
+        <span class="sidebar-text">Dashboard</span>
+      </a>
+      {% endif %}
+
+      <a href="{{ url_for('menu') }}" class="sidebar-link {% if request.endpoint == 'menu' %}active{% endif %}">
         <span class="sidebar-icon">M</span>
         <span class="sidebar-text">Menu</span>
       </a>
