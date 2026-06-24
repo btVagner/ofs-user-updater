@@ -1,4 +1,5 @@
-<nav class="sidebar" data-online-status-url="{{ url_for('status_online') }}">
+<nav class="sidebar" data-online-status-url="{{ url_for('status_online') }}"
+  data-online-users-url="{{ url_for('status_online_usuarios') }}">
   <div class="sidebar-top">
     <div class="sidebar-logo">
       <a href="{{ url_for('home') if has_perm('dashboard.operacional_acessar') else url_for('menu') }}" class="logo">OFS
@@ -8,10 +9,18 @@
 
     {% if session.tipo_id == 1 %}
     <div class="sidebar-status-card">
-      <span class="sidebar-section-title">Status</span>
-      <div class="online-indicator">
-        <span class="online-dot"></span>
-        <span class="online-text">{{ usuarios_online_count or 0 }} online</span>
+      <button type="button" class="online-indicator" data-online-toggle aria-expanded="false">
+        <span class="sidebar-icon online-sidebar-icon">
+          <span class="online-dot"></span>
+        </span>
+        <span class="sidebar-text online-text">{{ usuarios_online_count or 0 }} online</span>
+      </button>
+
+      <div class="online-users-popover hidden" data-online-popover>
+        <div class="online-users-title">Usuários online</div>
+        <div class="online-users-list" data-online-users-list>
+          <div class="online-users-empty">Carregando...</div>
+        </div>
       </div>
     </div>
     {% endif %}

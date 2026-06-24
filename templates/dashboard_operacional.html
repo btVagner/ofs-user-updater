@@ -88,14 +88,14 @@
           data-kpi-card="success" data-group="b2c">
           <span>B2C vs semana passada</span>
           <strong>{{ kpis.get('b2c_variation_percent', 0) }}%</strong>
-          <small>{{ kpis.get('b2c_completed_last_week_same_day', 0) }} no mesmo dia anterior</small>
+          <small>{{ kpis.get('b2c_completed_last_week_same_day', 0) }} no mesmo dia até {{ periods.get('comparison_until_time') or '-' }}</small>
         </article>
 
         <article class="dashboard-kpi-card {% if (kpis.get('redes_variation_percent', 0) or 0) < 0 %}warning{% endif %}"
           data-kpi-card="success" data-group="redes">
           <span>Redes vs semana passada</span>
           <strong>{{ kpis.get('redes_variation_percent', 0) }}%</strong>
-          <small>{{ kpis.get('redes_completed_last_week_same_day', 0) }} no mesmo dia anterior</small>
+          <small>{{ kpis.get('redes_completed_last_week_same_day', 0) }} no mesmo dia até {{ periods.get('comparison_until_time') or '-' }}</small>
         </article>
       </div>
     </section>
@@ -129,7 +129,7 @@
           data-kpi-card="notdone" data-group="b2c">
           <span>B2C improdutivas vs semana passada</span>
           <strong>{{ kpis.get('b2c_notdone_variation_percent', 0) }}%</strong>
-          <small>{{ kpis.get('b2c_notdone_last_week_same_day', 0) }} no mesmo dia anterior</small>
+          <small>{{ kpis.get('b2c_notdone_last_week_same_day', 0) }} no mesmo dia até {{ periods.get('comparison_until_time') or '-' }}</small>
         </article>
 
         <article
@@ -137,7 +137,7 @@
           data-kpi-card="notdone" data-group="redes">
           <span>Redes improdutivas vs semana passada</span>
           <strong>{{ kpis.get('redes_notdone_variation_percent', 0) }}%</strong>
-          <small>{{ kpis.get('redes_notdone_last_week_same_day', 0) }} no mesmo dia anterior</small>
+          <small>{{ kpis.get('redes_notdone_last_week_same_day', 0) }} no mesmo dia até {{ periods.get('comparison_until_time') or '-' }}</small>
         </article>
       </div>
     </section>

@@ -378,6 +378,7 @@ def _fetch_dashboard_activities(date_from: str, date_to: str, activity_codes: Li
         "resourceId",
         "city",
         "date",
+        "endTime",
     ]
 
     q = (
@@ -465,7 +466,31 @@ def _variation_percent(today_total, last_week_total):
 
     return round(((today_total - last_week_total) / last_week_total) * 100, 1)
 
-def _count_by_status(rows, date_value, allowed_codes, status_value):
+def _parse_ofs_datetime(value):
+    value = str(value or "").strip()
+    if not value:
+        return None
+
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(value[:19], fmt)
+        except ValueError:
+            continue
+
+    return None
+
+
+def _item_finished_until_time(item, until_time):
+    if until_time is None:
+        return True
+
+    end_dt = _parse_ofs_datetime(item.get("endTime"))
+    if not end_dt:
+        return False
+
+    return end_dt.time() <= until_time
+
+def _count_by_status(rows, date_value, allowed_codes, status_value, until_time=None):
     total = 0
     status_value = str(status_value or "").strip().lower()
 
@@ -476,21 +501,16 @@ def _count_by_status(rows, date_value, allowed_codes, status_value):
             continue
         if str(item.get("activityType") or "").strip() not in allowed_codes:
             continue
+        if not _item_finished_until_time(item, until_time):
+            continue
 
         total += 1
 
     return total
-def _count_completed(rows, date_value, allowed_codes):
-    total = 0
-    for item in rows:
-        if str(item.get("date") or "").strip() != date_value:
-            continue
-        if str(item.get("status") or "").strip().lower() != "completed":
-            continue
-        if str(item.get("activityType") or "").strip() not in allowed_codes:
-            continue
-        total += 1
-    return total
+
+
+def _count_completed(rows, date_value, allowed_codes, until_time=None):
+    return _count_by_status(rows, date_value, allowed_codes, "completed", until_time)
 
 
 def _list_from_counter(counter, key_name, total_name="total", limit=None):
@@ -506,7 +526,10 @@ def _list_from_counter(counter, key_name, total_name="total", limit=None):
 
 
 def _build_payload(rows, activity_maps):
-    today = _today()
+    now = _now()
+    today = now.date()
+    comparison_until_time = now.time().replace(microsecond=0)
+    comparison_until_text = now.strftime("%H:%M")
     last_week_same_day = today - timedelta(days=7)
     last_7_from = today - timedelta(days=6)
 
@@ -536,6 +559,7 @@ def _build_payload(rows, activity_maps):
             "activityType": activity_type,
             "activityTypeLabel": labels.get(activity_type, activity_type or "Não informado"),
             "city": city,
+            "endTime": str(item.get("endTime") or "").strip(),
             "group": (
                 "redes"
                 if activity_type in redes_codes
@@ -575,13 +599,35 @@ def _build_payload(rows, activity_maps):
 
     b2c_completed_today = _count_completed(rows, today_text, b2c_codes)
     redes_completed_today = _count_completed(rows, today_text, redes_codes)
-    b2c_completed_last_week = _count_completed(rows, last_week_text, b2c_codes)
-    redes_completed_last_week = _count_completed(rows, last_week_text, redes_codes)
+    b2c_completed_last_week = _count_completed(
+        rows,
+        last_week_text,
+        b2c_codes,
+        comparison_until_time,
+    )
+    redes_completed_last_week = _count_completed(
+        rows,
+        last_week_text,
+        redes_codes,
+        comparison_until_time,
+    )
 
     b2c_notdone_today = _count_by_status(rows, today_text, b2c_codes, "notdone")
     redes_notdone_today = _count_by_status(rows, today_text, redes_codes, "notdone")
-    b2c_notdone_last_week = _count_by_status(rows, last_week_text, b2c_codes, "notdone")
-    redes_notdone_last_week = _count_by_status(rows, last_week_text, redes_codes, "notdone")
+    b2c_notdone_last_week = _count_by_status(
+        rows,
+        last_week_text,
+        b2c_codes,
+        "notdone",
+        comparison_until_time,
+    )
+    redes_notdone_last_week = _count_by_status(
+        rows,
+        last_week_text,
+        redes_codes,
+        "notdone",
+        comparison_until_time,
+    )
 
     last_7_days = []
     for day_offset in range(7):
@@ -634,6 +680,7 @@ def _build_payload(rows, activity_maps):
         "periods": {
             "today": today_text,
             "same_weekday_last_week": last_week_text,
+            "comparison_until_time": comparison_until_text,
             "last_7_days_from": _date_text(last_7_from),
             "last_7_days_to": today_text,
         },
