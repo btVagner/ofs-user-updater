@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const typeFilter = document.querySelector("[data-dashboard-type-filter]");
     const statusChart = document.querySelector("[data-dashboard-status-chart]");
     const lineChart = document.querySelector("[data-dashboard-line-chart]");
+    const hourlyLineChart = document.querySelector("[data-dashboard-hourly-line-chart]");
     const b2cTypesChart = document.querySelector("[data-dashboard-b2c-types-chart]");
     const redesTypesChart = document.querySelector("[data-dashboard-redes-types-chart]");
     const b2cCitiesChart = document.querySelector("[data-dashboard-b2c-cities-chart]");
@@ -28,6 +29,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const ratingCategoriesChart = document.querySelector("[data-dashboard-rating-categories]");
     const ratingSubcategoriesChart = document.querySelector("[data-dashboard-rating-subcategories]");
     const criticalRatingsTable = document.querySelector("[data-dashboard-critical-ratings]");
+    const selectedLineComparisonPointsByChart = {
+        full: [],
+        hourly: []
+    };
     if (!statusUrl) return;
 
     function setRefreshMessage(type, title, subtitle, progressPercent, progressMessage, showUnlock) {
@@ -278,7 +283,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (!selectedTypes.size) return [];
 
-        return rows.filter((row) => selectedTypes.has(row.activityType));
+        return rows.filter((row) => {
+            const filterCode = row.activityTypeFilterCode || row.activityType;
+            return selectedTypes.has(filterCode);
+        });
     }
 
     function completionRate(total, completed) {
@@ -297,7 +305,20 @@ document.addEventListener("DOMContentLoaded", function () {
         renderTypeChart(allRows, today, "redes", redesTypesChart, "Nenhum tipo de Redes/B2B encontrado hoje.");
 
         renderStatusChart(rows, today);
-        renderLineChart(rows);
+
+        renderLineChart(rows, lineChart, {
+            chartKey: "full",
+            title: "Evolução últimos 7 dias",
+            emptyMessage: "Nenhuma atividade encontrada para o filtro selecionado."
+        });
+
+        renderLineChart(rows, hourlyLineChart, {
+            chartKey: "hourly",
+            title: "Evolução até o horário atual",
+            emptyMessage: "Nenhuma atividade encontrada até o horário atual.",
+            untilTime: payload.periods ? payload.periods.comparison_until_time : ""
+        });
+
         renderCityChart(rows, today, "b2c", b2cCitiesChart, "Nenhuma cidade B2C encontrada para o filtro.");
         renderCityChart(rows, today, "redes", redesCitiesChart, "Nenhuma cidade de Redes/B2B encontrada para o filtro.");
     }
@@ -407,11 +428,167 @@ document.addEventListener("DOMContentLoaded", function () {
             emptyMessage
         });
     }
-    function renderLineChart(rows) {
-        if (!lineChart) return;
 
+    function renderLineChart(rows, target, options) {
+        if (!target) return;
+
+        options = options || {};
+        const chartKey = options.chartKey || "full";
+        const selectedLineComparisonPoints = selectedLineComparisonPointsByChart[chartKey] || [];
         const periods = payload.periods || {};
         const dates = buildDateRange(periods.last_7_days_from, periods.last_7_days_to);
+        const series = buildEvolutionSeries(rows, dates, options.untilTime);
+
+        const completed = series.completed;
+        const notdone = series.notdone;
+        const maxValue = Math.max(...completed, ...notdone, 1);
+
+        const width = 960;
+        const height = 320;
+        const padX = 58;
+        const padY = 36;
+        const plotWidth = width - padX * 2;
+        const plotHeight = height - padY * 2;
+
+        if (!dates.length || (!completed.some(Boolean) && !notdone.some(Boolean))) {
+            target.innerHTML = `<p class="dashboard-muted">${escapeHtml(options.emptyMessage || "Nenhum dado encontrado.")}</p>`;
+            return;
+        }
+
+        const completedPoints = pointsFor(completed, maxValue, width, height, padX, padY, plotWidth, plotHeight)
+            .map((point, index) => ({
+                ...point,
+                index,
+                date: dates[index],
+                series: "completed",
+                label: "Completed"
+            }));
+
+        const notdonePoints = pointsFor(notdone, maxValue, width, height, padX, padY, plotWidth, plotHeight)
+            .map((point, index) => ({
+                ...point,
+                index,
+                date: dates[index],
+                series: "notdone",
+                label: "Notdone"
+            }));
+
+        const trendPoints = pointsFor(trendValues(completed), maxValue, width, height, padX, padY, plotWidth, plotHeight);
+
+        const selectedPoints = selectedLineComparisonPoints
+            .map((selected) => {
+                const source = selected.series === "notdone" ? notdonePoints : completedPoints;
+                return source[selected.index];
+            })
+            .filter(Boolean);
+
+        const comparisonLine = selectedPoints.length === 2
+            ? buildComparisonLineMarkup(selectedPoints[0], selectedPoints[1])
+            : "";
+
+        const comparisonSummary = selectedPoints.length === 2
+            ? buildLineComparisonSummary(selectedPoints[0], selectedPoints[1])
+            : `<span>Clique em dois pontos do gráfico para comparar Completed e Notdone.</span>`;
+
+        target.innerHTML = `
+        <svg class="dashboard-svg-chart dashboard-svg-chart-clean" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(options.title || "Evolução últimos 7 dias")}">
+            ${[0, 1, 2, 3].map((index) => {
+            const y = padY + (plotHeight / 3) * index;
+            return `<line class="dashboard-grid-line-clean" x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}"></line>`;
+        }).join("")}
+
+            <path class="dashboard-line-clean completed" d="${smoothPath(completedPoints)}"></path>
+            <path class="dashboard-line-clean notdone" d="${smoothPath(notdonePoints)}"></path>
+            <path class="dashboard-line-clean trend" d="${smoothPath(trendPoints)}"></path>
+
+            ${comparisonLine}
+
+            ${completedPoints.map((point) => {
+            const selected = selectedLineComparisonPoints.some((item) => {
+                return item.series === "completed" && item.index === point.index;
+            });
+
+            return `
+                    <circle
+                        class="dashboard-line-point completed ${selected ? "selected" : ""}"
+                        cx="${point.x}"
+                        cy="${point.y}"
+                        r="${selected ? 6 : 5}"
+                        data-point-series="completed"
+                        data-point-index="${point.index}"
+                    ></circle>
+                    <text class="dashboard-point-label-clean" x="${point.x}" y="${Math.max(16, point.y - 12)}" text-anchor="middle">
+                        ${point.value}
+                    </text>
+                `;
+        }).join("")}
+
+            ${notdonePoints.map((point) => {
+            const selected = selectedLineComparisonPoints.some((item) => {
+                return item.series === "notdone" && item.index === point.index;
+            });
+
+            return `
+                    <circle
+                        class="dashboard-line-point notdone ${selected ? "selected" : ""}"
+                        cx="${point.x}"
+                        cy="${point.y}"
+                        r="${selected ? 6 : 4.5}"
+                        data-point-series="notdone"
+                        data-point-index="${point.index}"
+                    ></circle>
+                    <text class="dashboard-point-label-clean notdone" x="${point.x}" y="${Math.min(height - 26, point.y + 20)}" text-anchor="middle">
+                        ${point.value}
+                    </text>
+                `;
+        }).join("")}
+
+            ${dates.map((date, index) => {
+            const x = completedPoints[index] ? completedPoints[index].x : padX;
+            return `<text class="dashboard-axis-label-clean" x="${x}" y="${height - 8}" text-anchor="middle">${date.slice(5)}</text>`;
+        }).join("")}
+        </svg>
+
+        <div class="dashboard-chart-legend dashboard-chart-legend-clean">
+            <span><i class="completed"></i>Completed</span>
+            <span><i class="notdone"></i>Notdone</span>
+            <span><i class="trend"></i>Tendência</span>
+        </div>
+
+        <div class="dashboard-line-comparison">
+            ${comparisonSummary}
+        </div>
+    `;
+
+        target.querySelectorAll("[data-point-index][data-point-series]").forEach((point) => {
+            point.addEventListener("click", function () {
+                const index = Number(point.dataset.pointIndex);
+                const series = point.dataset.pointSeries;
+
+                const currentSelection = selectedLineComparisonPointsByChart[chartKey] || [];
+                const exists = currentSelection.some((item) => {
+                    return item.index === index && item.series === series;
+                });
+
+                if (exists) {
+                    selectedLineComparisonPointsByChart[chartKey] = currentSelection.filter((item) => {
+                        return !(item.index === index && item.series === series);
+                    });
+                } else {
+                    if (currentSelection.length >= 2) {
+                        currentSelection.shift();
+                    }
+
+                    currentSelection.push({ index, series });
+                    selectedLineComparisonPointsByChart[chartKey] = currentSelection;
+                }
+
+                renderLineChart(rows, target, options);
+            });
+        });
+    }
+
+    function buildEvolutionSeries(rows, dates, untilTime) {
         const completedByDate = {};
         const notdoneByDate = {};
 
@@ -422,6 +599,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         rows.forEach((row) => {
             if (!(row.date in completedByDate)) return;
+            if (untilTime && !rowFinishedUntilTime(row, untilTime)) return;
 
             if (row.status === "completed") {
                 completedByDate[row.date] += 1;
@@ -432,54 +610,94 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
 
-        const completed = dates.map((date) => completedByDate[date] || 0);
-        const notdone = dates.map((date) => notdoneByDate[date] || 0);
-        const maxValue = Math.max(...completed, ...notdone, 1);
-        const width = 680;
-        const height = 250;
-        const padX = 42;
-        const padY = 24;
-        const plotWidth = width - padX * 2;
-        const plotHeight = height - padY * 2;
+        return {
+            completed: dates.map((date) => completedByDate[date] || 0),
+            notdone: dates.map((date) => notdoneByDate[date] || 0)
+        };
+    }
 
-        const completedPoints = pointsFor(completed, maxValue, width, height, padX, padY, plotWidth, plotHeight);
-        const notdonePoints = pointsFor(notdone, maxValue, width, height, padX, padY, plotWidth, plotHeight);
-        const trendPoints = pointsFor(trendValues(completed), maxValue, width, height, padX, padY, plotWidth, plotHeight);
+    function rowFinishedUntilTime(row, untilTime) {
+        const endMinutes = parseTimeToMinutes(row.endTime);
+        const untilMinutes = parseTimeToMinutes(untilTime);
 
-        lineChart.innerHTML = `
-            <svg class="dashboard-svg-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Evolução últimos 7 dias">
-                ${[0, 1, 2, 3].map((index) => {
-            const y = padY + (plotHeight / 3) * index;
-            return `<line class="dashboard-grid-line" x1="${padX}" y1="${y}" x2="${width - padX}" y2="${y}"></line>`;
-        }).join("")}
-                <path class="dashboard-line completed" d="${smoothPath(completedPoints)}"></path>
-                <path class="dashboard-line notdone" d="${smoothPath(notdonePoints)}"></path>
-                <path class="dashboard-line trend" d="${smoothPath(trendPoints)}"></path>
-                ${completedPoints.map((point) => `<circle class="dashboard-dot completed" cx="${point.x}" cy="${point.y}" r="4"></circle>`).join("")}
+        if (endMinutes === null || untilMinutes === null) {
+            return false;
+        }
 
-                ${completedPoints.map((point) => `
-                    <text class="dashboard-point-label completed" x="${point.x}" y="${Math.max(14, point.y - 10)}" text-anchor="middle">
-                        ${point.value}
-                    </text>
-                `).join("")}
+        return endMinutes <= untilMinutes;
+    }
 
-                ${notdonePoints.map((point) => `
-                    <text class="dashboard-point-label notdone" x="${point.x}" y="${Math.min(height - 18, point.y + 18)}" text-anchor="middle">
-                        ${point.value}
-                    </text>
-                `).join("")}
+    function parseTimeToMinutes(value) {
+        const text = String(value || "").trim();
+        const match = text.match(/(?:^|\s|T)(\d{2}):(\d{2})(?::\d{2})?/);
 
-                ${dates.map((date, index) => {
-            const x = completedPoints[index] ? completedPoints[index].x : padX;
-            return `<text class="dashboard-axis-label" x="${x}" y="${height - 4}" text-anchor="middle">${date.slice(5)}</text>`;
-        }).join("")}
-            </svg>
-            <div class="dashboard-chart-legend">
-                <span><i class="completed"></i>Completed</span>
-                <span><i class="notdone"></i>Notdone</span>
-                <span><i class="trend"></i>Tendência</span>
-            </div>
-        `;
+        if (!match) return null;
+
+        const hours = Number(match[1]);
+        const minutes = Number(match[2]);
+
+        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+            return null;
+        }
+
+        return hours * 60 + minutes;
+    }
+
+    function buildLineComparisonSummary(firstPoint, secondPoint) {
+        const diff = secondPoint.value - firstPoint.value;
+        const percent = firstPoint.value
+            ? Math.round((diff / firstPoint.value) * 1000) / 10
+            : 0;
+
+        const diffText = diff > 0 ? `+${diff}` : String(diff);
+        const percentText = percent > 0 ? `+${percent}%` : `${percent}%`;
+
+        return `
+        <span>
+            Comparando <strong>${firstPoint.label} ${firstPoint.date.slice(5)}</strong>
+            com <strong>${secondPoint.label} ${secondPoint.date.slice(5)}</strong>:
+            <strong>${diffText}</strong> atividades (${percentText})
+        </span>
+    `;
+    }
+
+    function buildComparisonLineMarkup(firstPoint, secondPoint) {
+        const diff = secondPoint.value - firstPoint.value;
+        const percent = firstPoint.value
+            ? Math.round((diff / firstPoint.value) * 1000) / 10
+            : 0;
+
+        const diffText = diff > 0 ? `+${diff}` : String(diff);
+        const percentText = percent > 0 ? `+${percent}%` : `${percent}%`;
+
+        const label = `${firstPoint.label} x ${secondPoint.label}: ${diffText} (${percentText})`;
+        const midX = (firstPoint.x + secondPoint.x) / 2;
+        const midY = (firstPoint.y + secondPoint.y) / 2;
+        const labelY = Math.max(24, midY - 14);
+        const labelWidth = Math.max(120, label.length * 7 + 24);
+
+        return `
+        <line
+            class="dashboard-comparison-line"
+            x1="${firstPoint.x}"
+            y1="${firstPoint.y}"
+            x2="${secondPoint.x}"
+            y2="${secondPoint.y}"
+        ></line>
+
+        <g class="dashboard-comparison-badge">
+            <rect
+                x="${midX - labelWidth / 2}"
+                y="${labelY - 17}"
+                width="${labelWidth}"
+                height="26"
+                rx="13"
+            ></rect>
+            <text x="${midX}" y="${labelY}" text-anchor="middle">
+                ${escapeHtml(label)}
+            </text>
+        </g>
+    `;
     }
 
     function buildDateRange(dateFrom, dateTo) {

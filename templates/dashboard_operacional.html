@@ -228,7 +228,7 @@
         </div>
       </details>
 
-      <section class="dashboard-grid two-cols">
+      <section class="dashboard-grid">
         <article class="dashboard-panel">
           <h2>Atividades por status hoje</h2>
           <div class="dashboard-status-chart" data-dashboard-status-chart>
@@ -242,8 +242,17 @@
             <p class="dashboard-muted">Carregando gráfico...</p>
           </div>
         </article>
-      </section>
 
+        <article class="dashboard-panel">
+          <h2>Evolução até o horário atual</h2>
+          <p class="dashboard-panel-subtitle">
+            Comparando todos os dias até {{ periods.get('comparison_until_time') or '-' }}.
+          </p>
+          <div class="dashboard-line-chart" data-dashboard-hourly-line-chart>
+            <p class="dashboard-muted">Carregando gráfico...</p>
+          </div>
+        </article>
+      </section>
       <section class="dashboard-grid two-cols">
         <article class="dashboard-panel">
           <h2>Top cidades B2C hoje</h2>

@@ -23,7 +23,9 @@ SNAPSHOT_KEY = "home_dashboard"
 SNAPSHOT_TTL_MINUTES = 15
 RUNNING_STALE_MINUTES = 15
 DEFAULT_RESOURCES = "02"
-
+SUPPORT_ACTIVITY_CODES = {"SUP", "SUP_QUA", "SUP_REP"}
+SUPPORT_ACTIVITY_FILTER_CODE = "SUPORTE"
+SUPPORT_ACTIVITY_LABEL = "Suporte"
 STATUS_OPTIONS = [
     "completed",
     "notdone",
@@ -642,7 +644,22 @@ def _build_customer_thermometer(rows, today_text):
         "subcategories": subcategory_rows[:10],
         "critical_rows": critical_rows[:12],
     }
+def _dashboard_type_filter_code(activity_type):
+    activity_type = str(activity_type or "").strip()
 
+    if activity_type in SUPPORT_ACTIVITY_CODES:
+        return SUPPORT_ACTIVITY_FILTER_CODE
+
+    return activity_type
+
+
+def _dashboard_type_label(activity_type, labels):
+    activity_type = str(activity_type or "").strip()
+
+    if activity_type in SUPPORT_ACTIVITY_CODES:
+        return SUPPORT_ACTIVITY_LABEL
+
+    return labels.get(activity_type, activity_type or "Não informado")
 def _build_payload(rows, activity_maps):
     now = _now()
     today = now.date()
@@ -669,13 +686,16 @@ def _build_payload(rows, activity_maps):
         item_date = str(item.get("date") or "").strip()
         status = str(item.get("status") or "nao_informado").strip().lower() or "nao_informado"
         activity_type = str(item.get("activityType") or "").strip()
+        activity_type_filter_code = _dashboard_type_filter_code(activity_type)
+        activity_type_label = _dashboard_type_label(activity_type, labels)
         city = str(item.get("city") or "Não informado").strip() or "Não informado"
 
         dashboard_rows.append({
             "date": item_date,
             "status": status,
             "activityType": activity_type,
-            "activityTypeLabel": labels.get(activity_type, activity_type or "Não informado"),
+            "activityTypeFilterCode": activity_type_filter_code,
+            "activityTypeLabel": activity_type_label,
             "city": city,
             "endTime": str(item.get("endTime") or "").strip(),
             "apptNumber": str(item.get("apptNumber") or "").strip(),
@@ -701,7 +721,7 @@ def _build_payload(rows, activity_maps):
         today_by_status[status] += 1
 
         if activity_type in b2c_codes:
-            b2c_by_type_today[activity_type] += 1
+            b2c_by_type_today[activity_type_filter_code] += 1
 
         if activity_type in redes_codes:
             redes_by_type_today[activity_type] += 1
@@ -772,7 +792,7 @@ def _build_payload(rows, activity_maps):
     b2c_type_rows = [
         {
             "code": code,
-            "label": labels.get(code, code),
+            "label": SUPPORT_ACTIVITY_LABEL if code == SUPPORT_ACTIVITY_FILTER_CODE else labels.get(code, code),
             "total": total,
         }
         for code, total in b2c_by_type_today.items()
@@ -789,14 +809,23 @@ def _build_payload(rows, activity_maps):
     ]
     redes_type_rows.sort(key=lambda item: item["total"], reverse=True)
 
-    activity_options = [
-        {
-            "code": code,
-            "label": labels.get(code, code),
-            "group": "redes" if code in redes_codes else "b2c",
-        }
-        for code in sorted(b2c_codes.union(redes_codes), key=lambda item: labels.get(item, item))
-    ]
+    activity_option_map = {}
+
+    for code in b2c_codes.union(redes_codes):
+        option_code = _dashboard_type_filter_code(code)
+        option_label = _dashboard_type_label(code, labels)
+
+        if option_code not in activity_option_map:
+            activity_option_map[option_code] = {
+                "code": option_code,
+                "label": option_label,
+                "group": "redes" if code in redes_codes else "b2c",
+            }
+
+    activity_options = sorted(
+        activity_option_map.values(),
+        key=lambda item: item["label"],
+    )
 
     return {
         "generated_at": _dt_text(_now()),

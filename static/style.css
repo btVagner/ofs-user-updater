@@ -2886,7 +2886,7 @@ body.login-page {
 }
 
 .dashboard-chart-legend i.completed {
-    background: #22c55e;
+    background: #d12c6a;
 }
 
 .dashboard-chart-legend i.notdone {
@@ -3163,4 +3163,172 @@ body.login-page {
 .dashboard-rating-badge.rating-5 {
     background: rgba(34, 197, 94, 0.16);
     border-color: rgba(34, 197, 94, 0.30);
+}
+
+.dashboard-svg-chart-clean {
+  width: 100%;
+  min-height: 320px;
+  overflow: visible;
+}
+
+.dashboard-grid-line-clean {
+  stroke: rgba(148, 163, 184, 0.16);
+  stroke-width: 1;
+}
+
+.dashboard-line-clean {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dashboard-line-clean.completed {
+  stroke: #d12c6a;
+  stroke-width: 2.6;
+}
+
+.dashboard-line-clean.notdone {
+  stroke: #f59e0b;
+  stroke-width: 2.2;
+}
+
+.dashboard-line-clean.trend {
+  stroke: #38bdf8;
+  stroke-width: 1.8;
+  stroke-dasharray: 8 10;
+  opacity: 0.8;
+}
+
+.dashboard-line-point {
+  fill: #d12c6a;
+  stroke: #f8fafc;
+  stroke-width: 1.6;
+  cursor: pointer;
+  transition: r 0.15s ease, filter 0.15s ease;
+}
+
+.dashboard-line-point:hover,
+.dashboard-line-point.selected {
+  filter: drop-shadow(0 0 8px rgba(209, 44, 106, 0.65));
+}
+
+.dashboard-comparison-line {
+  stroke: #f8fafc;
+  stroke-width: 2;
+  stroke-dasharray: 6 7;
+  filter: drop-shadow(0 0 7px rgba(209, 44, 106, 0.75));
+  opacity: 0.95;
+}
+
+.dashboard-comparison-badge rect {
+  fill: rgba(209, 44, 106, 0.95);
+  stroke: rgba(248, 250, 252, 0.35);
+  stroke-width: 1;
+  filter: drop-shadow(0 4px 12px rgba(209, 44, 106, 0.35));
+}
+
+.dashboard-comparison-badge text {
+  fill: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  dominant-baseline: middle;
+}
+
+.dashboard-point-label-clean {
+  fill: #dbe3ef;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dashboard-point-label-clean.notdone {
+  fill: #facc15;
+}
+
+.dashboard-axis-label-clean {
+  fill: #9ca3af;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.dashboard-chart-legend-clean {
+  margin-top: 4px;
+}
+
+.dashboard-chart-legend-clean .completed {
+  background: #d12c6a;
+}
+
+.dashboard-line-comparison {
+  margin-top: 10px;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.dashboard-line-comparison strong {
+  color: #f8fafc;
+  font-weight: 700;
+}
+.dashboard-comparison-line {
+  stroke: #f8fafc;
+  stroke-width: 2;
+  stroke-dasharray: 6 7;
+  filter: drop-shadow(0 0 7px rgba(209, 44, 106, 0.75));
+  opacity: 0;
+  animation: dashboardComparisonLineIn 0.45s ease forwards;
+}
+
+.dashboard-comparison-badge {
+  opacity: 0;
+  transform-origin: center;
+  animation: dashboardComparisonBadgeIn 0.35s ease 0.18s forwards;
+}
+
+@keyframes dashboardComparisonLineIn {
+  from {
+    opacity: 0;
+    stroke-dashoffset: 28;
+  }
+
+  to {
+    opacity: 0.95;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes dashboardComparisonBadgeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.dashboard-line-point.completed {
+  fill: #d12c6a;
+}
+
+.dashboard-line-point.notdone {
+  fill: #f59e0b;
+}
+
+.dashboard-line-point.notdone:hover,
+.dashboard-line-point.notdone.selected {
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.65));
+}
+
+.dashboard-chart-legend-clean .completed {
+  background: #d12c6a;
+}
+.dashboard-chart-legend .completed {
+  background: #d12c6a;
+}
+.dashboard-panel-subtitle {
+  margin: 0;
+  padding: 10px 18px 0;
+  color: #9aa4b2;
+  font-size: 0.86rem;
 }
