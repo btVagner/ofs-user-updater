@@ -1,5 +1,6 @@
 from flask import render_template, request, redirect, url_for, flash, session, send_file, jsonify
-from datetime import datetime
+from datetime import datetime, timedelta
+from werkzeug.security import check_password_hash
 from io import StringIO
 import csv
 import os
@@ -269,6 +270,602 @@ def _run_export_usuarios_ofs_job(base_dir: str, job_id: str, actor: dict):
         status_payload["error"] = str(e)
         _write_ofs_users_job_status(base_dir, job_id, status_payload)
 
+def _ensure_cleanup_dir(base_dir: str):
+    Path(base_dir).mkdir(parents=True, exist_ok=True)
+
+
+def _cleanup_job_paths(base_dir: str, job_id: str):
+    return {
+        "status": os.path.join(base_dir, f"{job_id}.json"),
+        "candidates": os.path.join(base_dir, f"{job_id}.candidates.json"),
+        "results": os.path.join(base_dir, f"{job_id}.results.json"),
+        "csv": os.path.join(base_dir, f"{job_id}.csv"),
+    }
+
+
+def _write_cleanup_json(path: str, payload: dict):
+    """
+    Escrita segura de JSON com retry.
+
+    No Windows/OneDrive, os.replace pode falhar com PermissionError
+    quando o arquivo final está sendo lido pelo polling da tela,
+    pelo antivírus ou pela sincronização do OneDrive.
+    """
+    base_dir = os.path.dirname(path)
+
+    if base_dir:
+        Path(base_dir).mkdir(parents=True, exist_ok=True)
+
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
+
+    last_error = None
+
+    for attempt in range(20):
+        tmp_path = f"{path}.{uuid.uuid4().hex}.tmp"
+
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+
+            os.replace(tmp_path, path)
+            return
+
+        except PermissionError as e:
+            last_error = e
+            time.sleep(0.15 + (attempt * 0.03))
+
+        except OSError as e:
+            last_error = e
+            time.sleep(0.15 + (attempt * 0.03))
+
+        finally:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+
+    raise last_error
+
+def _read_cleanup_json(path: str, default=None):
+    """
+    Leitura segura de JSON com retry.
+
+    Evita falha quando a tela consulta o status exatamente no momento
+    em que o worker está substituindo o arquivo.
+    """
+    if not os.path.exists(path):
+        return default
+
+    last_error = None
+
+    for _ in range(10):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+        except json.JSONDecodeError as e:
+            last_error = e
+            time.sleep(0.1)
+
+        except PermissionError as e:
+            last_error = e
+            time.sleep(0.1)
+
+        except OSError as e:
+            last_error = e
+            time.sleep(0.1)
+
+    if default is not None:
+        return default
+
+    raise last_error
+
+def _write_cleanup_status(base_dir: str, job_id: str, payload: dict):
+    _ensure_cleanup_dir(base_dir)
+    paths = _cleanup_job_paths(base_dir, job_id)
+    _write_cleanup_json(paths["status"], payload)
+
+
+def _read_cleanup_status(base_dir: str, job_id: str):
+    paths = _cleanup_job_paths(base_dir, job_id)
+    return _read_cleanup_json(paths["status"])
+
+
+def _write_cleanup_csv(path: str, rows: list, row_type: str = "candidates"):
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f, delimiter=";")
+
+        if row_type == "results":
+            writer.writerow([
+                "login",
+                "name",
+                "status",
+                "lastLoginTime",
+                "userType",
+                "mainResourceId",
+                "delete_user",
+                "inactivate_resource",
+            ])
+
+            for row in rows:
+                writer.writerow([
+                    row.get("login", ""),
+                    row.get("name", ""),
+                    row.get("status", ""),
+                    row.get("lastLoginTime", ""),
+                    row.get("userType", ""),
+                    row.get("mainResourceId", ""),
+                    row.get("delete_user", ""),
+                    row.get("inactivate_resource", ""),
+                ])
+
+            return
+
+        writer.writerow([
+            "login",
+            "name",
+            "status",
+            "lastLoginTime",
+            "userType",
+            "mainResourceId",
+        ])
+
+        for row in rows:
+            writer.writerow([
+                row.get("login", ""),
+                row.get("name", ""),
+                row.get("status", ""),
+                row.get("lastLoginTime", ""),
+                row.get("userType", ""),
+                row.get("mainResourceId", ""),
+            ])
+
+
+def _cleanup_apply_enabled():
+    return os.getenv("OFS_CLEANUP_ENABLE_APPLY", "false").lower() in ("1", "true", "yes", "on")
+
+
+def _cleanup_preview(rows: list, limit: int = 300):
+    return rows[:limit]
+
+def _run_cleanup_simulation_job(base_dir: str, job_id: str, actor: dict, config: dict):
+    paths = _cleanup_job_paths(base_dir, job_id)
+
+    status_payload = {
+        "ok": True,
+        "job_id": job_id,
+        "job_type": "simulation",
+        "status": "running",
+        "phase": "Iniciando simulação",
+        "created_at": _now_iso(),
+        "finished_at": None,
+        "progress_percent": 1,
+        "cutoff_days": config["cutoff_days"],
+        "only_active": config["only_active"],
+        "only_logged_once": config["only_logged_once"],
+        "total_scanned": 0,
+        "candidates": 0,
+        "ignored_without_login": 0,
+        "ignored_inactive": 0,
+        "error": None,
+    }
+
+    try:
+        _write_cleanup_status(base_dir, job_id, status_payload)
+
+        def on_progress(progress):
+            total_scanned = int(progress.get("total_scanned") or 0)
+            candidates = int(progress.get("candidates") or 0)
+
+            status_payload["phase"] = progress.get("phase") or "Processando usuários"
+            status_payload["total_scanned"] = total_scanned
+            status_payload["candidates"] = candidates
+            status_payload["ignored_without_login"] = int(progress.get("ignored_without_login") or 0)
+            status_payload["ignored_inactive"] = int(progress.get("ignored_inactive") or 0)
+
+            estimated = 5 + min(85, total_scanned // 50)
+            status_payload["progress_percent"] = min(90, estimated)
+
+            _write_cleanup_status(base_dir, job_id, status_payload)
+
+        vencidos, meta = find_stale_users(
+            cutoff_days=config["cutoff_days"],
+            only_active=config["only_active"],
+            only_logged_once=config["only_logged_once"],
+            progress_callback=on_progress,
+        )
+
+        status_payload["phase"] = "Gravando prévia"
+        status_payload["progress_percent"] = 92
+        _write_cleanup_status(base_dir, job_id, status_payload)
+
+        _write_cleanup_json(paths["candidates"], vencidos)
+        _write_cleanup_csv(paths["csv"], vencidos, row_type="candidates")
+
+        status_payload.update({
+            "status": "success",
+            "phase": "Simulação concluída",
+            "finished_at": _now_iso(),
+            "progress_percent": 100,
+            "total_scanned": meta.get("total", 0),
+            "candidates": len(vencidos),
+            "ignored_without_login": meta.get("ignored_without_login", 0),
+            "ignored_inactive": meta.get("ignored_inactive", 0),
+            "meta": meta,
+        })
+
+        _write_cleanup_status(base_dir, job_id, status_payload)
+
+        try:
+            audit_log(
+                actor_user_id=actor.get("id"),
+                actor_username=actor.get("username"),
+                module="ofs",
+                action="cleanup_simulation_async",
+                entity_type="ofs_user",
+                summary=(
+                    f"Simulação cleanup OFS: cutoff_days={config['cutoff_days']}, "
+                    f"only_active={config['only_active']}, "
+                    f"only_logged_once={config['only_logged_once']}, "
+                    f"candidates={len(vencidos)}"
+                ),
+                meta={
+                    "job_id": job_id,
+                    "config": config,
+                    "candidates": len(vencidos),
+                    "meta": meta,
+                },
+            )
+        except Exception:
+            pass
+
+    except Exception as e:
+        status_payload["status"] = "error"
+        status_payload["phase"] = "Erro na simulação"
+        status_payload["finished_at"] = _now_iso()
+        status_payload["error"] = str(e)
+        _write_cleanup_status(base_dir, job_id, status_payload)
+
+
+def _run_cleanup_apply_job(
+    base_dir: str,
+    apply_job_id: str,
+    source_job_id: str,
+    actor: dict,
+    candidates: list,
+):
+    apply_paths = _cleanup_job_paths(base_dir, apply_job_id)
+    total = len(candidates or [])
+
+    status_payload = {
+        "ok": True,
+        "job_id": apply_job_id,
+        "source_job_id": source_job_id,
+        "job_type": "application",
+        "status": "running",
+        "phase": "Preparando aplicação",
+        "created_at": _now_iso(),
+        "finished_at": None,
+        "progress_percent": 1,
+        "processed": 0,
+        "total": total,
+        "error": None,
+    }
+
+    try:
+        _cleanup_debug_log(base_dir, apply_job_id, "worker_started", {
+            "source_job_id": source_job_id,
+            "total_candidates": total,
+        })
+
+        _write_cleanup_status(base_dir, apply_job_id, status_payload)
+
+        _cleanup_debug_log(base_dir, apply_job_id, "initial_status_written")
+
+        if not candidates:
+            raise RuntimeError("A simulação não possui usuários candidatos.")
+
+        status_payload["phase"] = f"Aplicando limpeza em {total} usuários"
+        status_payload["progress_percent"] = 5
+        status_payload["processed"] = 0
+        status_payload["total"] = total
+
+        _cleanup_debug_log(base_dir, apply_job_id, "before_write_apply_start_status", {
+            "phase": status_payload["phase"],
+            "total": total,
+        })
+
+        _write_cleanup_status(base_dir, apply_job_id, status_payload)
+
+        _cleanup_debug_log(base_dir, apply_job_id, "apply_start_status_written")
+
+        def on_progress(progress):
+            processed = int(progress.get("processed") or 0)
+
+            status_payload["processed"] = processed
+            status_payload["total"] = total
+            status_payload["phase"] = progress.get("phase") or f"Aplicando limpeza ({processed}/{total})"
+            status_payload["progress_percent"] = (
+                min(99, 5 + round((processed / total) * 94))
+                if total
+                else 99
+            )
+            status_payload["current_login"] = progress.get("login")
+            status_payload["last_delete_user"] = progress.get("delete_user")
+            status_payload["last_inactivate_resource"] = progress.get("inactivate_resource")
+
+            _write_cleanup_status(base_dir, apply_job_id, status_payload)
+
+        _cleanup_debug_log(base_dir, apply_job_id, "before_execute_cleanup")
+
+        results = execute_cleanup(
+            candidates,
+            apply_changes=True,
+            progress_callback=on_progress,
+        )
+
+        _cleanup_debug_log(base_dir, apply_job_id, "after_execute_cleanup", {
+            "results": len(results),
+        })
+
+        _write_cleanup_json(apply_paths["results"], results)
+        _write_cleanup_csv(apply_paths["csv"], results, row_type="results")
+
+        status_payload.update({
+            "status": "success",
+            "phase": "Aplicação concluída",
+            "finished_at": _now_iso(),
+            "progress_percent": 100,
+            "processed": len(results),
+            "total": total,
+            "error": None,
+        })
+
+        _write_cleanup_status(base_dir, apply_job_id, status_payload)
+
+        _cleanup_debug_log(base_dir, apply_job_id, "worker_finished_success")
+
+        try:
+            audit_log(
+                actor_user_id=actor.get("id"),
+                actor_username=actor.get("username"),
+                module="ofs",
+                action="cleanup_async_apply",
+                entity_type="ofs_user",
+                summary=f"Aplicou cleanup OFS: source_job_id={source_job_id}, total={total}",
+                meta={
+                    "apply_job_id": apply_job_id,
+                    "source_job_id": source_job_id,
+                    "total": total,
+                    "results_preview": results[:50],
+                },
+            )
+        except Exception:
+            pass
+
+    except Exception as e:
+        _cleanup_debug_log(base_dir, apply_job_id, "worker_error", {
+            "error": str(e),
+            "error_type": type(e).__name__,
+        })
+
+        status_payload["status"] = "error"
+        status_payload["phase"] = "Erro na aplicação"
+        status_payload["finished_at"] = _now_iso()
+        status_payload["progress_percent"] = 0
+        status_payload["error"] = str(e)
+
+        try:
+            _write_cleanup_status(base_dir, apply_job_id, status_payload)
+        except Exception as write_error:
+            _cleanup_debug_log(base_dir, apply_job_id, "worker_error_status_write_failed", {
+                "error": str(write_error),
+                "error_type": type(write_error).__name__,
+            })
+def _cleanup_unlock_dir(base_dir: str):
+    path = os.path.join(base_dir, "unlock_tokens")
+    Path(path).mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _cleanup_unlock_path(base_dir: str, token: str):
+    return os.path.join(_cleanup_unlock_dir(base_dir), f"{token}.json")
+
+
+def _cleanup_password_hash_from_user_row(row: dict):
+    return row.get("password_hash")
+
+def _verify_password_value(stored_password: str, password: str) -> bool:
+    """
+    Valida senha do painel.
+
+    Suporta:
+    - bcrypt: $2a$ / $2b$ / $2y$
+    - Werkzeug: pbkdf2/scrypt
+    - fallback legado para texto puro, apenas por compatibilidade
+    """
+    if not stored_password or not password:
+        return False
+
+    stored_password = str(stored_password).strip()
+
+    # bcrypt
+    if stored_password.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            import bcrypt
+
+            return bcrypt.checkpw(
+                password.encode("utf-8"),
+                stored_password.encode("utf-8")
+            )
+        except Exception as e:
+            print(f"[cleanup-unlock] bcrypt validation error: {e}")
+            return False
+
+    # Werkzeug generate_password_hash
+    try:
+        if check_password_hash(stored_password, password):
+            return True
+    except Exception:
+        pass
+
+    # Fallback antigo, caso algum usuário tenha senha em texto puro
+    if stored_password == password:
+        return True
+
+    return False
+def _verify_current_user_password(password: str) -> bool:
+    if not password:
+        return False
+
+    actor = current_actor() or {}
+
+    actor_id = actor.get("id")
+    actor_username = (
+        actor.get("username")
+        or actor.get("login")
+        or session.get("username")
+        or session.get("usuario")
+        or session.get("usuario_logado")
+        or session.get("nome_usuario")
+    )
+
+    conn = get_connection()
+    cursor = None
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        row = None
+
+        if actor_id:
+            cursor.execute(
+                """
+                SELECT id, username, password_hash
+                FROM usuarios
+                WHERE id = %s
+                LIMIT 1
+                """,
+                (actor_id,)
+            )
+            row = cursor.fetchone()
+
+        if not row and actor_username:
+            cursor.execute(
+                """
+                SELECT id, username, password_hash
+                FROM usuarios
+                WHERE username = %s
+                LIMIT 1
+                """,
+                (actor_username,)
+            )
+            row = cursor.fetchone()
+
+        if not row:
+            print("[cleanup-unlock] usuário não encontrado para validação de senha")
+            return False
+
+        stored_password = _cleanup_password_hash_from_user_row(row)
+
+        if not stored_password:
+            print("[cleanup-unlock] password_hash vazio")
+            return False
+
+        return _verify_password_value(stored_password, password)
+
+    finally:
+        try:
+            if cursor:
+                cursor.close()
+            conn.close()
+        except Exception:
+            pass
+def _create_cleanup_unlock_token(base_dir: str, actor: dict, page_session_id: str):
+    token = uuid.uuid4().hex
+    expires_at = datetime.now() + timedelta(minutes=30)
+
+    payload = {
+        "token": token,
+        "actor_id": actor.get("id"),
+        "actor_username": actor.get("username"),
+        "page_session_id": page_session_id,
+        "created_at": _now_iso(),
+        "expires_at": expires_at.isoformat(timespec="seconds"),
+    }
+
+    _write_cleanup_json(_cleanup_unlock_path(base_dir, token), payload)
+
+    return token, payload
+
+
+def _validate_cleanup_unlock_token(base_dir: str, token: str, page_session_id: str):
+    if not token or not page_session_id:
+        return False, "Desbloqueio obrigatório para aplicar."
+
+    path = _cleanup_unlock_path(base_dir, token)
+    payload = _read_cleanup_json(path)
+
+    if not payload:
+        return False, "Desbloqueio não encontrado ou expirado."
+
+    actor = current_actor()
+
+    if str(payload.get("actor_id")) != str(actor.get("id")):
+        return False, "Desbloqueio pertence a outro usuário."
+
+    if payload.get("page_session_id") != page_session_id:
+        return False, "Desbloqueio não pertence a esta sessão da tela."
+
+    try:
+        expires_at = datetime.fromisoformat(payload.get("expires_at"))
+    except Exception:
+        return False, "Desbloqueio inválido."
+
+    if datetime.now() > expires_at:
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+
+        return False, "Desbloqueio expirado. Informe a senha novamente."
+
+    return True, None
+
+
+def _revoke_cleanup_unlock_token(base_dir: str, token: str):
+    if not token:
+        return
+
+    path = _cleanup_unlock_path(base_dir, token)
+
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except Exception:
+        pass
+
+def _cleanup_debug_log(base_dir: str, job_id: str, message: str, extra: dict = None):
+    try:
+        _ensure_cleanup_dir(base_dir)
+
+        log_path = os.path.join(base_dir, f"{job_id}.debug.log")
+
+        payload = {
+            "at": _now_iso(),
+            "message": message,
+            "extra": extra or {},
+        }
+
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            f.flush()
+
+    except Exception as e:
+        print(f"[cleanup-debug] falha ao gravar log: {e}")
 def init_app(app):
 
     @app.route("/consultar-usuarios")
@@ -719,94 +1316,296 @@ def init_app(app):
 
         return render_template("criar_tecnicos.html", logs=logs)
 
-    @app.route("/desativar_inativos", methods=["GET", "POST"])
+    @app.route("/desativar_inativos", methods=["GET"])
     @login_required
     @perm_required("ofs.desativar")
     def desativar_inativos():
-        raw_days = (request.values.get("cutoff_days") or "80").strip()
-        cutoff_days = int(raw_days) if raw_days.isdigit() else 80
-
-        only_active = request.values.get("only_active") is not None
-        only_logged_once = request.values.get("only_logged_once") is not None
-
-        vencidos, meta = find_stale_users(
-            cutoff_days=cutoff_days,
-            only_active=only_active,
-            only_logged_once=only_logged_once
+        return render_template(
+            "desativar_inativos.html",
+            cutoff_days=80,
+            only_active=True,
+            only_logged_once=True,
+            apply_unlocked=False,
         )
+    @app.route("/desativar_inativos/desbloquear", methods=["POST"])
+    @login_required
+    @perm_required("ofs.desativar")
+    def desativar_inativos_desbloquear():
+        password = request.form.get("password") or ""
+        page_session_id = request.form.get("page_session_id") or ""
 
-        results = []
-        mode = "SIMULACAO"
+        if not page_session_id:
+            return jsonify({
+                "ok": False,
+                "error": "Sessão da tela inválida. Recarregue a página."
+            }), 400
 
-        if request.method == "POST":
-            apply = request.form.get("apply_changes") == "1"
-
-            results = execute_cleanup(vencidos, apply_changes=apply)
-
-            mode = "APLICACAO" if apply else "SIMULACAO"
-
-            flash(
-                f"{'Aplicado' if apply else 'Simulado'} para {len(vencidos)} usuários.",
-                "success"
-            )
-
+        if not _verify_current_user_password(password):
             actor = current_actor()
 
+            try:
+                audit_log(
+                    actor_user_id=actor.get("id"),
+                    actor_username=actor.get("username"),
+                    module="ofs",
+                    action="cleanup_unlock_failed",
+                    entity_type="ofs_user",
+                    summary="Tentativa inválida de desbloqueio da tela de cleanup OFS",
+                    meta={"page_session_id": page_session_id},
+                )
+            except Exception:
+                pass
+
+            return jsonify({
+                "ok": False,
+                "error": "Senha inválida."
+            }), 403
+
+        base_dir = os.path.join(app.instance_path, "reports", "ofs_users_cleanup")
+        actor = current_actor()
+
+        token, payload = _create_cleanup_unlock_token(
+            base_dir=base_dir,
+            actor=actor,
+            page_session_id=page_session_id,
+        )
+
+        try:
             audit_log(
                 actor_user_id=actor.get("id"),
                 actor_username=actor.get("username"),
                 module="ofs",
-                action="cleanup" if apply else "cleanup_simulation",
+                action="cleanup_unlock_success",
                 entity_type="ofs_user",
-                summary=f"Cleanup OFS: mode={mode}, cutoff_days={cutoff_days}, only_active={only_active}, only_logged_once={only_logged_once}, total={len(vencidos)}",
+                summary="Desbloqueou aplicação da tela de cleanup OFS",
                 meta={
-                    "mode": mode,
-                    "cutoff_days": cutoff_days,
-                    "only_active": only_active,
-                    "only_logged_once": only_logged_once,
-                    "total": len(vencidos),
+                    "page_session_id": page_session_id,
+                    "expires_at": payload.get("expires_at"),
                 },
             )
+        except Exception:
+            pass
 
-        if request.values.get("export") == "1":
+        return jsonify({
+            "ok": True,
+            "unlock_token": token,
+            "expires_at": payload.get("expires_at"),
+        })
 
-            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            path = f"/tmp/users_vencidos_{stamp}.csv"
+    @app.route("/desativar_inativos/bloquear", methods=["POST"])
+    @login_required
+    @perm_required("ofs.desativar")
+    def desativar_inativos_bloquear():
+        token = request.form.get("unlock_token") or ""
 
-            with open(path, "w", newline="", encoding="utf-8") as f:
-                w = csv.writer(f)
+        base_dir = os.path.join(app.instance_path, "reports", "ofs_users_cleanup")
+        _revoke_cleanup_unlock_token(base_dir, token)
 
-                w.writerow([
-                    "login",
-                    "status",
-                    "lastLoginTime",
-                    "userType",
-                    "mainResourceId",
-                ])
+        return jsonify({"ok": True})
+    @app.route("/desativar_inativos/simular", methods=["POST"])
+    @login_required
+    @perm_required("ofs.desativar")
+    def desativar_inativos_simular():
+        raw_days = (request.form.get("cutoff_days") or "80").strip()
+        cutoff_days = int(raw_days) if raw_days.isdigit() else 80
 
-                for u in vencidos:
-                    w.writerow([
-                        u.get("login"),
-                        u.get("status"),
-                        u.get("lastLoginTime"),
-                        u.get("userType"),
-                        u.get("mainResourceId"),
-                    ])
+        if cutoff_days < 1:
+            return jsonify({"ok": False, "error": "Informe um cutoff maior que zero."}), 400
 
-            return send_file(
-                path,
-                as_attachment=True,
-                download_name=os.path.basename(path),
-                mimetype="text/csv"
-            )
+        only_active = request.form.get("only_active") is not None
+        only_logged_once = request.form.get("only_logged_once") is not None
 
-        return render_template(
-            "desativar_inativos.html",
-            cutoff_days=cutoff_days,
-            only_active=only_active,
-            only_logged_once=only_logged_once,
-            vencidos=vencidos,
-            results=results,
-            mode=mode,
-            meta=meta,
+        job_id = uuid.uuid4().hex
+        base_dir = os.path.join(app.instance_path, "reports", "ofs_users_cleanup")
+
+        config = {
+            "cutoff_days": cutoff_days,
+            "only_active": only_active,
+            "only_logged_once": only_logged_once,
+        }
+
+        actor = current_actor()
+
+        initial_status = {
+            "ok": True,
+            "job_id": job_id,
+            "job_type": "simulation",
+            "status": "queued",
+            "phase": "Simulação na fila",
+            "created_at": _now_iso(),
+            "finished_at": None,
+            "progress_percent": 0,
+            "cutoff_days": cutoff_days,
+            "only_active": only_active,
+            "only_logged_once": only_logged_once,
+            "total_scanned": 0,
+            "candidates": 0,
+            "ignored_without_login": 0,
+            "ignored_inactive": 0,
+            "error": None,
+        }
+
+        _write_cleanup_status(base_dir, job_id, initial_status)
+
+        thread = threading.Thread(
+            target=_run_cleanup_simulation_job,
+            args=(base_dir, job_id, actor, config),
+            daemon=True,
         )
+        thread.start()
+
+        return jsonify({
+            "ok": True,
+            "job_id": job_id,
+            "status_url": url_for("desativar_inativos_status", job_id=job_id),
+            "download_url": url_for("desativar_inativos_download", job_id=job_id),
+        })
+
+
+    @app.route("/desativar_inativos/status/<job_id>")
+    @login_required
+    @perm_required("ofs.desativar")
+    def desativar_inativos_status(job_id):
+        base_dir = os.path.join(app.instance_path, "reports", "ofs_users_cleanup")
+        paths = _cleanup_job_paths(base_dir, job_id)
+
+        status_payload = _read_cleanup_status(base_dir, job_id)
+
+        if not status_payload:
+            return jsonify({"ok": False, "error": "Job não encontrado."}), 404
+
+        payload = {
+            "ok": True,
+            **status_payload,
+        }
+
+        if status_payload.get("status") == "success":
+            if status_payload.get("job_type") == "application":
+                rows = _read_cleanup_json(paths["results"], default=[])
+                payload["results_preview"] = _cleanup_preview(rows)
+                payload["results_total"] = len(rows)
+            else:
+                rows = _read_cleanup_json(paths["candidates"], default=[])
+                payload["candidates_preview"] = _cleanup_preview(rows)
+                payload["candidates_total"] = len(rows)
+
+        return jsonify(payload)
+
+
+    @app.route("/desativar_inativos/download/<job_id>")
+    @login_required
+    @perm_required("ofs.desativar")
+    def desativar_inativos_download(job_id):
+        base_dir = os.path.join(app.instance_path, "reports", "ofs_users_cleanup")
+        paths = _cleanup_job_paths(base_dir, job_id)
+
+        status_payload = _read_cleanup_status(base_dir, job_id)
+
+        if not status_payload:
+            flash("Job não encontrado.", "danger")
+            return redirect(url_for("desativar_inativos"))
+
+        if status_payload.get("status") != "success":
+            flash("O processamento ainda não foi concluído.", "warning")
+            return redirect(url_for("desativar_inativos"))
+
+        if not os.path.exists(paths["csv"]):
+            flash("Arquivo CSV não encontrado.", "danger")
+            return redirect(url_for("desativar_inativos"))
+
+        filename_prefix = "resultado_cleanup_ofs" if status_payload.get("job_type") == "application" else "previa_cleanup_ofs"
+        filename = f"{filename_prefix}_{job_id[:8]}.csv"
+
+        return send_file(
+            paths["csv"],
+            as_attachment=True,
+            download_name=filename,
+            mimetype="text/csv",
+        )
+
+
+    @app.route("/desativar_inativos/aplicar/<job_id>", methods=["POST"])
+    @login_required
+    @perm_required("ofs.desativar")
+    def desativar_inativos_aplicar(job_id):
+        confirmation = (request.form.get("confirmation") or "").strip().upper()
+
+        if confirmation != "APLICAR":
+            return jsonify({
+                "ok": False,
+                "error": "Confirmação inválida. Digite APLICAR para confirmar."
+            }), 400
+
+        unlock_token = request.form.get("unlock_token") or ""
+        page_session_id = request.form.get("page_session_id") or ""
+
+        base_dir = os.path.join(app.instance_path, "reports", "ofs_users_cleanup")
+
+        token_ok, token_error = _validate_cleanup_unlock_token(
+            base_dir=base_dir,
+            token=unlock_token,
+            page_session_id=page_session_id,
+        )
+
+        if not token_ok:
+            return jsonify({
+                "ok": False,
+                "error": token_error or "Desbloqueio inválido."
+            }), 403
+
+        source_paths = _cleanup_job_paths(base_dir, job_id)
+        source_status = _read_cleanup_json(source_paths["status"])
+
+        if not source_status:
+            return jsonify({
+                "ok": False,
+                "error": "Job de simulação não encontrado."
+            }), 404
+
+        if source_status.get("status") != "success" or source_status.get("job_type") != "simulation":
+            return jsonify({
+                "ok": False,
+                "error": "Apenas simulações concluídas podem ser aplicadas."
+            }), 400
+
+        candidates = _read_cleanup_json(source_paths["candidates"], default=[])
+
+        if not candidates:
+            return jsonify({
+                "ok": False,
+                "error": "A simulação não possui usuários candidatos."
+            }), 400
+
+        apply_job_id = uuid.uuid4().hex
+        actor = current_actor()
+
+        initial_status = {
+            "ok": True,
+            "job_id": apply_job_id,
+            "source_job_id": job_id,
+            "job_type": "application",
+            "status": "queued",
+            "phase": "Aplicação na fila",
+            "created_at": _now_iso(),
+            "finished_at": None,
+            "progress_percent": 0,
+            "processed": 0,
+            "total": len(candidates),
+            "error": None,
+        }
+
+        _write_cleanup_status(base_dir, apply_job_id, initial_status)
+
+        thread = threading.Thread(
+            target=_run_cleanup_apply_job,
+            args=(base_dir, apply_job_id, job_id, actor, candidates),
+            daemon=True,
+        )
+        thread.start()
+
+        return jsonify({
+            "ok": True,
+            "job_id": apply_job_id,
+            "status_url": url_for("desativar_inativos_status", job_id=apply_job_id),
+            "download_url": url_for("desativar_inativos_download", job_id=apply_job_id),
+        })

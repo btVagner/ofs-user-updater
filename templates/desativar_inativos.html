@@ -14,116 +14,262 @@
     {% endwith %}
   </div>
 
-  <div class="update-container fade-in">
-    <h2>Desativar usuários</h2>
-
-    {% if meta %}
-    <p>
-      <small>
-        API: <strong>{{ meta.first_code }}</strong>
-        • 1ª página itens: <strong>{{ meta.first_count }}</strong>
-        • Total varrido: <strong>{{ meta.total }}</strong>
-        {% if meta.sample_keys and meta.sample_keys|length > 0 %}
-        • Campos de exemplo: {{ meta.sample_keys|join(', ') }}
-        {% endif %}
-        {% if meta.error %} • Erro: {{ meta.error }} {% endif %}
-      </small>
-    </p>
-    {% endif %}
-
-    <form method="post" class="form-box" style="max-width: 100%; width: 100%;">
-      <label for="cutoff_days">Dias sem login (cutoff)</label>
-      <input id="cutoff_days" name="cutoff_days" type="text" inputmode="numeric" pattern="[0-9]*"
-        value="{{ cutoff_days }}" />
-
-      <label style="display:flex; align-items:center; gap:10px; margin-top: 8px;">
-        <input id="only_active" name="only_active" type="checkbox" {% if only_active %}checked{% endif %} />
-        Somente status = active
-      </label>
-      <label style="display:flex; align-items:center; gap:10px; margin-top: 8px;">
-        <input id="only_logged_once" name="only_logged_once" type="checkbox" {% if only_logged_once %}checked{% endif
-          %} />
-        Somente usuários que já fizeram login
-      </label>
-
-      <button type="submit" name="apply_changes" value="0">Simular (sem executar)</button>
-      <button type="submit" name="apply_changes" value="1"
-        onclick="return confirm('Confirmar APLICAÇÃO? Esta ação remove usuários e inativa recursos.');">
-        Aplicar (executar)
-      </button>
-
-      <div style="margin-top:14px; text-align:center;">
-        <a class="btn-voltar" href="{{ url_for('desativar_inativos',
-                    cutoff_days=cutoff_days,
-                    only_active='on' if only_active else '',
-                    only_logged_once='on' if only_logged_once else '',
-                    export=1) }}">
-          Exportar CSV (lista prévia)
-        </a>
+  <main class="dashboard-page fade-in cleanup-page" data-simulate-url="{{ url_for('desativar_inativos_simular') }}"
+    data-unlock-url="{{ url_for('desativar_inativos_desbloquear') }}"
+    data-lock-url="{{ url_for('desativar_inativos_bloquear') }}">
+    <section class="dashboard-header">
+      <div>
+        <span class="dashboard-kicker">Operação OFS</span>
+        <h1>Desativar usuários inativos</h1>
+        <p>
+          Simule a lista de usuários antes de aplicar qualquer alteração. A aplicação usa exatamente
+          a lista gerada na simulação para evitar mudanças inesperadas entre consulta e execução.
+        </p>
       </div>
-    </form>
-  </div>
 
-  <div class="tabela-container">
-    <h3>Prévia — usuários a afetar ({{ vencidos|length }})</h3>
-    <table class="tabela-usuarios">
-      <thead>
-        <tr>
-          <th>login</th>
-          <th>status</th>
-          <th>lastLoginTime</th>
-          <th>userType</th>
-          <th>mainResourceId</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in vencidos %}
-        <tr>
-          <td>{{ u.login }}</td>
-          <td>{{ u.status }}</td>
-          <td>{{ u.lastLoginTime or '-' }}</td>
-          <td>{{ u.userType }}</td>
-          <td>{{ u.mainResourceId or '-' }}</td>
-        </tr>
-        {% endfor %}
-        {% if vencidos|length == 0 %}
-        <tr>
-          <td colspan="5">Nenhum usuário atende ao critério.</td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
+      <div class="dashboard-refresh-card cleanup-safety-card" data-cleanup-safety-card>
+        <span class="dashboard-refresh-status running" data-cleanup-lock-status>
+          Modo seguro
+        </span>
 
-  {% if results and results|length > 0 %}
-  <div class="tabela-container">
-    <h3>Resultado da {{ mode }}</h3>
-    <table class="tabela-usuarios">
-      <thead>
-        <tr>
-          <th>login</th>
-          <th>userType</th>
-          <th>lastLoginTime</th>
-          <th>mainResourceId</th>
-          <th>delete_user</th>
-          <th>inactivate_resource</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in results %}
-        <tr>
-          <td>{{ r.login }}</td>
-          <td>{{ r.userType }}</td>
-          <td>{{ r.lastLoginTime or '-' }}</td>
-          <td>{{ r.mainResourceId or '-' }}</td>
-          <td>{{ r.delete_user }}</td>
-          <td>{{ r.inactivate_resource }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        <small data-cleanup-lock-message>
+          Aplicação bloqueada.
+        </small>
+
+        <button type="button" class="btn-primary cleanup-unlock-open-btn" data-cleanup-open-unlock>
+          Desbloquear
+        </button>
+
+        <button type="button" class="btn-secondary-link cleanup-lock-btn hidden" data-cleanup-lock-btn>
+          Voltar ao modo seguro
+        </button>
+      </div>
+    </section>
+
+    <div class="dashboard-new-data cleanup-warning-box">
+      <span>
+        <strong>Atenção:</strong>
+        esta rotina pode remover usuários do OFS e inativar recursos vinculados.
+        Primeiro execute a simulação, valide a prévia e exporte o CSV antes de aplicar.
+      </span>
+    </div>
+
+    <section class="dashboard-grid two-cols">
+      <article class="dashboard-panel">
+        <h2>Critérios da simulação</h2>
+
+        <form class="cleanup-form" data-cleanup-form>
+          <div class="filter-field filter-grow">
+            <label for="cutoff_days">Dias sem login</label>
+            <input id="cutoff_days" name="cutoff_days" type="number" min="1" step="1" value="{{ cutoff_days }}"
+              required>
+            <p class="dashboard-muted">
+              Usuários com último login anterior a este corte serão considerados.
+            </p>
+          </div>
+
+          <label class="cleanup-check">
+            <input id="only_active" name="only_active" type="checkbox" {% if only_active %}checked{% endif %}>
+            <span>
+              <strong>Somente status active</strong>
+              <small>Ignora usuários que já não estão ativos no OFS.</small>
+            </span>
+          </label>
+
+          <label class="cleanup-check">
+            <input id="only_logged_once" name="only_logged_once" type="checkbox" {% if only_logged_once %}checked{%
+              endif %}>
+            <span>
+              <strong>Somente usuários que já fizeram login</strong>
+              <small>Ignora usuários sem lastLoginTime preenchido. Recomendado para produção.</small>
+            </span>
+          </label>
+
+          <button type="submit" class="btn-primary cleanup-full-btn" data-cleanup-simulate-btn>
+            Simular usuários inativos
+          </button>
+        </form>
+      </article>
+
+      <article class="dashboard-panel" data-cleanup-status-panel>
+        <h2>Status do processamento</h2>
+
+        <div class="cleanup-panel-body">
+          <p class="dashboard-muted" data-cleanup-status-text>
+            Nenhuma simulação iniciada.
+          </p>
+
+          <div class="dashboard-progress hidden" data-cleanup-progress>
+            <div class="dashboard-progress-head">
+              <span data-cleanup-phase>Aguardando...</span>
+              <strong data-cleanup-percent>0%</strong>
+            </div>
+            <div class="dashboard-progress-track">
+              <span data-cleanup-progress-bar style="width: 0%"></span>
+            </div>
+          </div>
+
+          <div class="dashboard-kpi-grid dashboard-kpi-grid-compact cleanup-kpis hidden" data-cleanup-kpis>
+            <article class="dashboard-kpi-card">
+              <span>Total varrido</span>
+              <strong data-cleanup-total-scanned>0</strong>
+              <small>Usuários lidos no OFS</small>
+            </article>
+
+            <article class="dashboard-kpi-card warning">
+              <span>Candidatos</span>
+              <strong data-cleanup-candidates>0</strong>
+              <small>Usuários na prévia</small>
+            </article>
+
+            <article class="dashboard-kpi-card">
+              <span>Sem login ignorados</span>
+              <strong data-cleanup-ignored-login>0</strong>
+              <small>Quando filtro estiver marcado</small>
+            </article>
+
+            <article class="dashboard-kpi-card">
+              <span>Inativos ignorados</span>
+              <strong data-cleanup-ignored-inactive>0</strong>
+              <small>Quando status active estiver marcado</small>
+            </article>
+          </div>
+
+          <div class="logs-header-actions cleanup-actions hidden" data-cleanup-actions>
+            <a href="#" class="btn-secondary-link" data-cleanup-download>
+              Exportar CSV
+            </a>
+
+            <button type="button" class="dashboard-unlock-btn cleanup-apply-btn" data-cleanup-open-apply disabled>
+              Aplicar desativação
+            </button>
+          </div>
+
+          <p class="dashboard-muted cleanup-env-note" data-cleanup-apply-note>
+            Para aplicar, primeiro simule a lista e desbloqueie o modo seguro com sua senha.
+          </p>
+        </div>
+      </article>
+    </section>
+
+    <section class="dashboard-panel hidden" data-cleanup-apply-panel>
+      <h2>Confirmar aplicação</h2>
+
+      <form class="cleanup-apply-form" data-cleanup-apply-form>
+        <input type="hidden" name="unlock_token" data-cleanup-unlock-token>
+        <input type="hidden" name="page_session_id" data-cleanup-page-session>
+
+        <div class="filter-field filter-grow">
+          <label for="cleanup_confirmation">
+            Digite <strong>APLICAR</strong> para confirmar
+          </label>
+          <input id="cleanup_confirmation" type="text" name="confirmation" placeholder="Digite APLICAR"
+            autocomplete="off" required>
+        </div>
+
+        <button type="submit" class="dashboard-unlock-btn cleanup-apply-btn">
+          Confirmar aplicação
+        </button>
+
+        <button type="button" class="btn-secondary-link cleanup-cancel-btn" data-cleanup-cancel-apply>
+          Cancelar
+        </button>
+      </form>
+    </section>
+
+    <section class="dashboard-panel hidden" data-cleanup-preview-panel>
+      <h2 data-cleanup-preview-title>Prévia de usuários</h2>
+
+      <div class="cleanup-panel-body">
+        <p class="dashboard-muted" data-cleanup-preview-subtitle>
+          Exibindo os primeiros registros retornados pelo processamento.
+        </p>
+      </div>
+
+      <div class="dashboard-table-wrap">
+        <table class="dashboard-table">
+          <thead data-cleanup-table-head>
+            <tr>
+              <th>Login</th>
+              <th>Nome</th>
+              <th>Status</th>
+              <th>Último login</th>
+              <th>UserType</th>
+              <th>Recurso</th>
+            </tr>
+          </thead>
+          <tbody data-cleanup-table-body>
+            <tr>
+              <td colspan="6">Nenhum dado carregado.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <div class="modal-overlay cleanup-unlock-modal" data-cleanup-unlock-modal aria-hidden="true">
+    <div class="modal-card cleanup-unlock-card" role="dialog" aria-modal="true" aria-labelledby="cleanup-unlock-title">
+      <div class="modal-header">
+        <h3 id="cleanup-unlock-title" class="modal-title">Desbloquear modo seguro</h3>
+      </div>
+
+      <div class="cleanup-unlock-body">
+        <p class="cleanup-unlock-alert">
+          <strong>As alterações realizadas aqui não poderão ser desfeitas.</strong>
+        </p>
+
+        <p class="dashboard-muted">
+          Para desbloquear a aplicação, insira sua senha novamente.
+        </p>
+
+        <form class="cleanup-unlock-form" data-cleanup-unlock-form>
+          <label for="cleanup_unlock_password">Senha do usuário</label>
+
+          <input id="cleanup_unlock_password" type="password" name="password" placeholder="Digite sua senha"
+            autocomplete="current-password" required>
+
+          <div class="cleanup-unlock-actions">
+            <button type="submit" class="btn-primary">
+              Desbloquear
+            </button>
+
+            <button type="button" class="btn-secondary-link" data-cleanup-close-unlock>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
-  {% endif %}
+  <div class="modal-overlay cleanup-confirm-modal" data-cleanup-confirm-modal aria-hidden="true">
+    <div class="modal-card cleanup-confirm-card" role="dialog" aria-modal="true"
+      aria-labelledby="cleanup-confirm-title">
+      <div class="modal-header">
+        <h3 id="cleanup-confirm-title" class="modal-title">Confirmar aplicação</h3>
+      </div>
+
+      <div class="cleanup-unlock-body">
+        <p class="cleanup-unlock-alert">
+          <strong>Esta ação remove usuários e inativa recursos no OFS.</strong>
+        </p>
+
+        <p class="dashboard-muted">
+          A aplicação será feita usando exatamente a lista da simulação concluída.
+          Esta operação não poderá ser desfeita automaticamente pelo painel.
+        </p>
+
+        <div class="cleanup-unlock-actions">
+          <button type="button" class="dashboard-unlock-btn cleanup-apply-btn" data-cleanup-confirm-apply>
+            Confirmar aplicação
+          </button>
+
+          <button type="button" class="btn-secondary-link" data-cleanup-cancel-confirm>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script defer src="{{ url_for('static', filename='js/desativar_inativos.js') }}"></script>
+  {% include 'includes/footer.html' %}
 </body>
-
-{% include 'includes/footer.html' %}

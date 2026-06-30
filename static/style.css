@@ -3332,3 +3332,245 @@ body.login-page {
   color: #9aa4b2;
   font-size: 0.86rem;
 }
+
+/* ===== Desativar usuários inativos ===== */
+
+.cleanup-page .dashboard-grid.two-cols {
+    align-items: start;
+}
+
+.cleanup-form,
+.cleanup-panel-body {
+    padding: 18px;
+}
+
+.cleanup-form .filter-field {
+    margin-bottom: 14px;
+}
+
+.cleanup-form input[type="number"],
+.cleanup-apply-form input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background-color: #2b2b2b;
+    color: #f1f1f1;
+    font-size: 0.95rem;
+}
+
+.cleanup-form input[type="number"]:focus,
+.cleanup-apply-form input[type="text"]:focus {
+    outline: none;
+    border-color: #00aaff;
+    box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.25);
+}
+
+.cleanup-check {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin: 12px 0;
+    padding: 11px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.065);
+    cursor: pointer;
+}
+
+.cleanup-check input {
+    margin-top: 3px;
+    accent-color: #d12c6a;
+}
+
+.cleanup-check strong {
+    display: block;
+    color: #f8fafc;
+    font-size: 0.9rem;
+}
+
+.cleanup-check small {
+    display: block;
+    margin-top: 4px;
+    color: #9aa4b2;
+    line-height: 1.4;
+}
+
+.cleanup-full-btn {
+    width: 100%;
+    margin-top: 12px;
+}
+
+.cleanup-warning-box {
+    align-items: flex-start;
+    justify-content: flex-start;
+    color: #fde68a;
+    background: rgba(245, 158, 11, 0.10);
+    border-color: rgba(245, 158, 11, 0.22);
+}
+
+.cleanup-kpis {
+    margin: 18px 0 0;
+}
+
+.cleanup-kpis.dashboard-kpi-grid-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cleanup-actions {
+    margin-top: 16px;
+    justify-content: flex-start;
+}
+
+.cleanup-apply-btn {
+    width: auto;
+    min-height: 38px;
+    margin-top: 0;
+    padding: 9px 13px;
+}
+
+.cleanup-apply-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.cleanup-env-note {
+    margin-top: 14px;
+}
+
+.cleanup-env-note code {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 2px 5px;
+    border-radius: 6px;
+}
+
+.cleanup-apply-form {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    padding: 18px;
+}
+
+.cleanup-apply-form .filter-field {
+    flex: 1;
+    min-width: 260px;
+}
+
+.cleanup-cancel-btn {
+    border: 0;
+}
+
+.dashboard-progress.error .dashboard-progress-track span {
+    background: #ef4444;
+}
+
+@media (max-width: 980px) {
+    .cleanup-page .dashboard-grid.two-cols {
+        grid-template-columns: 1fr;
+    }
+
+    .cleanup-kpis.dashboard-kpi-grid-compact {
+        grid-template-columns: 1fr;
+    }
+
+    .cleanup-apply-form {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .cleanup-apply-btn,
+    .cleanup-cancel-btn {
+        width: 100%;
+    }
+}
+/* ===== Modal de desbloqueio - Desativar usuários ===== */
+
+.cleanup-unlock-open-btn {
+    width: 100%;
+    margin-top: 12px;
+}
+
+.cleanup-unlock-modal.is-open {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cleanup-unlock-card {
+    width: min(520px, calc(100vw - 32px));
+    margin: 0;
+}
+
+.cleanup-unlock-body {
+    padding: 18px;
+}
+
+.cleanup-unlock-alert {
+    margin: 0 0 8px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    color: #fde68a;
+    background: rgba(245, 158, 11, 0.10);
+    border: 1px solid rgba(245, 158, 11, 0.22);
+    line-height: 1.45;
+}
+
+.cleanup-unlock-form {
+    display: grid;
+    gap: 9px;
+    margin-top: 16px;
+}
+
+.cleanup-unlock-form label {
+    color: #cbd5e1;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.cleanup-unlock-form input[type="password"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #333;
+    border-radius: 8px;
+    background-color: #2b2b2b;
+    color: #f1f1f1;
+    font-size: 0.95rem;
+}
+
+.cleanup-unlock-form input[type="password"]:focus {
+    outline: none;
+    border-color: #00aaff;
+    box-shadow: 0 0 0 2px rgba(0, 170, 255, 0.22);
+}
+
+.cleanup-unlock-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.cleanup-unlock-actions .btn-primary,
+.cleanup-unlock-actions .btn-secondary-link {
+    min-height: 40px;
+}
+
+.cleanup-lock-btn {
+    width: 100%;
+    margin-top: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+/* ===== Modal de confirmação - Desativar usuários ===== */
+
+.cleanup-confirm-modal.is-open {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cleanup-confirm-card {
+    width: min(560px, calc(100vw - 32px));
+    margin: 0;
+}
