@@ -8,12 +8,13 @@ from typing import Dict, List, Tuple
 
 import requests
 from openpyxl import Workbook
+from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 from database.connection import get_connection
 from database.audit import audit_log
 from ofs.client import OFSClient
-from core.utils import xlsx_auto_width
 
 
 REQUEST_TIMEOUT = 60
@@ -319,7 +320,14 @@ def _thermometer_conclusion(value):
     return value
 
 
-def _fetch_thermometer_activities(client: OFSClient, config: dict, base_dir: str, job_id: str, status_payload: dict) -> List[dict]:
+def _fetch_thermometer_activities(
+    client: OFSClient,
+    config: dict,
+    base_dir: str,
+    job_id: str,
+    status_payload: dict,
+    spool_path: str,
+) -> dict:
     url = f"{client.base_url}/activities/"
     headers = {"Accept": "application/json"}
     resources_param = ",".join(config["resources"])
@@ -327,126 +335,123 @@ def _fetch_thermometer_activities(client: OFSClient, config: dict, base_dir: str
     activity_type_query = _build_or_equals_query("activityType", config["activity_types"])
     combined_query = f"{status_query} and {activity_type_query}"
 
-    all_items = []
+    resource_name_map = _load_resource_name_map()
+    activity_type_label_map = _load_activity_type_label_map()
+
+    row_count = 0
+    column_widths = _xlsx_initial_widths(THERMOMETER_HEADERS)
     seen_activity_ids = set()
     date_list = list(_iter_date_strings(config["date_from"], config["date_to"]))
     total_days = len(date_list)
 
-    for day_index, day in enumerate(date_list, start=1):
-        offset = 0
-        page = 1
+    with open(spool_path, "w", encoding="utf-8") as spool_file:
+        for day_index, day in enumerate(date_list, start=1):
+            offset = 0
+            page = 1
 
-        while True:
-            params = [
-                ("dateFrom", day),
-                ("dateTo", day),
-                ("resources", resources_param),
-                ("q", combined_query),
-                ("fields", ",".join(THERMOMETER_API_FIELDS)),
-                ("limit", str(API_LIMIT)),
-                ("offset", str(offset)),
-            ]
+            while True:
+                params = [
+                    ("dateFrom", day),
+                    ("dateTo", day),
+                    ("resources", resources_param),
+                    ("q", combined_query),
+                    ("fields", ",".join(THERMOMETER_API_FIELDS)),
+                    ("limit", str(API_LIMIT)),
+                    ("offset", str(offset)),
+                ]
 
-            status_payload.update({
-                "status": "running",
-                "phase": f"Consultando termômetro - {day} - página {page}",
-                "rows_so_far": len(all_items),
-                "current_day": day,
-                "current_day_index": day_index,
-                "total_days": total_days,
-                "offset": offset,
-                "page": page,
-            })
-            _write_job_status(base_dir, job_id, status_payload)
+                status_payload.update({
+                    "status": "running",
+                    "phase": f"Consultando termômetro - {day} - página {page}",
+                    "rows_so_far": row_count,
+                    "current_day": day,
+                    "current_day_index": day_index,
+                    "total_days": total_days,
+                    "offset": offset,
+                    "page": page,
+                })
+                _write_job_status(base_dir, job_id, status_payload)
 
-            resp = requests.get(
-                url,
-                headers=headers,
-                params=params,
-                auth=client.auth,
-                timeout=REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
+                resp = requests.get(
+                    url,
+                    headers=headers,
+                    params=params,
+                    auth=client.auth,
+                    timeout=REQUEST_TIMEOUT,
+                )
+                resp.raise_for_status()
 
-            data = resp.json()
-            items = _normalize_items_payload(data)
+                data = resp.json()
+                items = _normalize_items_payload(data)
 
-            if not items:
-                break
+                if not items:
+                    break
 
-            for item in items:
-                activity_id = str(item.get("activityId") or "").strip()
+                for item in items:
+                    activity_id = str(item.get("activityId") or "").strip()
 
-                if activity_id:
-                    if activity_id in seen_activity_ids:
+                    if activity_id:
+                        if activity_id in seen_activity_ids:
+                            continue
+                        seen_activity_ids.add(activity_id)
+
+                    if not _has_customer_rating(item):
                         continue
-                    seen_activity_ids.add(activity_id)
 
-                if _has_customer_rating(item):
-                    all_items.append(item)
+                    resource_id = str(item.get("resourceId") or "").strip()
+                    activity_type = str(item.get("activityType") or "").strip()
+                    row_values = [
+                        item.get("apptNumber") or "",
+                        item.get("XA_AV_CLI") or "",
+                        item.get("XA_AV_CLI_CAT") or "",
+                        item.get("XA_AV_CLI_SUB_CAT") or "",
+                        _thermometer_conclusion(item.get("XA_AV_CLI_CON")),
+                        item.get("city") or "",
+                        resource_name_map.get(resource_id, "Técnico não encontrado na base"),
+                        item.get("timeSlot") or "",
+                        activity_type_label_map.get(activity_type, activity_type),
+                        item.get("XA_AV_REL") or "",
+                        item.get("XA_TSK_NOT") or "",
+                        item.get("date") or "",
+                        item.get("XA_REQ_CRE_DAT") or "",
+                    ]
 
-            has_more = bool(data.get("hasMore")) if isinstance(data, dict) else False
-            if not has_more:
-                break
+                    _spool_row(spool_file, row_values)
+                    _xlsx_update_widths(column_widths, row_values)
+                    row_count += 1
 
-            offset += len(items)
-            page += 1
+                has_more = bool(data.get("hasMore")) if isinstance(data, dict) else False
+                if not has_more:
+                    break
 
-    return all_items
+                offset += len(items)
+                page += 1
 
+    return {
+        "row_count": row_count,
+        "column_widths": column_widths,
+    }
 
-def _build_thermometer_xlsx(rows: List[dict], output_path: str):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Termômetro Cliente"
-    ws.append(THERMOMETER_HEADERS)
-
-    resource_name_map = _load_resource_name_map()
-    activity_type_label_map = _load_activity_type_label_map()
-
-    for item in rows:
-        resource_id = str(item.get("resourceId") or "").strip()
-        activity_type = str(item.get("activityType") or "").strip()
-
-        ws.append([
-            item.get("apptNumber") or "",
-            item.get("XA_AV_CLI") or "",
-            item.get("XA_AV_CLI_CAT") or "",
-            item.get("XA_AV_CLI_SUB_CAT") or "",
-            _thermometer_conclusion(item.get("XA_AV_CLI_CON")),
-            item.get("city") or "",
-            resource_name_map.get(resource_id, "Técnico não encontrado na base"),
-            item.get("timeSlot") or "",
-            activity_type_label_map.get(activity_type, activity_type),
-            item.get("XA_AV_REL") or "",
-            item.get("XA_TSK_NOT") or "",
-            item.get("date") or "",
-            item.get("XA_REQ_CRE_DAT") or "",
-        ])
-
-    header_fill = PatternFill("solid", fgColor="1F4E78")
-    header_font = Font(color="FFFFFF", bold=True)
-    thin = Side(style="thin", color="D9E2F3")
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-    for cell in ws[1]:
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = border
-
-    for row in ws.iter_rows(min_row=2):
-        for cell in row:
-            cell.border = border
-            cell.alignment = Alignment(vertical="top")
-
+def _build_thermometer_xlsx(
+    spool_path: str,
+    output_path: str,
+    column_widths: List[int],
+):
+    wb = Workbook(write_only=True)
+    ws = wb.create_sheet(title="Termômetro Cliente")
     ws.freeze_panes = "A2"
-    xlsx_auto_width(ws)
-    wb.save(output_path)
+    _xlsx_apply_widths(ws, column_widths)
 
+    styles = _xlsx_styles()
+    _append_write_only_row(ws, THERMOMETER_HEADERS, styles, is_header=True)
+    for row_values in _iter_spooled_rows(spool_path):
+        _append_write_only_row(ws, row_values, styles)
+
+    wb.save(output_path)
 
 def _run_thermometer_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
     filename = f"relatorio_termometro_cliente_{config['date_from']}_{config['date_to']}_{job_id[:8]}.xlsx"
+    spool_path = _job_rows_path(base_dir, job_id)
 
     status_payload = {
         "status": "running",
@@ -466,25 +471,37 @@ def _run_thermometer_report_job(base_dir: str, job_id: str, actor: dict, config:
 
     try:
         client = OFSClient()
-        rows = _fetch_thermometer_activities(client, config, base_dir, job_id, status_payload)
+        fetch_result = _fetch_thermometer_activities(
+            client,
+            config,
+            base_dir,
+            job_id,
+            status_payload,
+            spool_path,
+        )
+        row_count = fetch_result["row_count"]
 
         status_payload.update({
             "status": "running",
             "phase": "Gerando XLSX",
-            "rows_so_far": len(rows),
-            "total_rows": len(rows),
+            "rows_so_far": row_count,
+            "total_rows": row_count,
         })
         _write_job_status(base_dir, job_id, status_payload)
 
         output_path = _job_xlsx_path(base_dir, job_id)
-        _build_thermometer_xlsx(rows, output_path)
+        _build_thermometer_xlsx(
+            spool_path,
+            output_path,
+            fetch_result["column_widths"],
+        )
 
         status_payload.update({
             "status": "completed",
             "phase": "Relatório do termômetro concluído",
             "finished_at": _now_iso(),
-            "rows_so_far": len(rows),
-            "total_rows": len(rows),
+            "rows_so_far": row_count,
+            "total_rows": row_count,
             "download_ready": True,
         })
         _write_job_status(base_dir, job_id, status_payload)
@@ -501,7 +518,7 @@ def _run_thermometer_report_job(base_dir: str, job_id: str, actor: dict, config:
                 "dateFrom": config["date_from"],
                 "dateTo": config["date_to"],
                 "resources": config["resources"],
-                "total_rows": len(rows),
+                "total_rows": row_count,
                 "filename": filename,
             },
         )
@@ -515,6 +532,8 @@ def _run_thermometer_report_job(base_dir: str, job_id: str, actor: dict, config:
         })
         _write_job_status(base_dir, job_id, status_payload)
 
+    finally:
+        _safe_remove_file(spool_path)
 
 def start_thermometer_report_job(base_dir: str, actor: dict, config: dict) -> str:
     _ensure_dir(base_dir)
@@ -606,6 +625,91 @@ def _job_status_path(base_dir: str, job_id: str) -> str:
 
 def _job_xlsx_path(base_dir: str, job_id: str) -> str:
     return os.path.join(base_dir, f"{job_id}.xlsx")
+
+
+def _job_rows_path(base_dir: str, job_id: str) -> str:
+    return os.path.join(base_dir, f"{job_id}.rows.jsonl")
+
+
+def _safe_remove_file(path: str):
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except Exception:
+        pass
+
+
+def _xlsx_initial_widths(headers: List[str]) -> List[int]:
+    return [len(str(header or "")) for header in headers]
+
+
+def _xlsx_update_widths(widths: List[int], values: List[object]):
+    for index, value in enumerate(values):
+        if index >= len(widths):
+            break
+
+        try:
+            value_len = len("" if value is None else str(value))
+        except Exception:
+            value_len = 0
+
+        if value_len > widths[index]:
+            widths[index] = value_len
+
+
+def _xlsx_apply_widths(ws, widths: List[int], max_width: int = 60):
+    # Em write-only as dimensões precisam ser definidas antes do primeiro append.
+    for index, max_len in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(index)].width = min(max_len + 2, max_width)
+
+
+def _xlsx_styles() -> dict:
+    thin = Side(style="thin", color="D9E2F3")
+    return {
+        "header_fill": PatternFill("solid", fgColor="1F4E78"),
+        "header_font": Font(color="FFFFFF", bold=True),
+        "border": Border(left=thin, right=thin, top=thin, bottom=thin),
+        "header_alignment": Alignment(horizontal="center", vertical="center"),
+        "data_alignment": Alignment(vertical="top"),
+    }
+
+
+def _append_write_only_row(
+    ws,
+    values: List[object],
+    styles: dict,
+    *,
+    is_header: bool = False,
+):
+    cells = []
+    for value in values:
+        cell = WriteOnlyCell(ws, value=value)
+        cell.border = styles["border"]
+
+        if is_header:
+            cell.fill = styles["header_fill"]
+            cell.font = styles["header_font"]
+            cell.alignment = styles["header_alignment"]
+        else:
+            cell.alignment = styles["data_alignment"]
+
+        cells.append(cell)
+
+    ws.append(cells)
+
+
+def _spool_row(file_obj, values: List[object]):
+    file_obj.write(json.dumps(values, ensure_ascii=False, default=str))
+    file_obj.write("\n")
+
+
+def _iter_spooled_rows(spool_path: str):
+    with open(spool_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            yield json.loads(line)
 
 
 def _write_job_status(base_dir: str, job_id: str, payload: dict):
@@ -1017,7 +1121,11 @@ def read_job_status(base_dir: str, job_id: str) -> dict:
     print(f"[WARN] Falha ao ler status do job {job_id}: {last_error}")
     return {}
 def discard_job(base_dir: str, job_id: str):
-    for path in [_job_status_path(base_dir, job_id), _job_xlsx_path(base_dir, job_id)]:
+    for path in [
+        _job_status_path(base_dir, job_id),
+        _job_xlsx_path(base_dir, job_id),
+        _job_rows_path(base_dir, job_id),
+    ]:
         if os.path.exists(path):
             os.remove(path)
 
@@ -1673,13 +1781,22 @@ def _build_or_equals_query(field_name: str, values: List[str]) -> str:
     parts = [f"{field_name}=='{value}'" for value in cleaned]
     return "(" + " OR ".join(parts) + ")"
 
-def _fetch_activities(client: OFSClient, config: dict, base_dir: str, job_id: str, status_payload: dict) -> List[dict]:
+def _fetch_activities(
+    client: OFSClient,
+    config: dict,
+    base_dir: str,
+    job_id: str,
+    status_payload: dict,
+    spool_path: str,
+) -> dict:
     url = f"{client.base_url}/activities/"
     headers = {"Accept": "application/json"}
 
+    report_type = config.get("report_type", "ofs_os")
+    selected_fields = config["fields"]
     api_fields = _api_fields_for_selected(
-        config["fields"],
-        report_type=config.get("report_type", "ofs_os"),
+        selected_fields,
+        report_type=report_type,
     )
 
     status_payload["api_fields"] = api_fields
@@ -1688,227 +1805,12 @@ def _fetch_activities(client: OFSClient, config: dict, base_dir: str, job_id: st
             api_fields.append(required_field)
 
     resources_param = ",".join(config["resources"])
-
     status_query = _build_or_equals_query("status", config["statuses"])
     activity_type_query = _build_or_equals_query("activityType", config["activity_types"])
 
     # IMPORTANTE:
     # O OFS deve receber apenas UM parâmetro q contendo a expressão completa.
     combined_query = f"{status_query} and {activity_type_query}"
-
-    all_items = []
-    seen_activity_ids = set()
-
-    daily_counts = {}
-    daily_raw_counts = {}
-    duplicate_activity_ids = 0
-    total_raw_rows = 0
-    total_pages_processed = 0
-
-    date_list = list(_iter_date_strings(config["date_from"], config["date_to"]))
-    total_days = len(date_list)
-
-    for day_index, day in enumerate(date_list, start=1):
-        offset = 0
-        page = 1
-        day_count = 0
-        day_raw_count = 0
-
-        while True:
-            params = [
-                ("dateFrom", day),
-                ("dateTo", day),
-                ("resources", resources_param),
-                ("q", combined_query),
-                ("fields", ",".join(api_fields)),
-                ("limit", str(API_LIMIT)),
-                ("offset", str(offset)),
-            ]
-
-            status_payload.update({
-                "status": "running",
-                "phase": f"Consultando OFS - {day} - página {page}, offset {offset}",
-                "rows_so_far": len(all_items),
-                "raw_rows_so_far": total_raw_rows,
-                "q": combined_query,
-                "current_day": day,
-                "current_day_index": day_index,
-                "total_days": total_days,
-                "offset": offset,
-                "page": page,
-                "total_pages_processed": total_pages_processed,
-                "daily_counts": daily_counts,
-                "daily_raw_counts": daily_raw_counts,
-                "duplicate_activity_ids": duplicate_activity_ids,
-            })
-            _write_job_status(base_dir, job_id, status_payload)
-
-            resp = requests.get(
-                url,
-                headers=headers,
-                params=params,
-                auth=client.auth,
-                timeout=REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-
-            data = resp.json()
-            items = _normalize_items_payload(data)
-
-            returned_count = len(items)
-            day_raw_count += returned_count
-            total_raw_rows += returned_count
-            total_pages_processed += 1
-
-            for item in items:
-                activity_id = str(item.get("activityId") or "").strip()
-
-                if activity_id:
-                    if activity_id in seen_activity_ids:
-                        duplicate_activity_ids += 1
-                        continue
-
-                    seen_activity_ids.add(activity_id)
-
-                all_items.append(item)
-                day_count += 1
-
-            daily_counts[day] = day_count
-            daily_raw_counts[day] = day_raw_count
-
-            status_payload.update({
-                "status": "running",
-                "phase": f"Processando OFS - {day} - página {page}",
-                "rows_so_far": len(all_items),
-                "raw_rows_so_far": total_raw_rows,
-                "current_day": day,
-                "current_day_index": day_index,
-                "total_days": total_days,
-                "offset": offset,
-                "page": page,
-                "total_pages_processed": total_pages_processed,
-                "daily_counts": daily_counts,
-                "daily_raw_counts": daily_raw_counts,
-                "duplicate_activity_ids": duplicate_activity_ids,
-            })
-            _write_job_status(base_dir, job_id, status_payload)
-
-            has_more = bool(data.get("hasMore")) if isinstance(data, dict) else False
-
-            if not has_more:
-                break
-
-            if returned_count <= 0:
-                raise RuntimeError(
-                    f"A API informou hasMore=true para o dia {day}, mas não retornou itens. "
-                    "A consulta pode estar pesada demais ou excedendo o tempo limite do OFS."
-                )
-
-            offset += returned_count
-            page += 1
-
-    status_payload.update({
-        "status": "running",
-        "phase": "Consulta OFS concluída. Preparando XLSX.",
-        "rows_so_far": len(all_items),
-        "total_rows": len(all_items),
-        "raw_rows_so_far": total_raw_rows,
-        "total_raw_rows": total_raw_rows,
-        "total_pages_processed": total_pages_processed,
-        "daily_counts": daily_counts,
-        "daily_raw_counts": daily_raw_counts,
-        "duplicate_activity_ids": duplicate_activity_ids,
-    })
-    _write_job_status(base_dir, job_id, status_payload)
-
-    return all_items
-
-def _build_activity_report_summary(rows: List[dict]) -> dict:
-    """
-    Monta resumo visual para relatórios operacionais.
-
-    Usado inicialmente no relatório de Redes.
-    """
-    resource_name_map = _load_resource_name_map()
-    activity_type_label_map = _load_activity_type_label_map()
-
-    by_status = {}
-    by_resource = {}
-    by_activity_type = {}
-
-    for item in rows:
-        status = str(item.get("status") or "Não informado").strip() or "Não informado"
-        resource_id = str(item.get("resourceId") or "").strip()
-        activity_type_code = str(item.get("activityType") or "").strip()
-
-        by_status[status] = by_status.get(status, 0) + 1
-
-        activity_type_label = activity_type_label_map.get(activity_type_code, activity_type_code or "Não informado")
-        by_activity_type[activity_type_label] = by_activity_type.get(activity_type_label, 0) + 1
-
-        resource_key = resource_id or "sem_resource"
-        resource_name = resource_name_map.get(resource_id, "Técnico não encontrado na base")
-
-        if resource_key not in by_resource:
-            by_resource[resource_key] = {
-                "resource_id": resource_id or "-",
-                "resource_name": resource_name,
-                "total": 0,
-                "by_status": {},
-            }
-
-        by_resource[resource_key]["total"] += 1
-        by_resource[resource_key]["by_status"][status] = (
-            by_resource[resource_key]["by_status"].get(status, 0) + 1
-        )
-
-    by_resource_list = list(by_resource.values())
-    by_resource_list.sort(
-        key=lambda item: (
-            int(item.get("total") or 0),
-            str(item.get("resource_name") or "")
-        ),
-        reverse=True,
-    )
-
-    by_activity_type_list = [
-        {
-            "label": label,
-            "total": total,
-        }
-        for label, total in by_activity_type.items()
-    ]
-    by_activity_type_list.sort(key=lambda item: item["total"], reverse=True)
-
-    by_status_list = [
-        {
-            "status": status,
-            "total": total,
-        }
-        for status, total in by_status.items()
-    ]
-    by_status_list.sort(key=lambda item: item["total"], reverse=True)
-
-    return {
-        "total": len(rows),
-        "by_status": by_status,
-        "by_status_list": by_status_list,
-        "by_resource": by_resource_list,
-        "by_activity_type": by_activity_type_list,
-    }
-
-def _build_xlsx(
-    rows: List[dict],
-    selected_fields: List[str],
-    output_path: str,
-    report_type: str = "ofs_os",
-):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Relatório OS OFS"
-
-    headers = [FIELD_MAP[key]["xlsx_header"] for key in selected_fields]
-    ws.append(headers)
 
     resource_name_map = _load_resource_name_map()
     resource_status_map = (
@@ -1918,7 +1820,7 @@ def _build_xlsx(
     )
     activity_type_label_map = (
         _load_activity_type_label_map()
-        if "activityType" in selected_fields
+        if "activityType" in selected_fields or report_type == "redes"
         else {}
     )
     close_reason_name_map = (
@@ -1931,43 +1833,291 @@ def _build_xlsx(
         if TASK_TYPE_PROPERTY_CODE in selected_fields
         else {}
     )
+
+    headers_xlsx = [FIELD_MAP[key]["xlsx_header"] for key in selected_fields]
+    column_widths = _xlsx_initial_widths(headers_xlsx)
+    summary_state = (
+        _new_activity_report_summary_state(
+            resource_name_map=resource_name_map,
+            activity_type_label_map=activity_type_label_map,
+        )
+        if report_type == "redes"
+        else None
+    )
+
+    row_count = 0
+    seen_activity_ids = set()
+    daily_counts = {}
+    daily_raw_counts = {}
+    duplicate_activity_ids = 0
+    total_raw_rows = 0
+    total_pages_processed = 0
+
+    date_list = list(_iter_date_strings(config["date_from"], config["date_to"]))
+    total_days = len(date_list)
+
+    with open(spool_path, "w", encoding="utf-8") as spool_file:
+        for day_index, day in enumerate(date_list, start=1):
+            offset = 0
+            page = 1
+            day_count = 0
+            day_raw_count = 0
+
+            while True:
+                params = [
+                    ("dateFrom", day),
+                    ("dateTo", day),
+                    ("resources", resources_param),
+                    ("q", combined_query),
+                    ("fields", ",".join(api_fields)),
+                    ("limit", str(API_LIMIT)),
+                    ("offset", str(offset)),
+                ]
+
+                status_payload.update({
+                    "status": "running",
+                    "phase": f"Consultando OFS - {day} - página {page}, offset {offset}",
+                    "rows_so_far": row_count,
+                    "raw_rows_so_far": total_raw_rows,
+                    "q": combined_query,
+                    "current_day": day,
+                    "current_day_index": day_index,
+                    "total_days": total_days,
+                    "offset": offset,
+                    "page": page,
+                    "total_pages_processed": total_pages_processed,
+                    "daily_counts": daily_counts,
+                    "daily_raw_counts": daily_raw_counts,
+                    "duplicate_activity_ids": duplicate_activity_ids,
+                })
+                _write_job_status(base_dir, job_id, status_payload)
+
+                resp = requests.get(
+                    url,
+                    headers=headers,
+                    params=params,
+                    auth=client.auth,
+                    timeout=REQUEST_TIMEOUT,
+                )
+                resp.raise_for_status()
+
+                data = resp.json()
+                items = _normalize_items_payload(data)
+
+                returned_count = len(items)
+                day_raw_count += returned_count
+                total_raw_rows += returned_count
+                total_pages_processed += 1
+
+                for item in items:
+                    activity_id = str(item.get("activityId") or "").strip()
+
+                    if activity_id:
+                        if activity_id in seen_activity_ids:
+                            duplicate_activity_ids += 1
+                            continue
+
+                        seen_activity_ids.add(activity_id)
+
+                    row_values = [
+                        _row_value(
+                            item,
+                            key,
+                            resource_name_map=resource_name_map,
+                            resource_status_map=resource_status_map,
+                            activity_type_label_map=activity_type_label_map,
+                            close_reason_name_map=close_reason_name_map,
+                            task_type_name_map=task_type_name_map,
+                            report_type=report_type,
+                        )
+                        for key in selected_fields
+                    ]
+
+                    _spool_row(spool_file, row_values)
+                    _xlsx_update_widths(column_widths, row_values)
+                    row_count += 1
+                    day_count += 1
+
+                    if summary_state is not None:
+                        _update_activity_report_summary_state(summary_state, item)
+
+                daily_counts[day] = day_count
+                daily_raw_counts[day] = day_raw_count
+
+                status_payload.update({
+                    "status": "running",
+                    "phase": f"Processando OFS - {day} - página {page}",
+                    "rows_so_far": row_count,
+                    "raw_rows_so_far": total_raw_rows,
+                    "current_day": day,
+                    "current_day_index": day_index,
+                    "total_days": total_days,
+                    "offset": offset,
+                    "page": page,
+                    "total_pages_processed": total_pages_processed,
+                    "daily_counts": daily_counts,
+                    "daily_raw_counts": daily_raw_counts,
+                    "duplicate_activity_ids": duplicate_activity_ids,
+                })
+                _write_job_status(base_dir, job_id, status_payload)
+
+                has_more = bool(data.get("hasMore")) if isinstance(data, dict) else False
+
+                if not has_more:
+                    break
+
+                if returned_count <= 0:
+                    raise RuntimeError(
+                        f"A API informou hasMore=true para o dia {day}, mas não retornou itens. "
+                        "A consulta pode estar pesada demais ou excedendo o tempo limite do OFS."
+                    )
+
+                offset += returned_count
+                page += 1
+
+    status_payload.update({
+        "status": "running",
+        "phase": "Consulta OFS concluída. Preparando XLSX.",
+        "rows_so_far": row_count,
+        "total_rows": row_count,
+        "raw_rows_so_far": total_raw_rows,
+        "total_raw_rows": total_raw_rows,
+        "total_pages_processed": total_pages_processed,
+        "daily_counts": daily_counts,
+        "daily_raw_counts": daily_raw_counts,
+        "duplicate_activity_ids": duplicate_activity_ids,
+    })
+    _write_job_status(base_dir, job_id, status_payload)
+
+    return {
+        "row_count": row_count,
+        "column_widths": column_widths,
+        "summary": (
+            _finalize_activity_report_summary_state(summary_state)
+            if summary_state is not None
+            else None
+        ),
+    }
+
+def _new_activity_report_summary_state(
+    resource_name_map: Dict[str, str] = None,
+    activity_type_label_map: Dict[str, str] = None,
+) -> dict:
+    return {
+        "total": 0,
+        "by_status": {},
+        "by_resource": {},
+        "by_activity_type": {},
+        "resource_name_map": resource_name_map or {},
+        "activity_type_label_map": activity_type_label_map or {},
+    }
+
+
+def _update_activity_report_summary_state(state: dict, item: dict):
+    status = str(item.get("status") or "Não informado").strip() or "Não informado"
+    resource_id = str(item.get("resourceId") or "").strip()
+    activity_type_code = str(item.get("activityType") or "").strip()
+
+    state["total"] += 1
+    state["by_status"][status] = state["by_status"].get(status, 0) + 1
+
+    activity_type_label = state["activity_type_label_map"].get(
+        activity_type_code,
+        activity_type_code or "Não informado",
+    )
+    state["by_activity_type"][activity_type_label] = (
+        state["by_activity_type"].get(activity_type_label, 0) + 1
+    )
+
+    resource_key = resource_id or "sem_resource"
+    resource_name = state["resource_name_map"].get(
+        resource_id,
+        "Técnico não encontrado na base",
+    )
+
+    if resource_key not in state["by_resource"]:
+        state["by_resource"][resource_key] = {
+            "resource_id": resource_id or "-",
+            "resource_name": resource_name,
+            "total": 0,
+            "by_status": {},
+        }
+
+    state["by_resource"][resource_key]["total"] += 1
+    state["by_resource"][resource_key]["by_status"][status] = (
+        state["by_resource"][resource_key]["by_status"].get(status, 0) + 1
+    )
+
+
+def _finalize_activity_report_summary_state(state: dict) -> dict:
+    by_resource_list = list(state["by_resource"].values())
+    by_resource_list.sort(
+        key=lambda item: (
+            int(item.get("total") or 0),
+            str(item.get("resource_name") or ""),
+        ),
+        reverse=True,
+    )
+
+    by_activity_type_list = [
+        {"label": label, "total": total}
+        for label, total in state["by_activity_type"].items()
+    ]
+    by_activity_type_list.sort(key=lambda item: item["total"], reverse=True)
+
+    by_status_list = [
+        {"status": status, "total": total}
+        for status, total in state["by_status"].items()
+    ]
+    by_status_list.sort(key=lambda item: item["total"], reverse=True)
+
+    return {
+        "total": state["total"],
+        "by_status": state["by_status"],
+        "by_status_list": by_status_list,
+        "by_resource": by_resource_list,
+        "by_activity_type": by_activity_type_list,
+    }
+
+
+def _build_activity_report_summary(rows) -> dict:
+    """Monta o mesmo resumo operacional sem exigir que o chamador retenha linhas em RAM."""
+    resource_name_map = _load_resource_name_map()
+    activity_type_label_map = _load_activity_type_label_map()
+    state = _new_activity_report_summary_state(
+        resource_name_map=resource_name_map,
+        activity_type_label_map=activity_type_label_map,
+    )
+
     for item in rows:
-        ws.append([
-            _row_value(
-                item,
-                key,
-                resource_name_map=resource_name_map,
-                resource_status_map=resource_status_map,
-                activity_type_label_map=activity_type_label_map,
-                close_reason_name_map=close_reason_name_map,
-                task_type_name_map=task_type_name_map,
-                report_type=report_type,
-            )
-            for key in selected_fields
-        ])
+        _update_activity_report_summary_state(state, item)
 
-    header_fill = PatternFill("solid", fgColor="1F4E78")
-    header_font = Font(color="FFFFFF", bold=True)
-    thin = Side(style="thin", color="D9E2F3")
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    return _finalize_activity_report_summary_state(state)
 
-    for cell in ws[1]:
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = border
-
-    for row in ws.iter_rows(min_row=2):
-        for cell in row:
-            cell.border = border
-            cell.alignment = Alignment(vertical="top")
-
+def _build_xlsx(
+    spool_path: str,
+    selected_fields: List[str],
+    output_path: str,
+    column_widths: List[int],
+    report_type: str = "ofs_os",
+):
+    wb = Workbook(write_only=True)
+    ws = wb.create_sheet(title="Relatório OS OFS")
     ws.freeze_panes = "A2"
-    xlsx_auto_width(ws)
+    _xlsx_apply_widths(ws, column_widths)
+
+    headers = [FIELD_MAP[key]["xlsx_header"] for key in selected_fields]
+    styles = _xlsx_styles()
+    _append_write_only_row(ws, headers, styles, is_header=True)
+
+    for row_values in _iter_spooled_rows(spool_path):
+        _append_write_only_row(ws, row_values, styles)
 
     wb.save(output_path)
+
 def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
     filename = f"relatorio_os_ofs_{config['date_from']}_{config['date_to']}_{job_id[:8]}.xlsx"
+    spool_path = _job_rows_path(base_dir, job_id)
 
     status_payload = {
         "status": "running",
@@ -2009,13 +2159,21 @@ def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
 
         client = OFSClient()
         config["report_type"] = "ofs_os"
-        rows = _fetch_activities(client, config, base_dir, job_id, status_payload)
+        fetch_result = _fetch_activities(
+            client,
+            config,
+            base_dir,
+            job_id,
+            status_payload,
+            spool_path,
+        )
+        row_count = fetch_result["row_count"]
 
         status_payload.update({
             "status": "running",
             "phase": "Gerando XLSX",
-            "rows_so_far": len(rows),
-            "total_rows": len(rows),
+            "rows_so_far": row_count,
+            "total_rows": row_count,
             "total_raw_rows": status_payload.get("total_raw_rows"),
             "duplicate_activity_ids": status_payload.get("duplicate_activity_ids"),
             "total_pages_processed": status_payload.get("total_pages_processed"),
@@ -2025,14 +2183,20 @@ def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
         _write_job_status(base_dir, job_id, status_payload)
 
         output_path = _job_xlsx_path(base_dir, job_id)
-        _build_xlsx(rows, config["fields"], output_path, report_type="ofs_os")
+        _build_xlsx(
+            spool_path,
+            config["fields"],
+            output_path,
+            fetch_result["column_widths"],
+            report_type="ofs_os",
+        )
 
         status_payload.update({
             "status": "completed",
             "phase": "Extração concluída",
             "finished_at": _now_iso(),
-            "rows_so_far": len(rows),
-            "total_rows": len(rows),
+            "rows_so_far": row_count,
+            "total_rows": row_count,
             "download_ready": True,
         })
         _write_job_status(base_dir, job_id, status_payload)
@@ -2052,7 +2216,7 @@ def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
                 "resources": config["resources"],
                 "activity_types": config["activity_types"],
                 "fields": config["fields"],
-                "total_rows": len(rows),
+                "total_rows": row_count,
                 "total_raw_rows": status_payload.get("total_raw_rows"),
                 "duplicate_activity_ids": status_payload.get("duplicate_activity_ids"),
                 "total_pages_processed": status_payload.get("total_pages_processed"),
@@ -2090,8 +2254,12 @@ def _run_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
             },
         )
 
+    finally:
+        _safe_remove_file(spool_path)
+
 def _run_redes_report_job(base_dir: str, job_id: str, actor: dict, config: dict):
     filename = f"relatorio_redes_{config['date_from']}_{config['date_to']}_{job_id[:8]}.xlsx"
+    spool_path = _job_rows_path(base_dir, job_id)
 
     status_payload = {
         "status": "running",
@@ -2134,13 +2302,22 @@ def _run_redes_report_job(base_dir: str, job_id: str, actor: dict, config: dict)
 
         client = OFSClient()
         config["report_type"] = "redes"
-        rows = _fetch_activities(client, config, base_dir, job_id, status_payload)
+        fetch_result = _fetch_activities(
+            client,
+            config,
+            base_dir,
+            job_id,
+            status_payload,
+            spool_path,
+        )
+        row_count = fetch_result["row_count"]
+        summary_payload = fetch_result["summary"]
 
         status_payload.update({
             "status": "running",
             "phase": "Gerando resumo de Redes",
-            "rows_so_far": len(rows),
-            "total_rows": len(rows),
+            "rows_so_far": row_count,
+            "total_rows": row_count,
             "total_raw_rows": status_payload.get("total_raw_rows"),
             "duplicate_activity_ids": status_payload.get("duplicate_activity_ids"),
             "total_pages_processed": status_payload.get("total_pages_processed"),
@@ -2148,8 +2325,6 @@ def _run_redes_report_job(base_dir: str, job_id: str, actor: dict, config: dict)
             "daily_raw_counts": status_payload.get("daily_raw_counts"),
         })
         _write_job_status(base_dir, job_id, status_payload)
-
-        summary_payload = _build_activity_report_summary(rows)
 
         status_payload.update({
             "status": "running",
@@ -2159,14 +2334,20 @@ def _run_redes_report_job(base_dir: str, job_id: str, actor: dict, config: dict)
         _write_job_status(base_dir, job_id, status_payload)
 
         output_path = _job_xlsx_path(base_dir, job_id)
-        _build_xlsx(rows, config["fields"], output_path, report_type="redes")
+        _build_xlsx(
+            spool_path,
+            config["fields"],
+            output_path,
+            fetch_result["column_widths"],
+            report_type="redes",
+        )
 
         status_payload.update({
             "status": "completed",
             "phase": "Extração de Redes concluída",
             "finished_at": _now_iso(),
-            "rows_so_far": len(rows),
-            "total_rows": len(rows),
+            "rows_so_far": row_count,
+            "total_rows": row_count,
             "summary": summary_payload,
             "download_ready": True,
         })
@@ -2187,7 +2368,7 @@ def _run_redes_report_job(base_dir: str, job_id: str, actor: dict, config: dict)
                 "resources": config["resources"],
                 "activity_types": config["activity_types"],
                 "fields": config["fields"],
-                "total_rows": len(rows),
+                "total_rows": row_count,
                 "total_raw_rows": status_payload.get("total_raw_rows"),
                 "duplicate_activity_ids": status_payload.get("duplicate_activity_ids"),
                 "total_pages_processed": status_payload.get("total_pages_processed"),
@@ -2226,6 +2407,8 @@ def _run_redes_report_job(base_dir: str, job_id: str, actor: dict, config: dict)
             },
         )
 
+    finally:
+        _safe_remove_file(spool_path)
 
 def start_redes_report_job(base_dir: str, actor: dict, config: dict) -> str:
     _ensure_dir(base_dir)

@@ -1,6 +1,6 @@
 .page-relatorios {
   width: 100%;
-  padding: 32px 32px 40px;
+  padding: 32px var(--ofs-content-gutter) 40px;
   box-sizing: border-box;
 }
 
@@ -65,10 +65,10 @@
   gap: 20px;
   min-height: 180px;
   padding: 24px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(29, 31, 38, 0.96) 0%, rgba(21, 23, 29, 0.96) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+  border-radius: var(--ofs-radius-lg);
+  background: var(--ofs-surface);
+  border: 1px solid var(--ofs-border-soft);
+  box-shadow: var(--ofs-shadow-sm);
 }
 
 .report-entry-copy {
@@ -125,7 +125,6 @@
 }
 
 .report-main-btn:hover {
-  transform: translateY(-1px);
   filter: brightness(1.04);
   box-shadow: 0 14px 30px rgba(0, 127, 209, 0.30);
 }
@@ -149,7 +148,6 @@
   background: #4a5562;
 }
 .btn-secondary:hover {
-  transform: translateY(-1px);
   background: #5a6674;
 }
 
@@ -158,7 +156,6 @@
 }
 
 .btn-primary:hover {
-  transform: translateY(-1px);
   filter: brightness(1.04);
 }
 
@@ -171,9 +168,9 @@
 }
 
 .report-section {
-  background: linear-gradient(180deg, rgba(34, 37, 45, 0.96) 0%, rgba(27, 29, 36, 0.96) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 14px;
+  background: var(--ofs-surface);
+  border: 1px solid var(--ofs-border-soft);
+  border-radius: var(--ofs-radius-lg);
   padding: 16px;
   margin-bottom: 14px;
 }
@@ -214,8 +211,8 @@
   margin-top: 6px;
   padding: 0 12px;
   border-radius: 10px;
-  border: 1px solid #3d4653;
-  background: #20242d;
+  border: 1px solid var(--ofs-border);
+  background: var(--ofs-surface-soft);
   color: #fff;
   box-sizing: border-box;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
@@ -223,8 +220,8 @@
 
 .report-grid input[type="date"]:focus {
   outline: none;
-  border-color: rgba(0, 170, 255, 0.55);
-  box-shadow: 0 0 0 3px rgba(0, 170, 255, 0.12);
+  border-color: var(--ofs-accent);
+  box-shadow: var(--ofs-focus-ring);
 }
 
 .checkbox-grid {
@@ -256,7 +253,6 @@
 .check-card:hover {
   background: rgba(31, 35, 43, 0.96);
   border-color: rgba(0, 170, 255, 0.18);
-  transform: translateY(-1px);
 }
 
 .check-card input {
@@ -312,7 +308,6 @@
 
 .resource-type-btn:hover {
   background: #252b34;
-  transform: translateY(-1px);
 }
 
 .resource-type-btn.active {
@@ -327,7 +322,7 @@
 
 .resource-list {
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 12px;
+  border-radius: var(--ofs-radius-lg);
   background: #171b22;
   padding: 10px;
 }
@@ -356,7 +351,7 @@
 }
 
 .resource-name {
-  color: #f1f1f1;
+  color: var(--ofs-text);
   font-size: 13px;
 }
 
@@ -406,8 +401,8 @@
   background: #1b2028;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-left: 5px solid #0d6efd;
-  color: #f1f1f1;
-  border-radius: 12px;
+  color: var(--ofs-text);
+  border-radius: var(--ofs-radius-lg);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
   overflow: hidden;
   opacity: 0;
@@ -510,7 +505,7 @@
   gap: 14px;
   margin-bottom: 14px;
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: var(--ofs-radius-lg);
   background: rgba(27, 31, 38, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.06);
   flex-wrap: wrap;
@@ -536,7 +531,7 @@
 
 .resource-sync-progress {
   width: min(420px, 100%);
-  background: #20242d;
+  background: var(--ofs-surface-soft);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   padding: 9px 10px;
@@ -677,7 +672,7 @@
     gap: 3px;
     margin-bottom: 10px;
     padding: 10px 12px;
-    border-radius: 12px;
+    border-radius: var(--ofs-radius-lg);
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -737,7 +732,6 @@
 }
 
 .report-back-link:hover {
-  transform: translateY(-1px);
   background: #313844;
   border-color: rgba(0, 170, 255, 0.18);
 }
@@ -792,7 +786,7 @@ body[data-ofs-os-start-url] {
 .report-summary-box {
   margin-top: 18px;
   padding: 16px;
-  border-radius: 14px;
+  border-radius: var(--ofs-radius-lg);
   background: linear-gradient(180deg, rgba(20, 24, 31, 0.96) 0%, rgba(16, 19, 25, 0.96) 100%);
   border: 1px solid rgba(0, 170, 255, 0.16);
   box-shadow:
@@ -829,7 +823,7 @@ body[data-ofs-os-start-url] {
 
 .report-summary-item {
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--ofs-radius-lg);
   background: rgba(12, 15, 21, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -874,8 +868,8 @@ body[data-ofs-os-start-url] {
   height: 42px;
   padding: 0 12px;
   border-radius: 10px;
-  border: 1px solid #3d4653;
-  background: #20242d;
+  border: 1px solid var(--ofs-border);
+  background: var(--ofs-surface-soft);
   color: #ffffff;
   box-sizing: border-box;
   transition:
@@ -889,8 +883,8 @@ body[data-ofs-os-start-url] {
 
 .resource-search-field input:focus {
   outline: none;
-  border-color: rgba(0, 170, 255, 0.55);
-  box-shadow: 0 0 0 3px rgba(0, 170, 255, 0.12);
+  border-color: var(--ofs-accent);
+  box-shadow: var(--ofs-focus-ring);
 }
 
 .resource-search-count {
@@ -926,7 +920,7 @@ body[data-ofs-os-start-url] {
     margin: 12px 0 14px;
     padding: 10px 12px;
     border: 1px solid rgba(148, 163, 184, 0.16);
-    border-radius: 12px;
+    border-radius: var(--ofs-radius-lg);
     background: rgba(15, 23, 42, 0.35);
 }
 
@@ -955,8 +949,8 @@ body[data-ofs-os-start-url] {
 }
 
 .resource-status-filter-btn.active {
-    background: #0d6efd;
-    border-color: #0d6efd;
+    background: var(--ofs-accent);
+    border-color: var(--ofs-accent);
     color: #ffffff;
 }
 
@@ -1038,7 +1032,7 @@ body[data-ofs-os-start-url] {
 
 .redes-kpi-card {
   padding: 16px;
-  border-radius: 14px;
+  border-radius: var(--ofs-radius-lg);
   background: rgba(5, 18, 14, 0.74);
   border: 1px solid rgba(34, 197, 94, 0.16);
 }
@@ -1078,7 +1072,7 @@ body[data-ofs-os-start-url] {
 
 .redes-mini-card {
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--ofs-radius-lg);
   background: rgba(10, 15, 20, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
@@ -1099,7 +1093,7 @@ body[data-ofs-os-start-url] {
 
 .redes-table-wrap {
   overflow-x: auto;
-  border-radius: 12px;
+  border-radius: var(--ofs-radius-lg);
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -1134,7 +1128,7 @@ body[data-ofs-os-start-url] {
 
 .redes-empty {
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--ofs-radius-lg);
   color: #9aa4b2;
   background: rgba(10, 15, 20, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.07);

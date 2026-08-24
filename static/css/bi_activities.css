@@ -1,6 +1,6 @@
 .bi-page {
-    padding: 32px;
-    color: #f5f5f7;
+    padding: 32px var(--ofs-content-gutter);
+    color: var(--ofs-text);
 }
 
 .bi-header {
@@ -9,7 +9,7 @@
 
 .bi-kicker {
     margin: 0 0 8px;
-    color: #ff4fa3;
+    color: var(--ofs-accent);
     font-size: 0.82rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -36,11 +36,11 @@
 }
 
 .bi-card {
-    background: rgba(18, 18, 26, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 18px;
-    padding: 22px;
-    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.32);
+    background: var(--ofs-surface);
+    border: 1px solid var(--ofs-border-soft);
+    border-radius: var(--ofs-radius-lg);
+    padding: 20px;
+    box-shadow: var(--ofs-shadow-sm);
 }
 
 .bi-card-header {
@@ -92,14 +92,14 @@
     background: rgba(255, 255, 255, 0.06);
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 12px;
+    border-radius: var(--ofs-radius-md);
     padding: 11px 12px;
     outline: none;
 }
 
 .bi-field input:focus {
-    border-color: rgba(255, 79, 163, 0.75);
-    box-shadow: 0 0 0 3px rgba(255, 79, 163, 0.12);
+    border-color: var(--ofs-accent);
+    box-shadow: var(--ofs-focus-ring);
 }
 
 .bi-field small {
@@ -114,7 +114,7 @@
     gap: 12px 18px;
     padding: 14px;
     background: rgba(255, 255, 255, 0.04);
-    border-radius: 14px;
+    border-radius: var(--ofs-radius-lg);
 }
 
 .bi-statuses label {
@@ -135,27 +135,26 @@
 .bi-btn-primary,
 .bi-btn-secondary {
     border: 0;
-    border-radius: 12px;
+    border-radius: var(--ofs-radius-md);
     padding: 11px 16px;
     font-weight: 800;
     cursor: pointer;
-    transition: transform 0.15s ease, opacity 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
 .bi-btn-primary {
-    background: linear-gradient(135deg, #ff2f92, #ff73bd);
+    background: var(--ofs-accent);
     color: #fff;
 }
 
 .bi-btn-secondary {
     background: rgba(255, 255, 255, 0.08);
-    color: #f5f5f7;
+    color: var(--ofs-text);
     border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .bi-btn-primary:hover,
 .bi-btn-secondary:hover {
-    transform: translateY(-1px);
 }
 
 .bi-btn-primary:disabled,
@@ -168,7 +167,7 @@
 .bi-result {
     margin-top: 18px;
     padding: 14px;
-    border-radius: 14px;
+    border-radius: var(--ofs-radius-lg);
     white-space: pre-wrap;
     line-height: 1.45;
     font-size: 0.9rem;
@@ -346,7 +345,7 @@
 .bi-mini-btn {
     border: 1px solid rgba(255, 255, 255, 0.10);
     background: rgba(255, 255, 255, 0.06);
-    color: #f5f5f7;
+    color: var(--ofs-text);
     border-radius: 10px;
     padding: 8px 10px;
     font-size: 0.78rem;
@@ -379,13 +378,12 @@
 }
 
 .bi-activity-type-option:hover {
-    transform: translateY(-1px);
     border-color: rgba(255, 79, 163, 0.28);
     background: rgba(255, 255, 255, 0.055);
 }
 
 .bi-activity-type-option input {
-    accent-color: #ff4fa3;
+    accent-color: var(--ofs-accent);
 }
 
 .bi-activity-type-label {
