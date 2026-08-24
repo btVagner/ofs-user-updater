@@ -231,6 +231,10 @@
         massiveProgressMeta.textContent = `Processamento finalizado. ${success} sucesso(s) e ${error} erro(s).`;
       } else if (data.status === "error") {
         massiveProgressMeta.textContent = `Job finalizado com erro. ${success} sucesso(s) e ${error} erro(s).`;
+      } else if (data.status === "abandoned") {
+        massiveProgressMeta.textContent =
+          data.status_message ||
+          "Job anterior abandonado automaticamente por falta de atividade recente. A fila foi liberada para um novo envio.";
       } else {
         massiveProgressMeta.textContent = "Aguardando processamento...";
       }
@@ -338,7 +342,11 @@
       const data = await fetchMassiveStatus(currentJobId);
       updateMassiveSummaryFromApi(data);
 
-      if (data.status === "finished" || data.status === "error") {
+      if (
+        data.status === "finished" ||
+        data.status === "error" ||
+        data.status === "abandoned"
+      ) {
         setMassiveButtonsState(false);
         stopMassivePolling();
         return;
@@ -487,7 +495,8 @@
         currentJobId = startData.job_id;
 
         if (massiveProgressMeta) {
-          massiveProgressMeta.textContent = "Job iniciado. Aguardando primeiros retornos...";
+          massiveProgressMeta.textContent =
+            startData.message || "Job iniciado. Aguardando primeiros retornos...";
         }
 
         pollMassiveStatus();

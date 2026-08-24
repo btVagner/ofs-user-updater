@@ -21,6 +21,7 @@ OIC_GRANT_TYPE = os.getenv("OIC_GRANT_TYPE", "").strip()
 REQUEST_TIMEOUT = 60
 DEFAULT_EVENT = "activityCreated"
 MASSIVE_JOB_LOCK_NAME = "ddc_mensageria_massivo_lock"
+MASSIVE_JOB_STALE_SECONDS = 300
 
 _token_cache = {
     "access_token": None,
@@ -205,7 +206,61 @@ def _json_dump(value):
         return str(value)
 
 
-def _create_job(usuario_id: Optional[int], ids: List[str]) -> Tuple[int, str]:
+def _recover_stale_jobs(cur) -> int:
+    cur.execute(
+        """
+        SELECT id, status
+        FROM ddc_mensageria_jobs
+        WHERE status IN ('pending', 'running')
+          AND TIMESTAMPDIFF(
+                SECOND,
+                CASE
+                    WHEN status = 'pending' THEN created_at
+                    ELSE COALESCE(heartbeat_at, started_at, created_at)
+                END,
+                NOW()
+              ) >= %s
+        FOR UPDATE
+        """,
+        (MASSIVE_JOB_STALE_SECONDS,),
+    )
+    stale_jobs = cur.fetchall() or []
+
+    recovered_count = 0
+
+    for row in stale_jobs:
+        if isinstance(row, (tuple, list)):
+            job_id = row[0]
+            previous_status = row[1]
+        else:
+            job_id = row.get("id")
+            previous_status = row.get("status")
+
+        reason = (
+            "Job abandonado automaticamente após "
+            f"{MASSIVE_JOB_STALE_SECONDS} segundos sem atividade válida "
+            f"(status anterior: {previous_status})."
+        )
+
+        cur.execute(
+            """
+            UPDATE ddc_mensageria_jobs
+            SET status = 'abandoned',
+                finished_at = NOW(),
+                abandoned_at = NOW(),
+                abandoned_reason = %s
+            WHERE id = %s
+              AND status IN ('pending', 'running')
+            """,
+            (reason, job_id),
+        )
+
+        recovered_count += int(cur.rowcount or 0)
+
+    return recovered_count
+
+
+def _create_job(usuario_id: Optional[int], ids: List[str]) -> Tuple[int, str, int]:
     job_uuid = uuid.uuid4().hex
 
     conn = get_connection()
@@ -236,12 +291,15 @@ def _create_job(usuario_id: Optional[int], ids: List[str]) -> Tuple[int, str]:
 
         lock_acquired = True
 
+        recovered_stale_count = _recover_stale_jobs(cur)
+
         cur.execute(
             """
             SELECT id
             FROM ddc_mensageria_jobs
             WHERE status IN ('pending', 'running')
             LIMIT 1
+            FOR UPDATE
             """
         )
         active_job = cur.fetchone()
@@ -270,7 +328,7 @@ def _create_job(usuario_id: Optional[int], ids: List[str]) -> Tuple[int, str]:
             cur.execute(item_sql, (job_id, activity_id, idx))
 
         conn.commit()
-        return job_id, job_uuid
+        return job_id, job_uuid, recovered_stale_count
 
     except Exception:
         conn.rollback()
@@ -295,12 +353,15 @@ def _set_job_running(job_id: int):
             """
             UPDATE ddc_mensageria_jobs
             SET status = 'running',
-                started_at = NOW()
+                started_at = COALESCE(started_at, NOW()),
+                heartbeat_at = NOW()
             WHERE id = %s
+              AND status = 'pending'
             """,
             (job_id,),
         )
         conn.commit()
+        return int(cur.rowcount or 0) == 1
     finally:
         cur.close()
         conn.close()
@@ -317,6 +378,28 @@ def _update_job_item(
     conn = get_connection()
     cur = conn.cursor()
     try:
+        cur.execute(
+            """
+            UPDATE ddc_mensageria_jobs
+            SET processed = processed + 1,
+                success_count = success_count + %s,
+                error_count = error_count + %s,
+                percent = ROUND(((processed + 1) / total) * 100),
+                heartbeat_at = NOW()
+            WHERE id = %s
+              AND status = 'running'
+            """,
+            (
+                1 if success else 0,
+                0 if success else 1,
+                job_id,
+            ),
+        )
+
+        if int(cur.rowcount or 0) != 1:
+            conn.rollback()
+            return False
+
         cur.execute(
             """
             UPDATE ddc_mensageria_job_items
@@ -338,23 +421,8 @@ def _update_job_item(
             ),
         )
 
-        cur.execute(
-            """
-            UPDATE ddc_mensageria_jobs
-            SET processed = processed + 1,
-                success_count = success_count + %s,
-                error_count = error_count + %s,
-                percent = ROUND(((processed + 1) / total) * 100)
-            WHERE id = %s
-            """,
-            (
-                1 if success else 0,
-                0 if success else 1,
-                job_id,
-            ),
-        )
-
         conn.commit()
+        return True
     finally:
         cur.close()
         conn.close()
@@ -369,15 +437,18 @@ def _finish_job(job_id: int, status: str):
             UPDATE ddc_mensageria_jobs
             SET status = %s,
                 finished_at = NOW(),
+                heartbeat_at = NOW(),
                 percent = CASE
                     WHEN total > 0 THEN ROUND((processed / total) * 100)
                     ELSE 0
                 END
             WHERE id = %s
+              AND status = 'running'
             """,
             (status, job_id),
         )
         conn.commit()
+        return int(cur.rowcount or 0) == 1
     finally:
         cur.close()
         conn.close()
@@ -391,29 +462,35 @@ def _mark_job_error(job_id: int, message: str):
             """
             UPDATE ddc_mensageria_jobs
             SET status = 'error',
-                finished_at = NOW()
+                finished_at = NOW(),
+                heartbeat_at = NOW()
             WHERE id = %s
+              AND status IN ('pending', 'running')
             """,
             (job_id,),
         )
 
-        cur.execute(
-            """
-            INSERT INTO ddc_mensageria_job_items
-            (job_id, activity_id, item_order, status, status_code, response_body, message, processed_at)
-            VALUES (%s, %s, %s, 'error', %s, %s, %s, NOW())
-            """,
-            (
-                job_id,
-                "SYSTEM",
-                999999999,
-                0,
-                None,
-                message,
-            ),
-        )
+        job_marked_error = int(cur.rowcount or 0) == 1
+
+        if job_marked_error:
+            cur.execute(
+                """
+                INSERT INTO ddc_mensageria_job_items
+                (job_id, activity_id, item_order, status, status_code, response_body, message, processed_at)
+                VALUES (%s, %s, %s, 'error', %s, %s, %s, NOW())
+                """,
+                (
+                    job_id,
+                    "SYSTEM",
+                    999999999,
+                    0,
+                    None,
+                    message,
+                ),
+            )
 
         conn.commit()
+        return job_marked_error
     finally:
         cur.close()
         conn.close()
@@ -438,7 +515,8 @@ def _process_mass_job(job_id: int):
         cur.close()
         conn.close()
 
-    _set_job_running(job_id)
+    if not _set_job_running(job_id):
+        return
 
     try:
         for idx, item in enumerate(items):
@@ -452,7 +530,7 @@ def _process_mass_job(job_id: int):
             else:
                 message = f"OS {activity_id} não enviada. API respondeu {result['status_code']}."
 
-            _update_job_item(
+            item_updated = _update_job_item(
                 job_id=job_id,
                 job_item_id=job_item_id,
                 success=result["success"],
@@ -460,6 +538,9 @@ def _process_mass_job(job_id: int):
                 response_body=result["response_body"],
                 message=message,
             )
+
+            if not item_updated:
+                return
 
             if idx < len(items) - 1:
                 time.sleep(1)
@@ -477,7 +558,10 @@ def start_massive_job(usuario_id: Optional[int], ids: List[str]) -> dict:
     if not clean_ids:
         raise DDCMensageriaError("Nenhum ID válido foi informado para o envio massivo.")
 
-    job_id, job_uuid = _create_job(usuario_id=usuario_id, ids=clean_ids)
+    job_id, job_uuid, recovered_stale_count = _create_job(
+        usuario_id=usuario_id,
+        ids=clean_ids,
+    )
 
     thread = threading.Thread(
         target=_process_mass_job,
@@ -486,11 +570,19 @@ def start_massive_job(usuario_id: Optional[int], ids: List[str]) -> dict:
     )
     thread.start()
 
+    message = f"Job massivo iniciado com {len(clean_ids)} ID(s)."
+    if recovered_stale_count:
+        message += (
+            " Um envio anterior sem atividade foi marcado como abandonado "
+            "automaticamente e deixou de bloquear a fila."
+        )
+
     return {
         "success": True,
         "job_id": job_uuid,
         "total": len(clean_ids),
-        "message": f"Job massivo iniciado com {len(clean_ids)} ID(s).",
+        "recovered_stale_count": recovered_stale_count,
+        "message": message,
     }
 
 
@@ -513,7 +605,10 @@ def get_job_status(job_uuid: str) -> dict:
                 percent,
                 created_at,
                 started_at,
-                finished_at
+                heartbeat_at,
+                finished_at,
+                abandoned_at,
+                abandoned_reason
             FROM ddc_mensageria_jobs
             WHERE job_uuid = %s
             """,
@@ -548,6 +643,13 @@ def get_job_status(job_uuid: str) -> dict:
                 processed_at.strftime("%H:%M:%S")
                 if processed_at else None
             )
+        status_message = None
+        if job["status"] == "abandoned":
+            status_message = (
+                job.get("abandoned_reason")
+                or "Job abandonado automaticamente por ausência de atividade recente."
+            )
+
         return {
             "job_id": job["job_uuid"],
             "status": job["status"],
@@ -558,9 +660,12 @@ def get_job_status(job_uuid: str) -> dict:
             "error_count": job["error_count"],
             "percent": job["percent"],
             "logs": logs,
+            "status_message": status_message,
             "created_at": str(job["created_at"]) if job["created_at"] else None,
             "started_at": str(job["started_at"]) if job["started_at"] else None,
+            "heartbeat_at": str(job["heartbeat_at"]) if job["heartbeat_at"] else None,
             "finished_at": str(job["finished_at"]) if job["finished_at"] else None,
+            "abandoned_at": str(job["abandoned_at"]) if job["abandoned_at"] else None,
         }
     finally:
         cur.close()

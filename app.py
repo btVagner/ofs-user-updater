@@ -20,7 +20,13 @@ APP_ROOT = os.getenv("APP_ROOT", "").strip()
 if APP_ROOT:
     app.config["APPLICATION_ROOT"] = APP_ROOT
 
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "minha_chave_secreta")
+flask_secret_key = os.getenv("FLASK_SECRET_KEY", "").strip()
+if not flask_secret_key:
+    raise RuntimeError(
+        "FLASK_SECRET_KEY não configurada. Defina a variável no ambiente ou no arquivo .env."
+    )
+
+app.secret_key = flask_secret_key
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 register_routes(app)
