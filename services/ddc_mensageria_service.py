@@ -3,7 +3,7 @@ import os
 import threading
 import time
 import uuid
-from typing import Optional, List, Tuple
+from typing import Callable, Optional, List, Tuple
 
 import requests
 
@@ -79,7 +79,7 @@ def _extract_expires_in(token_response: dict) -> int:
         return 300
 
 
-def _request_new_token() -> str:
+def _request_new_token(heartbeat_callback: Optional[Callable[[], None]] = None) -> str:
     _validate_env()
 
     payload = {
@@ -89,6 +89,9 @@ def _request_new_token() -> str:
     }
 
     try:
+        if heartbeat_callback:
+            heartbeat_callback()
+
         response = requests.post(
             OIC_TOKEN_URL,
             data=payload,
@@ -120,18 +123,24 @@ def _request_new_token() -> str:
     return access_token
 
 
-def _get_valid_token(force_refresh: bool = False) -> str:
+def _get_valid_token(
+    force_refresh: bool = False,
+    heartbeat_callback: Optional[Callable[[], None]] = None,
+) -> str:
     with _token_lock:
         cached_token = _token_cache.get("access_token")
         expires_at = float(_token_cache.get("expires_at") or 0)
 
     if force_refresh or not cached_token or time.time() >= expires_at:
-        return _request_new_token()
+        return _request_new_token(heartbeat_callback=heartbeat_callback)
 
     return cached_token
 
 
-def _send_ddc_request(activity_id: str) -> dict:
+def _send_ddc_request(
+    activity_id: str,
+    heartbeat_callback: Optional[Callable[[], None]] = None,
+) -> dict:
     _validate_env()
 
     payload = {
@@ -151,11 +160,17 @@ def _send_ddc_request(activity_id: str) -> dict:
         )
 
     try:
-        token = _get_valid_token(force_refresh=False)
+        token = _get_valid_token(
+            force_refresh=False,
+            heartbeat_callback=heartbeat_callback,
+        )
         response = _do_request(token)
 
         if response.status_code in (401, 403):
-            token = _get_valid_token(force_refresh=True)
+            token = _get_valid_token(
+                force_refresh=True,
+                heartbeat_callback=heartbeat_callback,
+            )
             response = _do_request(token)
 
     except Exception as e:
@@ -206,12 +221,26 @@ def _json_dump(value):
         return str(value)
 
 
-def _recover_stale_jobs(cur) -> int:
+def _build_stale_reason(previous_status: str) -> str:
+    return (
+        "Job abandonado automaticamente após "
+        f"{MASSIVE_JOB_STALE_SECONDS} segundos sem atividade válida "
+        f"(status anterior: {previous_status})."
+    )
+
+
+def _recover_job_if_stale(cur, job_id: int, previous_status: str) -> bool:
+    reason = _build_stale_reason(previous_status)
+
     cur.execute(
         """
-        SELECT id, status
-        FROM ddc_mensageria_jobs
-        WHERE status IN ('pending', 'running')
+        UPDATE ddc_mensageria_jobs
+        SET status = 'abandoned',
+            finished_at = NOW(),
+            abandoned_at = NOW(),
+            abandoned_reason = %s
+        WHERE id = %s
+          AND status IN ('pending', 'running')
           AND TIMESTAMPDIFF(
                 SECOND,
                 CASE
@@ -220,15 +249,27 @@ def _recover_stale_jobs(cur) -> int:
                 END,
                 NOW()
               ) >= %s
-        FOR UPDATE
         """,
-        (MASSIVE_JOB_STALE_SECONDS,),
+        (reason, job_id, MASSIVE_JOB_STALE_SECONDS),
     )
-    stale_jobs = cur.fetchall() or []
+
+    return int(cur.rowcount or 0) == 1
+
+
+def _recover_stale_jobs(cur) -> int:
+    cur.execute(
+        """
+        SELECT id, status
+        FROM ddc_mensageria_jobs
+        WHERE status IN ('pending', 'running')
+        FOR UPDATE
+        """
+    )
+    active_jobs = cur.fetchall() or []
 
     recovered_count = 0
 
-    for row in stale_jobs:
+    for row in active_jobs:
         if isinstance(row, (tuple, list)):
             job_id = row[0]
             previous_status = row[1]
@@ -236,26 +277,8 @@ def _recover_stale_jobs(cur) -> int:
             job_id = row.get("id")
             previous_status = row.get("status")
 
-        reason = (
-            "Job abandonado automaticamente após "
-            f"{MASSIVE_JOB_STALE_SECONDS} segundos sem atividade válida "
-            f"(status anterior: {previous_status})."
-        )
-
-        cur.execute(
-            """
-            UPDATE ddc_mensageria_jobs
-            SET status = 'abandoned',
-                finished_at = NOW(),
-                abandoned_at = NOW(),
-                abandoned_reason = %s
-            WHERE id = %s
-              AND status IN ('pending', 'running')
-            """,
-            (reason, job_id),
-        )
-
-        recovered_count += int(cur.rowcount or 0)
+        if _recover_job_if_stale(cur, job_id, previous_status):
+            recovered_count += 1
 
     return recovered_count
 
@@ -341,6 +364,26 @@ def _create_job(usuario_id: Optional[int], ids: List[str]) -> Tuple[int, str, in
                 cur.fetchone()
             except Exception:
                 pass
+        cur.close()
+        conn.close()
+
+
+def _touch_job_heartbeat(job_id: int) -> bool:
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            UPDATE ddc_mensageria_jobs
+            SET heartbeat_at = NOW()
+            WHERE id = %s
+              AND status = 'running'
+            """,
+            (job_id,),
+        )
+        conn.commit()
+        return int(cur.rowcount or 0) == 1
+    finally:
         cur.close()
         conn.close()
 
@@ -523,7 +566,10 @@ def _process_mass_job(job_id: int):
             job_item_id = int(item["id"])
             activity_id = str(item["activity_id"]).strip()
 
-            result = _send_ddc_request(activity_id)
+            result = _send_ddc_request(
+                activity_id,
+                heartbeat_callback=lambda: _touch_job_heartbeat(job_id),
+            )
 
             if result["success"]:
                 message = f"OS {activity_id} enviada com sucesso. API respondeu {result['status_code']}."
@@ -586,38 +632,55 @@ def start_massive_job(usuario_id: Optional[int], ids: List[str]) -> dict:
     }
 
 
+def _select_job_by_uuid(cur, job_uuid: str):
+    cur.execute(
+        """
+        SELECT
+            id,
+            job_uuid,
+            status,
+            event_name,
+            total,
+            processed,
+            success_count,
+            error_count,
+            percent,
+            created_at,
+            started_at,
+            heartbeat_at,
+            finished_at,
+            abandoned_at,
+            abandoned_reason
+        FROM ddc_mensageria_jobs
+        WHERE job_uuid = %s
+        """,
+        (job_uuid,),
+    )
+    return cur.fetchone()
+
+
 def get_job_status(job_uuid: str) -> dict:
     conn = get_connection()
     cur = conn.cursor(dictionary=True)
 
     try:
-        cur.execute(
-            """
-            SELECT
-                id,
-                job_uuid,
-                status,
-                event_name,
-                total,
-                processed,
-                success_count,
-                error_count,
-                percent,
-                created_at,
-                started_at,
-                heartbeat_at,
-                finished_at,
-                abandoned_at,
-                abandoned_reason
-            FROM ddc_mensageria_jobs
-            WHERE job_uuid = %s
-            """,
-            (job_uuid,),
-        )
-        job = cur.fetchone()
+        job = _select_job_by_uuid(cur, job_uuid)
 
         if not job:
             raise DDCMensageriaError("Job não encontrado.")
+
+        if job["status"] in ("pending", "running"):
+            _recover_job_if_stale(
+                cur,
+                int(job["id"]),
+                str(job["status"]),
+            )
+            conn.commit()
+
+            # Releitura obrigatória: se o worker tiver finalizado ou outro fluxo
+            # tiver recuperado o job enquanto o polling aguardava o UPDATE,
+            # devolvemos o estado que realmente venceu no banco.
+            job = _select_job_by_uuid(cur, job_uuid)
 
         cur.execute(
             """
