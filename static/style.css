@@ -4095,3 +4095,78 @@ body:not(.login-page) .dashboard-table th {
 body:not(.login-page) .dashboard-table tr:hover td {
     background: #f5f3ee;
 }
+
+/* ===== Demanda 17.3: contraste dos gráficos e Consulta de Usuários OFS ===== */
+/* Os gráficos SVG "clean" ainda carregavam cores desenhadas para a base escura. */
+body:not(.login-page) .dashboard-grid-line-clean {
+    stroke: rgba(79, 89, 100, 0.24);
+}
+
+body:not(.login-page) .dashboard-point-label-clean {
+    fill: #34404b;
+}
+
+body:not(.login-page) .dashboard-point-label-clean.notdone {
+    fill: #8a6110;
+}
+
+body:not(.login-page) .dashboard-axis-label-clean {
+    fill: #4f5964;
+    font-weight: 600;
+}
+
+body:not(.login-page) .dashboard-chart-legend-clean {
+    color: #4f5964;
+}
+
+body:not(.login-page) .dashboard-line-comparison {
+    color: #55616d;
+}
+
+body:not(.login-page) .dashboard-comparison-line {
+    stroke: #5d6873;
+    filter: none;
+}
+
+/* Consulta de Usuários OFS: superfície e progresso alinhados ao tema claro. */
+body:not(.login-page) .users-export-page > h2 {
+    color: #1d2329;
+}
+
+body:not(.login-page) .users-export-card {
+    background: var(--ofs-surface);
+    color: var(--ofs-text);
+    border: 1px solid var(--ofs-border-soft);
+    border-radius: var(--ofs-radius-lg);
+    box-shadow: var(--ofs-shadow-sm);
+    overflow-x: visible;
+}
+
+body:not(.login-page) .users-export-card h3,
+body:not(.login-page) .users-export-progress-head {
+    color: #242a31;
+}
+
+body:not(.login-page) .users-export-copy,
+body:not(.login-page) .users-export-details {
+    color: #5f6974;
+}
+
+body:not(.login-page) .users-export-progress-track {
+    background: #e2dfd8;
+    border: 1px solid #c9c5bd;
+}
+
+body:not(.login-page) .users-export-progress-bar {
+    background: var(--ofs-accent);
+}
+
+body:not(.login-page) .users-export-error {
+    color: #a13737;
+}
+
+body:not(.login-page) .users-export-actions .btn-primary,
+body:not(.login-page) .users-export-actions .btn-secondary-link {
+    min-height: 40px;
+}
+
