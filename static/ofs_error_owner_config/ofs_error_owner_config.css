@@ -104,3 +104,38 @@
     content: " ▼";
     font-size: 11px;
 }
+/* ===== Demanda 17.2: tema claro consistente ===== */
+.error-owners-table thead {
+  background: #efede7;
+}
+
+.error-owners-table th {
+  color: #45515d;
+  border-bottom-color: #d8d4cc;
+}
+
+.error-owners-table td,
+.message-box {
+  color: #303840;
+  border-bottom-color: #e0ddd6;
+}
+
+.error-owners-table tr:hover {
+  background: #f5f3ee;
+}
+
+.origin-badge {
+  background: #eef2f5;
+  border-color: #d7e0e8;
+  color: #40505f;
+}
+
+.inline-form select {
+  background: #ffffff;
+  border-color: #cbc7bf;
+  color: #242a31;
+}
+
+.sortable:hover {
+  color: #225f98;
+}

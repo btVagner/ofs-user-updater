@@ -568,3 +568,99 @@
     justify-self: start;
   }
 }
+/* ===== Demanda 17.2: tema claro consistente ===== */
+.page-ddc-mensageria {
+  color: var(--ofs-text);
+}
+
+.page-ddc-mensageria .page-header h2,
+.ddc-option-header h3,
+.table-title,
+.summary-value {
+  color: #1d2329;
+}
+
+.page-ddc-mensageria .page-subtitle,
+.ddc-option-header p,
+.massive-help-text,
+.summary-label,
+.table-counter,
+.massive-progress-meta,
+.massive-log-empty,
+.massive-log-time {
+  color: #66707a;
+}
+
+.ddc-option-card,
+.summary-card,
+.massive-progress-card,
+.table-card {
+  background: var(--ofs-surface);
+  border-color: var(--ofs-border-soft);
+  box-shadow: var(--ofs-shadow-sm);
+}
+
+.ddc-expand-box,
+.table-toolbar {
+  background: #f0eee8;
+  border-color: #d8d4cc;
+}
+
+.page-ddc-mensageria .filter-field input,
+.page-ddc-mensageria .filter-field select {
+  background: #ffffff;
+  color: #242a31;
+  border-color: #cbc7bf;
+}
+
+.massive-progress-bar {
+  background: #ddd9d1;
+  border-color: #cbc7bf;
+}
+
+.massive-log-item {
+  background: #ffffff;
+  border-color: #ddd9d1;
+}
+
+.massive-log-message {
+  color: #38414a;
+}
+
+.success-msg,
+.ddc-result-success {
+  color: #22643a;
+  background: #edf8f0;
+  border-color: #b8dfc3;
+}
+
+.error-msg,
+.ddc-result-error {
+  color: #9c3432;
+  background: #fff0ef;
+  border-color: #efc2bf;
+}
+
+.info-msg {
+  color: #285c89;
+  background: #edf5fc;
+  border-color: #bfd7ea;
+}
+
+.badge-ok {
+  color: #22643a;
+  background: #edf8f0;
+  border-color: #b8dfc3;
+}
+
+.badge-pending {
+  color: #8a6414;
+  background: #fff8df;
+  border-color: #ead79a;
+}
+
+.badge-error {
+  color: #9c3432;
+  background: #fff0ef;
+  border-color: #efc2bf;
+}

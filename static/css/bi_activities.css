@@ -487,3 +487,85 @@
 .bi-summary-card.danger strong {
     color: #fecaca;
 }
+/* ===== Demanda 17.2: tema claro consistente ===== */
+.bi-page {
+    color: var(--ofs-text);
+}
+
+.bi-header h1,
+.bi-card-header h2,
+.bi-summary-card strong {
+    color: #1d2329;
+}
+
+.bi-subtitle,
+.bi-card-header p,
+.bi-field small,
+.bi-activity-types-header small,
+.bi-summary-card span,
+.bi-summary-card small {
+    color: #66707a;
+}
+
+.bi-card,
+.bi-summary-card {
+    background: var(--ofs-surface);
+    border-color: var(--ofs-border-soft);
+    box-shadow: var(--ofs-shadow-sm);
+}
+
+.bi-field label,
+.bi-statuses span,
+.bi-statuses label {
+    color: #4f5964;
+}
+
+.bi-field input {
+    background: #ffffff;
+    color: #242a31;
+    border-color: #cbc7bf;
+}
+
+.bi-statuses,
+.bi-activity-types,
+.bi-activity-type-option {
+    background: #f3f1ec;
+    border-color: #d8d4cc;
+}
+
+.bi-activity-type-option:hover {
+    background: #fbfaf7;
+    border-color: #bfd2e3;
+}
+
+.bi-activity-type-label,
+.bi-table,
+.bi-table td {
+    color: #303840;
+}
+
+.bi-activity-type-code,
+.bi-empty,
+.bi-empty-inline {
+    color: #6b7580;
+}
+
+.bi-table-wrapper {
+    border-color: #d8d4cc;
+}
+
+.bi-table th {
+    color: #45515d;
+    background: #efede7;
+}
+
+.bi-table td,
+.bi-table th {
+    border-bottom-color: #e0ddd6;
+}
+
+.bi-error-preview {
+    background: #fff2f1;
+    color: #8e3836;
+    border-color: #efc8c5;
+}

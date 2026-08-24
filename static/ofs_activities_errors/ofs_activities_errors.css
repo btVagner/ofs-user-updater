@@ -997,3 +997,145 @@
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.04);
 }
+/* ===== Demanda 17.2: tema claro consistente ===== */
+.page-atividades,
+#ofsReprocessingPage {
+  color: var(--ofs-text);
+}
+
+.page-atividades h2,
+.modal-custom h3,
+.dashboard-card-header h3,
+.type-filter-group-title strong {
+  color: #1d2329;
+}
+
+.kpi,
+.filtro-card,
+.tabela-card,
+.modal-custom,
+.job-card,
+.dashboard-card,
+.metric-box,
+.type-filter-list,
+.dashboard-dropdown-menu,
+.pending-close-toggle,
+.pending-close-filter-btn,
+.type-filter-group-title,
+.type-filter-empty {
+  background: var(--ofs-surface);
+  border-color: var(--ofs-border-soft);
+  color: var(--ofs-text);
+  box-shadow: var(--ofs-shadow-sm);
+}
+
+.kpi,
+.filtro-form label,
+.field label,
+.job-label,
+.job-msg,
+.job-next-run,
+.dashboard-subtitle,
+.metric-label,
+.type-filter-code,
+.pending-close-filter-label,
+.type-filter-group-title span,
+.type-filter-empty,
+.empty-row {
+  color: #66707a;
+}
+
+.filtro-form input,
+.filtro-form input[type="file"],
+.modal-grid-1 textarea,
+#detailModal textarea {
+  background: #ffffff;
+  color: #242a31;
+  border-color: #cbc7bf;
+}
+
+.tabela-atividades thead {
+  background: #efede7;
+}
+
+.tabela-atividades th,
+.tabela-atividades td,
+.tabela-atividades tr,
+.type-filter-item {
+  color: #303840;
+  border-color: #ddd9d1;
+}
+
+.tabela-atividades tr:hover,
+.dashboard-dropdown-menu a:hover,
+.type-filter-item:hover {
+  background: #f5f3ee;
+}
+
+.job-progress {
+  background: #ddd9d1;
+  border-color: #cbc7bf;
+}
+
+.job-countdown,
+.metric-value,
+.type-filter-qtd,
+.type-filter-name {
+  color: #1f2730;
+}
+
+.dashboard-card {
+  background: var(--ofs-surface);
+  border-color: var(--ofs-border-soft);
+}
+
+.metric-box {
+  background: #f4f2ed;
+}
+
+.type-filter-list {
+  background: #f7f6f2;
+}
+
+.dashboard-filter-help,
+.dashboard-filter-modal-help {
+  background: #edf5fc;
+  border-color: #bfd7ea;
+  color: #285c89;
+}
+
+.dashboard-filter-help-text,
+.dashboard-note {
+  color: #56738f;
+}
+
+.dashboard-dropdown-menu a {
+  color: #303840;
+}
+
+.pending-close-toggle,
+.pending-close-filter-btn {
+  background: #f0eee8;
+  color: #4b5661;
+  border-color: #d2cec6;
+}
+
+.pending-close-filter-btn.active {
+  background: #0d6efd;
+  border-color: #0d6efd;
+  color: #ffffff;
+}
+
+.type-filter-group-title {
+  background: #f0eee8;
+  border-color: #d8d4cc;
+}
+
+.type-filter-group-internal .type-filter-group-title {
+  background: #fff8e5;
+  border-color: #ead79a;
+}
+
+.type-filter-group-internal .type-filter-code {
+  color: #986b11;
+}

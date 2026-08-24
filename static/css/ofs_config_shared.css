@@ -194,3 +194,57 @@
     align-items: stretch;
   }
 }
+/* ===== Demanda 17.2: tema claro consistente ===== */
+.page-header h2,
+.table-title,
+.summary-value {
+  color: #1d2329;
+}
+
+.page-subtitle,
+.summary-label,
+.table-counter,
+.empty-row,
+.history-count {
+  color: #66707a;
+}
+
+.summary-card,
+.table-card {
+  background: var(--ofs-surface);
+  border-color: var(--ofs-border-soft);
+  box-shadow: var(--ofs-shadow-sm);
+}
+
+.table-toolbar {
+  background: #f0eee8;
+  border-color: #ddd9d1;
+}
+
+.badge-ok {
+  color: #22643a;
+  background: #edf8f0;
+  border-color: #b8dfc3;
+}
+
+.badge-pending {
+  color: #8a6414;
+  background: #fff8df;
+  border-color: #ead79a;
+}
+
+.success-msg {
+  color: #22643a;
+  background: #edf8f0;
+  border-color: #b8dfc3;
+}
+
+.error-msg {
+  color: #9c3432;
+  background: #fff0ef;
+  border-color: #efc2bf;
+}
+
+.row-pending {
+  background: #fff9e9;
+}

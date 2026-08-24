@@ -3599,3 +3599,499 @@ body:not(.login-page) .dashboard-period span {
         transition: none;
     }
 }
+
+/* ===== Demanda 17.2: consistência do tema claro nas telas autenticadas ===== */
+body:not(.login-page) {
+    --ofs-bg: #eceae5;
+    --ofs-bg-elevated: #f1efe9;
+    --ofs-surface: #f8f7f3;
+    --ofs-surface-soft: #efede7;
+    --ofs-surface-hover: #fcfbf8;
+    --ofs-border: #d4d0c8;
+    --ofs-border-soft: #dfdbd3;
+    --ofs-text: #242a31;
+    --ofs-text-muted: #66707a;
+    --ofs-text-subtle: #7a848e;
+    --ofs-shadow-sm: 0 6px 18px rgba(35, 39, 43, 0.06);
+    --ofs-shadow-md: 0 10px 28px rgba(35, 39, 43, 0.08);
+    color-scheme: light;
+}
+
+/* A sidebar permanece deliberadamente no tema escuro. */
+body:not(.login-page) .sidebar {
+    --ofs-bg: #0b0d10;
+    --ofs-bg-elevated: #0f1216;
+    --ofs-surface: #14181d;
+    --ofs-surface-soft: #181d23;
+    --ofs-surface-hover: #1d232b;
+    --ofs-border: #2a313a;
+    --ofs-border-soft: #222931;
+    --ofs-text: #f2f5f8;
+    --ofs-text-muted: #9ca7b4;
+    --ofs-text-subtle: #788491;
+    --ofs-shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.18);
+    --ofs-shadow-md: 0 10px 28px rgba(0, 0, 0, 0.22);
+    color-scheme: dark;
+}
+
+body:not(.login-page) h1,
+body:not(.login-page) h2,
+body:not(.login-page) h3,
+body:not(.login-page) h4 {
+    color: #1d2329;
+}
+
+body:not(.login-page) .home-hero,
+body:not(.login-page) .logs-page-header {
+    border-bottom-color: #d8d4cc;
+}
+
+body:not(.login-page) .home-kicker,
+body:not(.login-page) .page-kicker-relatorios,
+body:not(.login-page) .logs-page-subtitle,
+body:not(.login-page) .filter-field label,
+body:not(.login-page) .logs-filters-hint,
+body:not(.login-page) .form-box .hint,
+body:not(.login-page) .update-card p {
+    color: #66707a;
+}
+
+body:not(.login-page) .card,
+body:not(.login-page) .update-card,
+body:not(.login-page) .update-container,
+body:not(.login-page) .form-container,
+body:not(.login-page) .form-box,
+body:not(.login-page) .logs-filters,
+body:not(.login-page) .logs-kpi-card,
+body:not(.login-page) .logs-panel,
+body:not(.login-page) .modal-card {
+    background: var(--ofs-surface);
+    color: var(--ofs-text);
+    border-color: var(--ofs-border-soft);
+    box-shadow: var(--ofs-shadow-sm);
+}
+
+body:not(.login-page) .form-box {
+    border-radius: var(--ofs-radius-lg);
+    backdrop-filter: none;
+}
+
+body:not(.login-page) .form-container h2,
+body:not(.login-page) .update-container h2,
+body:not(.login-page) .form-box h2,
+body:not(.login-page) .logs-page-header h2,
+body:not(.login-page) .logs-kpi-card strong,
+body:not(.login-page) .logs-panel h3,
+body:not(.login-page) .modal-title {
+    color: #1d2329;
+}
+
+body:not(.login-page) .form-box input[type="text"],
+body:not(.login-page) .form-box input[type="password"],
+body:not(.login-page) .form-box select,
+body:not(.login-page) .form-container input[type="text"],
+body:not(.login-page) .filter-field input,
+body:not(.login-page) .filter-field select,
+body:not(.login-page) .perfis-box input[type="text"],
+body:not(.login-page) .perfis-editor input[type="text"],
+body:not(.login-page) .usuarios-filtro select {
+    background-color: #ffffff;
+    color: #242a31;
+    border-color: #c9c5bd;
+}
+
+body:not(.login-page) .form-box select {
+    background-image: url("data:image/svg+xml;utf8,<svg fill='%2359636d' height='18' viewBox='0 0 24 24' width='18' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/></svg>");
+}
+
+body:not(.login-page) .form-box label,
+body:not(.login-page) .form-container label,
+body:not(.login-page) .permissao-label,
+body:not(.login-page) .usuarios-filtro {
+    color: #4f5964;
+}
+
+body:not(.login-page) .email-wrapper {
+    background: #ffffff;
+    border-color: #c9c5bd;
+}
+
+body:not(.login-page) .email-wrapper input {
+    color: #242a31;
+}
+
+body:not(.login-page) .email-domain {
+    color: #66707a;
+    background: #f0eee8;
+    border-left-color: #d2cec6;
+}
+
+body:not(.login-page) .form-box code.csv-head {
+    color: #38414a;
+    background: #ebe8e1;
+    border: 1px solid #d8d4cc;
+}
+
+body:not(.login-page) .tabela-usuarios {
+    background: #ffffff;
+    color: #242a31;
+}
+
+body:not(.login-page) .tabela-usuarios th {
+    background: #efede7;
+    color: #39424c;
+}
+
+body:not(.login-page) .tabela-usuarios th,
+body:not(.login-page) .tabela-usuarios td {
+    border-color: #d8d4cc;
+}
+
+body:not(.login-page) .tabela-usuarios tr:nth-child(even) {
+    background: #f8f7f3;
+}
+
+body:not(.login-page) .perfil-item {
+    background: #ffffff;
+    border-color: #d5d1c9;
+    color: #303840;
+    box-shadow: none;
+}
+
+body:not(.login-page) .perfil-item:hover {
+    background: #f5f3ee;
+    border-color: #c3d2df;
+    box-shadow: none;
+}
+
+body:not(.login-page) .perfil-item.selected {
+    background: #eaf2fa;
+    border-color: #b9d1e7;
+    border-left-color: #4da3ff;
+    border-bottom-color: #4da3ff;
+    color: #1f4f79;
+    box-shadow: none;
+}
+
+body:not(.login-page) .perfil-link,
+body:not(.login-page) .perfil-selected-label {
+    color: #36414c;
+}
+
+body:not(.login-page) .perfil-selected-label {
+    color: #4e708d;
+}
+
+body:not(.login-page) .perfis-separator {
+    border-top-color: #d8d4cc;
+}
+
+body:not(.login-page) .perfis-scroll::-webkit-scrollbar-track,
+body:not(.login-page) .permissoes-box::-webkit-scrollbar-track {
+    background: #ece9e2;
+}
+
+body:not(.login-page) .perfis-scroll::-webkit-scrollbar-thumb,
+body:not(.login-page) .permissoes-box::-webkit-scrollbar-thumb {
+    background: #b8b3aa;
+}
+
+body:not(.login-page) .perfis-scroll::-webkit-scrollbar-thumb:hover,
+body:not(.login-page) .permissoes-box::-webkit-scrollbar-thumb:hover {
+    background: #969087;
+}
+
+body:not(.login-page) .permissoes-box {
+    background: #f4f2ed;
+    border-color: #d4d0c8;
+}
+
+body:not(.login-page) .alert-success {
+    color: #22643a;
+    background: #edf8f0;
+    border-color: #b8dfc3;
+}
+
+body:not(.login-page) .alert-danger {
+    color: #9c3432;
+    background: #fff0ef;
+    border-color: #efc2bf;
+}
+
+body:not(.login-page) .modal-header {
+    border-bottom-color: #ddd9d1;
+}
+
+body:not(.login-page) .modal-pre {
+    background: #f0eee8;
+    color: #303840;
+}
+
+body:not(.login-page) .btn-secondary-link {
+    color: #40505f;
+    background: #f7f6f2;
+    border-color: #d2cec6;
+}
+
+body:not(.login-page) .btn-secondary-link:hover,
+body:not(.login-page) .btn-secondary-link:focus-visible {
+    color: #225f98;
+    background: #edf4fa;
+    border-color: #bdd2e5;
+}
+
+body:not(.login-page) .btn-link-strong {
+    color: #1f5f96;
+    background: #e8f2fb;
+    border-color: #bfd7ea;
+}
+
+body:not(.login-page) .btn-link-strong:hover,
+body:not(.login-page) .btn-link-strong:focus-visible {
+    background: #dcecf8;
+}
+
+body:not(.login-page) .btn-disabled,
+body:not(.login-page) .page-pill {
+    color: #6f7882;
+    background: #f1efe9;
+    border-color: #d8d4cc;
+}
+
+body:not(.login-page) .logs-pagination {
+    color: #5d6670;
+}
+
+body:not(.login-page) .logs-kpi-card span {
+    color: #66707a;
+}
+
+body:not(.login-page) .logs-panel h3 {
+    background: #f0eee8;
+    border-bottom-color: #ddd9d1;
+}
+
+body:not(.login-page) .logs-mini-table {
+    color: #303840;
+}
+
+body:not(.login-page) .logs-mini-table th,
+body:not(.login-page) .logs-mini-table td {
+    border-bottom-color: #e0ddd6;
+}
+
+body:not(.login-page) .logs-mini-table th {
+    color: #4c5661;
+    background: #f0eee8;
+}
+
+body:not(.login-page) .logs-mini-table tr:hover td,
+body:not(.login-page) .logs-table thead th:hover {
+    background: #f3f1ec;
+}
+
+body:not(.login-page) .metric-bar {
+    background: #ddd9d1;
+}
+
+/* Usuários do painel: remove os últimos contrastes herdados do tema escuro. */
+body:not(.login-page) .usuarios-header {
+    border-bottom-color: #d8d4cc;
+}
+
+body:not(.login-page) .usuarios-kicker,
+body:not(.login-page) .usuarios-header p,
+body:not(.login-page) .usuarios-total-card span {
+    color: #66707a;
+}
+
+body:not(.login-page) .usuarios-header h2,
+body:not(.login-page) .usuarios-total-card strong {
+    color: #1d2329;
+}
+
+body:not(.login-page) .usuarios-total-card,
+body:not(.login-page) .usuarios-toolbar,
+body:not(.login-page) .usuarios-table-card {
+    background: var(--ofs-surface);
+    border-color: var(--ofs-border-soft);
+    box-shadow: var(--ofs-shadow-sm);
+}
+
+body:not(.login-page) .usuarios-filter-field label,
+body:not(.login-page) .usuarios-id {
+    color: #4f5964;
+}
+
+body:not(.login-page) .usuarios-filter-field select,
+body:not(.login-page) .usuarios-profile-form select {
+    background: #ffffff;
+    color: #242a31;
+    border-color: #cbc7bf;
+}
+
+body:not(.login-page) .usuarios-admin-note {
+    color: #285c89;
+    background: #edf5fc;
+    border-color: #bfd7ea;
+}
+
+body:not(.login-page) .usuarios-table th,
+body:not(.login-page) .usuarios-table td {
+    border-color: #ddd9d1;
+}
+
+body:not(.login-page) .usuarios-table th {
+    color: #45515d;
+    background: #efede7;
+}
+
+body:not(.login-page) .usuarios-profile-pill {
+    color: #285c89;
+    background: #eaf3fb;
+    border-color: #c6dced;
+}
+
+/* Dashboard operacional: superfícies claras mantendo cores semânticas dos dados. */
+body:not(.login-page) .dashboard-header {
+    border-bottom-color: #d8d4cc;
+}
+
+body:not(.login-page) .dashboard-kicker,
+body:not(.login-page) .dashboard-empty-state p,
+body:not(.login-page) .dashboard-muted,
+body:not(.login-page) .dashboard-kpi-card span,
+body:not(.login-page) .dashboard-kpi-card small,
+body:not(.login-page) .dashboard-filter-scope-kicker,
+body:not(.login-page) .dashboard-status-total span,
+body:not(.login-page) .dashboard-status-item-head small,
+body:not(.login-page) .dashboard-axis-label,
+body:not(.login-page) .dashboard-chart-legend {
+    color: #66707a;
+}
+
+body:not(.login-page) .dashboard-panel,
+body:not(.login-page) .dashboard-empty-state,
+body:not(.login-page) .dashboard-kpi-card,
+body:not(.login-page) .dashboard-kpi-shell,
+body:not(.login-page) .dashboard-filter-scope,
+body:not(.login-page) .dashboard-filter-panel {
+    background: var(--ofs-surface);
+    border-color: var(--ofs-border-soft);
+    box-shadow: var(--ofs-shadow-sm);
+}
+
+body:not(.login-page) .dashboard-panel h2,
+body:not(.login-page) .dashboard-empty-state h2,
+body:not(.login-page) .dashboard-kpi-shell-header h2,
+body:not(.login-page) .dashboard-kpi-card strong,
+body:not(.login-page) .dashboard-filter-scope h2,
+body:not(.login-page) .dashboard-filter-panel summary span,
+body:not(.login-page) .dashboard-status-total strong,
+body:not(.login-page) .dashboard-status-item-head span,
+body:not(.login-page) .dashboard-status-item-head strong {
+    color: #1d2329;
+}
+
+body:not(.login-page) .dashboard-panel h2 {
+    background: #f0eee8;
+    border-bottom-color: #ddd9d1;
+}
+
+body:not(.login-page) .dashboard-kpi-shell {
+    background: #f5f7f3;
+}
+
+body:not(.login-page) .dashboard-kpi-filter {
+    background: #eeece6;
+    border-color: #d8d4cc;
+}
+
+body:not(.login-page) .dashboard-kpi-filter button {
+    color: #59636d;
+}
+
+body:not(.login-page) .dashboard-kpi-filter button.active {
+    color: #ffffff;
+}
+
+body:not(.login-page) .dashboard-filter-panel summary {
+    border-bottom-color: #ddd9d1;
+}
+
+body:not(.login-page) .dashboard-filter-panel summary strong {
+    color: #3974a3;
+}
+
+body:not(.login-page) .dashboard-filter-toolbar input {
+    color: #242a31;
+    background: #ffffff;
+    border-color: #cbc7bf;
+}
+
+body:not(.login-page) .dashboard-filter-actions button {
+    color: #40505f;
+    background: #f0eee8;
+    border-color: #d2cec6;
+}
+
+body:not(.login-page) .dashboard-filter-actions button:hover,
+body:not(.login-page) .dashboard-filter-actions button:focus-visible {
+    color: #225f98;
+    background: #e8f2fa;
+    border-color: #bdd2e5;
+}
+
+body:not(.login-page) .dashboard-type-column-title {
+    border-bottom-color: #ddd9d1;
+}
+
+body:not(.login-page) .dashboard-type-column-title span,
+body:not(.login-page) .dashboard-type-chip,
+body:not(.login-page) .dashboard-type-chip span {
+    color: #4f5964;
+}
+
+body:not(.login-page) .dashboard-type-chip:hover span {
+    color: #225f98;
+}
+
+body:not(.login-page) .dashboard-status-track,
+body:not(.login-page) .dashboard-progress-track {
+    background: #ddd9d1;
+}
+
+body:not(.login-page) .dashboard-grid-line {
+    stroke: rgba(79, 89, 100, 0.18);
+}
+
+body:not(.login-page) .dashboard-point-label {
+    fill: #34404b;
+    stroke: rgba(255, 255, 255, 0.86);
+}
+
+body:not(.login-page) .dashboard-point-label.completed {
+    fill: #2f6d45;
+}
+
+body:not(.login-page) .dashboard-point-label.notdone {
+    fill: #966b10;
+}
+
+body:not(.login-page) .dashboard-table {
+    color: #303840;
+}
+
+body:not(.login-page) .dashboard-table th,
+body:not(.login-page) .dashboard-table td {
+    border-bottom-color: #e0ddd6;
+}
+
+body:not(.login-page) .dashboard-table th {
+    color: #45515d;
+    background: #efede7;
+}
+
+body:not(.login-page) .dashboard-table tr:hover td {
+    background: #f5f3ee;
+}

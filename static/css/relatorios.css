@@ -1133,3 +1133,220 @@ body[data-ofs-os-start-url] {
   background: rgba(10, 15, 20, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
+/* ===== Demanda 17.2: tema claro consistente ===== */
+.page-relatorios,
+.page-relatorio-ofs-os,
+.page-relatorio-redes {
+  color: var(--ofs-text);
+}
+
+.page-header-relatorios h2,
+.report-entry-card h3,
+.report-section h4,
+.report-section-title-row h4,
+.activity-type-group-title strong,
+.report-summary-header strong,
+.redes-result-header h3,
+.redes-summary-block h4 {
+  color: #1d2329;
+}
+
+.page-kicker-relatorios,
+.page-subtitle-relatorios,
+.report-entry-card p,
+.report-section-hint,
+.activity-type-group-title span,
+.resource-sync-copy span,
+.report-summary-header span,
+.redes-result-header p,
+.redes-kpi-card span,
+.redes-mini-card span,
+.redes-empty {
+  color: #66707a;
+}
+
+.report-entry-card,
+.report-section,
+.report-page-shell,
+.report-summary-box,
+.redes-result-summary {
+  background: var(--ofs-surface);
+  border-color: var(--ofs-border-soft);
+  box-shadow: var(--ofs-shadow-sm);
+}
+
+.report-entry-badge {
+  color: #4d6173;
+  background: #eef2f5;
+  border-color: #d7e0e8;
+}
+
+.report-section label,
+.report-grid label,
+.resource-search-field label,
+.resource-status-filter-label {
+  color: #4f5964;
+}
+
+.report-grid input[type="date"],
+.resource-search-field input {
+  background: #ffffff;
+  color: #242a31;
+  border-color: #cbc7bf;
+}
+
+.check-card,
+.resource-type-btn,
+.resource-list,
+.report-back-link,
+.resource-search-count,
+.resource-status-filter-row,
+.resource-status-filter-btn,
+.report-summary-item,
+.redes-kpi-card,
+.redes-mini-card,
+.redes-summary-table,
+.redes-empty {
+  background: #f4f2ed;
+  border-color: #d8d4cc;
+  color: #303840;
+}
+
+.check-card:hover,
+.resource-type-btn:hover,
+.report-back-link:hover,
+.resource-check:hover,
+.resource-status-filter-btn:hover {
+  background: #fbfaf7;
+  border-color: #bfd1e0;
+}
+
+.btn-mini {
+  background: #ece9e2;
+  color: #3d4853;
+  border-color: #d2cec6;
+}
+
+.btn-mini:hover {
+  background: #e4edf5;
+  border-color: #bdd2e5;
+}
+
+.resource-type-btn span,
+.resource-id,
+.empty-resources,
+.resource-search-count {
+  color: #6d7782;
+}
+
+.resource-check {
+  border-bottom-color: #e2ded7;
+}
+
+.report-status-box {
+  background: #eaf3fb;
+  border-color: #bdd7ec;
+  color: #285c89;
+}
+
+.toast-msg {
+  background: #ffffff;
+  border-color: #d8d4cc;
+  color: #303840;
+  box-shadow: 0 12px 28px rgba(35, 39, 43, 0.12);
+}
+
+.toast-text {
+  color: #5b6570;
+}
+
+.toast-progress {
+  background: #e7e3dc;
+}
+
+.resource-sync-row,
+.activity-type-group-title {
+  background: #f4f2ed;
+  border-color: #d8d4cc;
+}
+
+.resource-sync-copy strong,
+.resource-sync-progress-top strong {
+  color: #252c33;
+}
+
+.resource-sync-progress {
+  background: #f0eee8;
+  border-color: #d6d2ca;
+}
+
+.resource-sync-progress-top {
+  color: #59636d;
+}
+
+.resource-sync-bar {
+  background: #ddd9d1;
+}
+
+.report-back-link {
+  color: #40505f;
+}
+
+.resource-status-filter-btn {
+  color: #4f5964;
+}
+
+.resource-status-filter-btn.active,
+.resource-type-btn.active,
+.resource-type-btn.active span {
+  color: #ffffff;
+}
+
+.resource-check[data-resource-status]:not([data-resource-status="active"]) .resource-name {
+  color: #b54747;
+}
+
+.resource-check[data-resource-status]:not([data-resource-status="active"]) {
+  background: #fff2f1;
+}
+
+.report-entry-card-redes .report-entry-badge {
+  color: #2f7449;
+  border-color: #c3dfcc;
+  background: #edf8f0;
+}
+
+.page-relatorio-redes .check-card-redes {
+  border-color: #c7dfcf;
+  background: #f1f8f3;
+}
+
+.page-relatorio-redes .check-card-redes:hover {
+  border-color: #a8cfb4;
+  background: #eaf5ed;
+}
+
+.redes-kpi-card {
+  border-color: #c9dfd0;
+  background: #f1f8f3;
+}
+
+.redes-kpi-card strong,
+.redes-mini-card strong {
+  color: #23312a;
+}
+
+.redes-table-wrap {
+  border-color: #d8d4cc;
+}
+
+.redes-summary-table th,
+.redes-summary-table td {
+  color: #3f4953;
+  border-bottom-color: #e0ddd6;
+}
+
+.redes-summary-table th {
+  color: #36414c;
+  background: #efede7;
+}

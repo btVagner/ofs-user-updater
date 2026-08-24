@@ -347,3 +347,59 @@
     gap: 10px;
     align-items: center;
 }
+/* ===== Demanda 17.2: tema claro consistente ===== */
+.th-filter-btn,
+.th-filter-action,
+.ms-btn,
+.ms-mini,
+.btn-disabled {
+  background: #f0eee8;
+  color: #4b5661;
+  border-color: #d2cec6;
+}
+
+.th-filter-btn:hover,
+.th-filter-action:hover,
+.ms-btn:hover,
+.ms-mini:hover {
+  background: #e6eef5;
+  color: #285c89;
+  border-color: #bdd2e5;
+}
+
+.th-filter-menu,
+#modalExport.modal-custom,
+.ms-panel {
+  background: var(--ofs-surface);
+  color: var(--ofs-text);
+  border-color: var(--ofs-border-soft);
+  box-shadow: var(--ofs-shadow-md);
+}
+
+#thFilterInput,
+#modalExport .form-control,
+.ms-search {
+  background: #ffffff;
+  color: #242a31;
+  border-color: #cbc7bf;
+}
+
+#modalExport .modal-top h3,
+#modalExport label,
+.ms-item span {
+  color: #303840;
+}
+
+.ms-item {
+  border-color: #e0ddd6;
+}
+
+.ms-item:hover {
+  background: #f5f3ee;
+}
+
+.ms-hint,
+.pagination .page-info,
+.ms-btn .ms-placeholder {
+  color: #66707a;
+}
