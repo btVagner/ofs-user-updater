@@ -1211,7 +1211,13 @@ body[data-ofs-os-start-url] {
   border-color: #d8d4cc;
   color: #303840;
 }
+.report-summary-item span {
+  color: #66707a;
+}
 
+.report-summary-item strong {
+  color: #242a31;
+}
 .check-card:hover,
 .resource-type-btn:hover,
 .report-back-link:hover,

@@ -3965,6 +3965,17 @@ body:not(.login-page) .usuarios-profile-pill {
 }
 
 /* Dashboard operacional: superfícies claras mantendo cores semânticas dos dados. */
+body:not(.login-page) .dashboard-new-data {
+    color: #285c89;
+    background: #e7f1fa;
+    border-color: #b9d7ef;
+}
+
+body:not(.login-page) .dashboard-new-data button {
+    color: #174f7d;
+    background: #d4eafb;
+    border-color: #8ecaf2;
+}
 body:not(.login-page) .dashboard-header {
     border-bottom-color: #d8d4cc;
 }
