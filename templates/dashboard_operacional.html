@@ -1,4 +1,4 @@
-{% set page_css_files = [] %}
+{% set page_css_files = ['css/dashboard_technicians.css'] %}
 {% include 'includes/head.html' %}
 
 <body>
@@ -11,7 +11,9 @@
   {% set thermometer_summary = thermometer.get('summary') or {} %}
   <main id="dashboard-root" class="dashboard-page fade-in" data-status-url="{{ url_for('dashboard_status') }}"
     data-unlock-url="{{ url_for('dashboard_unlock') }}" data-can-unlock="{{ '1' if is_admin else '0' }}"
-    data-current-updated-at="{{ snapshot.updated_at or '' }}">
+    data-current-updated-at="{{ snapshot.updated_at or '' }}"
+    data-technicians-summary-url="{{ url_for('technician_monitor_summary') }}"
+    data-technicians-tree-url="{{ url_for('technician_monitor_tree') }}">
     <section class="dashboard-header">
       <div>
         <span class="dashboard-kicker">Visão operacional</span>
@@ -41,6 +43,14 @@
       </div>
     </section>
 
+    <nav class="dashboard-view-tabs" role="tablist" aria-label="Visões do Dashboard Operacional" data-dashboard-view-tabs>
+      <button id="dashboard-tab-os" type="button" class="active" role="tab" aria-selected="true"
+        aria-controls="dashboard-view-os" tabindex="0" data-dashboard-view="os">OS</button>
+      <button id="dashboard-tab-technicians" type="button" role="tab" aria-selected="false"
+        aria-controls="dashboard-view-technicians" tabindex="-1" data-dashboard-view="technicians">Técnicos e Rotas</button>
+    </nav>
+
+    <section id="dashboard-view-os" role="tabpanel" aria-labelledby="dashboard-tab-os" data-dashboard-view-panel="os">
     <div class="dashboard-new-data hidden" data-dashboard-new-data>
       <span>Novos dados disponíveis.</span>
       <button type="button" data-dashboard-reload>Atualizar tela</button>
@@ -337,8 +347,62 @@
       </article>
     </section>
     {% endif %}
+    </section>
+
+    <section id="dashboard-view-technicians" class="dashboard-technicians-view hidden" role="tabpanel"
+      aria-labelledby="dashboard-tab-technicians" aria-hidden="true" data-dashboard-view-panel="technicians">
+      <div class="technicians-header">
+        <div>
+          <span class="technicians-kicker">Monitor local</span>
+          <h2>Técnicos e Rotas</h2>
+          <p>Estado operacional, rotas, atividades e integridade do read model local.</p>
+        </div>
+        <button type="button" class="technicians-refresh-button" data-technicians-refresh aria-label="Atualizar monitor de técnicos">
+          Atualizar
+        </button>
+      </div>
+
+      <div class="technicians-health-shell" data-technicians-health aria-live="polite">
+        <span class="technicians-health-neutral">Os dados serão carregados somente ao abrir esta aba.</span>
+      </div>
+
+      <div class="technicians-error hidden" role="alert" data-technicians-error></div>
+
+      <section class="technicians-summary" aria-label="Resumo operacional de técnicos" data-technicians-summary>
+        <div class="technicians-skeleton-grid" aria-hidden="true" data-technicians-summary-skeleton>
+          <span></span><span></span><span></span><span></span>
+        </div>
+      </section>
+
+      <section class="technicians-browser" aria-label="Hierarquia operacional de técnicos">
+        <div class="technicians-toolbar">
+          <div class="technicians-filter-group" role="group" aria-label="Filtros operacionais" data-technicians-filters>
+            <button type="button" class="active" aria-pressed="true" data-technicians-filter="all">Todos</button>
+            <button type="button" aria-pressed="false" data-technicians-filter="problems">Somente problemas</button>
+            <button type="button" aria-pressed="false" data-technicians-filter="waiting">Aguardando ativação</button>
+            <button type="button" aria-pressed="false" data-technicians-filter="active">Rota ativa</button>
+            <button type="button" aria-pressed="false" data-technicians-filter="open">OS iniciada/aberta</button>
+          </div>
+
+          <label class="technicians-search">
+            <span>Buscar nos nós carregados</span>
+            <input type="search" placeholder="Nome ou ID do técnico" autocomplete="off" data-technicians-search>
+          </label>
+        </div>
+
+        <p class="technicians-search-hint" data-technicians-search-hint>
+          A busca considera somente os ramos já carregados. Expanda a hierarquia para ampliar o alcance sem baixar a árvore completa.
+        </p>
+
+        <div class="technicians-tree-state" data-technicians-tree-state aria-live="polite">
+          Abra a aba para carregar a raiz da hierarquia.
+        </div>
+        <ul class="technicians-tree hidden" role="tree" aria-label="Hierarquia de recursos OFS" data-technicians-tree></ul>
+      </section>
+    </section>
   </main>
 
   <script id="dashboard-payload" type="application/json">{{ payload|tojson }}</script>
   <script defer src="{{ url_for('static', filename='js/dashboard_operacional.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/dashboard_technicians.js') }}"></script>
   {% include 'includes/footer.html' %}

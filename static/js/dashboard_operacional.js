@@ -19,6 +19,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const btnSelectAll = document.querySelector("[data-dashboard-select-all]");
     const btnClearAll = document.querySelector("[data-dashboard-clear-all]");
     const payload = parsePayload(payloadScript);
+    const filterReadModel = payload.filter_read_model && payload.filter_read_model.types
+        ? payload.filter_read_model.types
+        : {};
+    const activityOptionsByCode = new Map(
+        (Array.isArray(payload.activity_options) ? payload.activity_options : [])
+            .map((item) => [item.code, item])
+    );
     const filterCount = document.querySelector("[data-dashboard-filter-count]");
     const filterSearch = document.querySelector("[data-dashboard-filter-search]");
     const btnSelectB2c = document.querySelector("[data-dashboard-select-b2c]");
@@ -277,16 +284,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         renderFilteredBlocks();
     }
-    function getFilteredRows() {
-        const rows = Array.isArray(payload.dashboard_rows) ? payload.dashboard_rows : [];
-        const selectedTypes = getSelectedTypes();
-
-        if (!selectedTypes.size) return [];
-
-        return rows.filter((row) => {
-            const filterCode = row.activityTypeFilterCode || row.activityType;
-            return selectedTypes.has(filterCode);
-        });
+    function getTypeMetrics(code) {
+        const metrics = filterReadModel[code];
+        return metrics && typeof metrics === "object" ? metrics : null;
     }
 
     function completionRate(total, completed) {
@@ -295,43 +295,45 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function renderFilteredBlocks() {
-        const rows = getFilteredRows();
-        const allRows = Array.isArray(payload.dashboard_rows) ? payload.dashboard_rows : [];
-        const today = payload.periods ? payload.periods.today : "";
+        const selectedTypes = getSelectedTypes();
 
         updateFilterCount();
 
-        renderTypeChart(allRows, today, "b2c", b2cTypesChart, "Nenhum tipo B2C encontrado hoje.");
-        renderTypeChart(allRows, today, "redes", redesTypesChart, "Nenhum tipo de Redes/B2B encontrado hoje.");
+        renderTypeChart("b2c", b2cTypesChart, "Nenhum tipo B2C encontrado hoje.");
+        renderTypeChart("redes", redesTypesChart, "Nenhum tipo de Redes/B2B encontrado hoje.");
 
-        renderStatusChart(rows, today);
+        renderStatusChart(selectedTypes);
 
-        renderLineChart(rows, lineChart, {
+        renderLineChart(selectedTypes, lineChart, {
             chartKey: "full",
             title: "Evolução últimos 7 dias",
             emptyMessage: "Nenhuma atividade encontrada para o filtro selecionado."
         });
 
-        renderLineChart(rows, hourlyLineChart, {
+        renderLineChart(selectedTypes, hourlyLineChart, {
             chartKey: "hourly",
             title: "Evolução até o horário atual",
             emptyMessage: "Nenhuma atividade encontrada até o horário atual.",
-            untilTime: payload.periods ? payload.periods.comparison_until_time : ""
+            useUntilModel: true
         });
 
-        renderCityChart(rows, today, "b2c", b2cCitiesChart, "Nenhuma cidade B2C encontrada para o filtro.");
-        renderCityChart(rows, today, "redes", redesCitiesChart, "Nenhuma cidade de Redes/B2B encontrada para o filtro.");
+        renderCityChart(selectedTypes, "b2c", b2cCitiesChart, "Nenhuma cidade B2C encontrada para o filtro.");
+        renderCityChart(selectedTypes, "redes", redesCitiesChart, "Nenhuma cidade de Redes/B2B encontrada para o filtro.");
     }
 
-    function renderStatusChart(rows, today) {
+    function renderStatusChart(selectedTypes) {
         if (!statusChart) return;
 
-        const todayRows = rows.filter((row) => row.date === today);
         const counts = {};
 
-        todayRows.forEach((row) => {
-            const status = row.status || "nao_informado";
-            counts[status] = (counts[status] || 0) + 1;
+        selectedTypes.forEach((code) => {
+            const metrics = getTypeMetrics(code);
+            if (!metrics) return;
+
+            const statusToday = metrics.status_today || {};
+            Object.entries(statusToday).forEach(([status, value]) => {
+                counts[status] = (counts[status] || 0) + Number(value || 0);
+            });
         });
 
         const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
@@ -409,15 +411,22 @@ document.addEventListener("DOMContentLoaded", function () {
     `;
     }
 
-    function renderTypeChart(rows, today, group, target, emptyMessage) {
-        const map = {};
+    function renderTypeChart(group, target, emptyMessage) {
+        const totalsByLabel = {};
 
-        rows.filter((row) => row.date === today && row.group === group).forEach((row) => {
-            const label = row.activityTypeLabel || row.activityType || "Não informado";
-            map[label] = (map[label] || 0) + 1;
-        });
+        (Array.isArray(payload.activity_options) ? payload.activity_options : [])
+            .filter((option) => option.group === group)
+            .forEach((option) => {
+                const metrics = getTypeMetrics(option.code) || {};
+                const value = Object.values(metrics.status_today || {})
+                    .reduce((sum, total) => sum + Number(total || 0), 0);
+                if (!value) return;
 
-        const entries = Object.entries(map)
+                const label = option.label || option.code || "Não informado";
+                totalsByLabel[label] = (totalsByLabel[label] || 0) + value;
+            });
+
+        const entries = Object.entries(totalsByLabel)
             .map(([label, value]) => ({ label, value }))
             .sort((a, b) => b.value - a.value);
 
@@ -429,7 +438,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
-    function renderLineChart(rows, target, options) {
+    function renderLineChart(selectedTypes, target, options) {
         if (!target) return;
 
         options = options || {};
@@ -437,7 +446,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const selectedLineComparisonPoints = selectedLineComparisonPointsByChart[chartKey] || [];
         const periods = payload.periods || {};
         const dates = buildDateRange(periods.last_7_days_from, periods.last_7_days_to);
-        const series = buildEvolutionSeries(rows, dates, options.untilTime);
+        const series = buildEvolutionSeries(selectedTypes, dates, options.useUntilModel === true);
 
         const completed = series.completed;
         const notdone = series.notdone;
@@ -583,12 +592,12 @@ document.addEventListener("DOMContentLoaded", function () {
                     selectedLineComparisonPointsByChart[chartKey] = currentSelection;
                 }
 
-                renderLineChart(rows, target, options);
+                renderLineChart(selectedTypes, target, options);
             });
         });
     }
 
-    function buildEvolutionSeries(rows, dates, untilTime) {
+    function buildEvolutionSeries(selectedTypes, dates, useUntilModel) {
         const completedByDate = {};
         const notdoneByDate = {};
 
@@ -597,50 +606,25 @@ document.addEventListener("DOMContentLoaded", function () {
             notdoneByDate[date] = 0;
         });
 
-        rows.forEach((row) => {
-            if (!(row.date in completedByDate)) return;
-            if (untilTime && !rowFinishedUntilTime(row, untilTime)) return;
+        selectedTypes.forEach((code) => {
+            const metrics = getTypeMetrics(code);
+            if (!metrics) return;
 
-            if (row.status === "completed") {
-                completedByDate[row.date] += 1;
-            }
+            const evolution = useUntilModel
+                ? (metrics.evolution_until || {})
+                : (metrics.evolution || {});
 
-            if (row.status === "notdone") {
-                notdoneByDate[row.date] += 1;
-            }
+            dates.forEach((date) => {
+                const values = evolution[date] || {};
+                completedByDate[date] += Number(values.completed || 0);
+                notdoneByDate[date] += Number(values.notdone || 0);
+            });
         });
 
         return {
             completed: dates.map((date) => completedByDate[date] || 0),
             notdone: dates.map((date) => notdoneByDate[date] || 0)
         };
-    }
-
-    function rowFinishedUntilTime(row, untilTime) {
-        const endMinutes = parseTimeToMinutes(row.endTime);
-        const untilMinutes = parseTimeToMinutes(untilTime);
-
-        if (endMinutes === null || untilMinutes === null) {
-            return false;
-        }
-
-        return endMinutes <= untilMinutes;
-    }
-
-    function parseTimeToMinutes(value) {
-        const text = String(value || "").trim();
-        const match = text.match(/(?:^|\s|T)(\d{2}):(\d{2})(?::\d{2})?/);
-
-        if (!match) return null;
-
-        const hours = Number(match[1]);
-        const minutes = Number(match[2]);
-
-        if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-            return null;
-        }
-
-        return hours * 60 + minutes;
     }
 
     function buildLineComparisonSummary(firstPoint, secondPoint) {
@@ -756,19 +740,27 @@ document.addEventListener("DOMContentLoaded", function () {
         return values.map((_value, index) => Math.max(0, intercept + slope * index));
     }
 
-    function renderCityChart(rows, today, group, target, emptyMessage) {
+    function renderCityChart(selectedTypes, group, target, emptyMessage) {
         const cityMap = {};
 
-        rows.filter((row) => row.date === today && row.group === group).forEach((row) => {
-            const city = row.city || "Não informado";
+        selectedTypes.forEach((code) => {
+            const option = activityOptionsByCode.get(code);
+            if (!option || option.group !== group) return;
 
-            if (!cityMap[city]) {
-                cityMap[city] = { city, total: 0, completed: 0, notdone: 0 };
-            }
+            const metrics = getTypeMetrics(code);
+            if (!metrics) return;
 
-            cityMap[city].total += 1;
-            if (row.status === "completed") cityMap[city].completed += 1;
-            if (row.status === "notdone") cityMap[city].notdone += 1;
+            (Array.isArray(metrics.cities_today) ? metrics.cities_today : []).forEach((row) => {
+                const city = row.city || "Não informado";
+
+                if (!cityMap[city]) {
+                    cityMap[city] = { city, total: 0, completed: 0, notdone: 0 };
+                }
+
+                cityMap[city].total += Number(row.total || 0);
+                cityMap[city].completed += Number(row.completed || 0);
+                cityMap[city].notdone += Number(row.notdone || 0);
+            });
         });
 
         const entries = Object.values(cityMap)

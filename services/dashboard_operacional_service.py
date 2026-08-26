@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import threading
 from collections import defaultdict
 from datetime import date, datetime, timedelta
@@ -76,35 +77,7 @@ def _json_loads(value):
         return None
 
 
-def _ensure_snapshot_table():
-    conn = get_connection()
-    cur = conn.cursor()
-
-    try:
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS dashboard_operacional_snapshot (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                snapshot_key VARCHAR(80) NOT NULL UNIQUE,
-                status VARCHAR(20) NOT NULL DEFAULT 'completed',
-                payload_json JSON NULL,
-                error_text TEXT NULL,
-                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                expires_at DATETIME NULL,
-                started_at DATETIME NULL,
-                finished_at DATETIME NULL
-            )
-            """
-        )
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
-
-
 def _load_snapshot():
-    _ensure_snapshot_table()
-
     conn = get_connection()
     cur = conn.cursor(dictionary=True)
 
@@ -135,6 +108,37 @@ def _load_snapshot():
 
         row["payload"] = _json_loads(row.get("payload_json"))
         return row
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _load_snapshot_status():
+    """Lê somente metadata do snapshot, sem transferir/deserializar payload_json."""
+    conn = get_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        cur.execute(
+            """
+            SELECT
+                snapshot_key,
+                status,
+                error_text,
+                updated_at,
+                expires_at,
+                started_at,
+                finished_at,
+                progress_percent,
+                progress_message,
+                progress_updated_at,
+                payload_json IS NOT NULL AS has_payload
+            FROM dashboard_operacional_snapshot
+            WHERE snapshot_key = %s
+            """,
+            (SNAPSHOT_KEY,),
+        )
+        return cur.fetchone()
     finally:
         cur.close()
         conn.close()
@@ -486,6 +490,21 @@ def _parse_ofs_datetime(value):
     return None
 
 
+def _parse_clock_minutes(value):
+    """Replica a leitura de horário usada historicamente pelo JS do dashboard."""
+    text = str(value or "").strip()
+    match = re.search(r"(?:^|\s|T)(\d{2}):(\d{2})(?::\d{2})?", text)
+    if not match:
+        return None
+
+    hours = int(match.group(1))
+    minutes = int(match.group(2))
+    if not (0 <= hours <= 23 and 0 <= minutes <= 59):
+        return None
+
+    return hours * 60 + minutes
+
+
 def _item_finished_until_time(item, until_time):
     if until_time is None:
         return True
@@ -660,6 +679,134 @@ def _dashboard_type_label(activity_type, labels):
         return SUPPORT_ACTIVITY_LABEL
 
     return labels.get(activity_type, activity_type or "Não informado")
+
+
+def _new_filter_type_metrics():
+    return {
+        "status_today": defaultdict(int),
+        "evolution": defaultdict(lambda: {"completed": 0, "notdone": 0}),
+        "evolution_until": defaultdict(lambda: {"completed": 0, "notdone": 0}),
+        "cities_today": {},
+    }
+
+
+def _accumulate_filter_metrics(
+    type_metrics,
+    filter_code,
+    item_date,
+    status,
+    city,
+    end_time,
+    *,
+    today_text,
+    date_from,
+    date_to,
+    comparison_until_time,
+):
+    filter_code = str(filter_code or "").strip()
+    if not filter_code:
+        return
+
+    metrics = type_metrics.get(filter_code)
+    if metrics is None:
+        metrics = _new_filter_type_metrics()
+        type_metrics[filter_code] = metrics
+
+    item_date = str(item_date or "").strip()
+    status = str(status or "nao_informado").strip().lower() or "nao_informado"
+    city = str(city or "Não informado").strip() or "Não informado"
+
+    if item_date == today_text:
+        metrics["status_today"][status] += 1
+
+        city_row = metrics["cities_today"].get(city)
+        if city_row is None:
+            city_row = {
+                "city": city,
+                "total": 0,
+                "completed": 0,
+                "notdone": 0,
+            }
+            metrics["cities_today"][city] = city_row
+
+        city_row["total"] += 1
+        if status == "completed":
+            city_row["completed"] += 1
+        if status == "notdone":
+            city_row["notdone"] += 1
+
+    if not date_from or not date_to or not (date_from <= item_date <= date_to):
+        return
+
+    if status not in {"completed", "notdone"}:
+        return
+
+    metrics["evolution"][item_date][status] += 1
+
+    if comparison_until_time is None:
+        return
+
+    end_minutes = _parse_clock_minutes(end_time)
+    until_minutes = comparison_until_time.hour * 60 + comparison_until_time.minute
+    if end_minutes is not None and end_minutes <= until_minutes:
+        metrics["evolution_until"][item_date][status] += 1
+
+
+def _finalize_filter_read_model(type_metrics):
+    compact_types = {}
+    for filter_code, metrics in type_metrics.items():
+        compact_types[filter_code] = {
+            "status_today": dict(sorted(metrics["status_today"].items())),
+            "evolution": {
+                item_date: values
+                for item_date, values in sorted(metrics["evolution"].items())
+                if values.get("completed") or values.get("notdone")
+            },
+            "evolution_until": {
+                item_date: values
+                for item_date, values in sorted(metrics["evolution_until"].items())
+                if values.get("completed") or values.get("notdone")
+            },
+            "cities_today": sorted(
+                metrics["cities_today"].values(),
+                key=lambda item: item["city"],
+            ),
+        }
+
+    return {"types": compact_types}
+
+
+def _build_filter_read_model(dashboard_rows, periods):
+    """Converte snapshots legados em agregados sem expor atividades ao browser."""
+    today_text = str(periods.get("today") or "")
+    date_from = str(periods.get("last_7_days_from") or "")
+    date_to = str(periods.get("last_7_days_to") or "")
+
+    comparison_until_time = None
+    comparison_until_text = str(periods.get("comparison_until_time") or "").strip()
+    if comparison_until_text:
+        try:
+            comparison_until_time = datetime.strptime(comparison_until_text, "%H:%M").time()
+        except ValueError:
+            comparison_until_time = None
+
+    type_metrics = {}
+    for row in dashboard_rows:
+        _accumulate_filter_metrics(
+            type_metrics,
+            row.get("activityTypeFilterCode") or row.get("activityType"),
+            row.get("date"),
+            row.get("status"),
+            row.get("city"),
+            row.get("endTime"),
+            today_text=today_text,
+            date_from=date_from,
+            date_to=date_to,
+            comparison_until_time=comparison_until_time,
+        )
+
+    return _finalize_filter_read_model(type_metrics)
+
 def _build_payload(rows, activity_maps):
     now = _now()
     today = now.date()
@@ -670,6 +817,13 @@ def _build_payload(rows, activity_maps):
 
     today_text = _date_text(today)
     last_week_text = _date_text(last_week_same_day)
+    periods = {
+        "today": today_text,
+        "same_weekday_last_week": last_week_text,
+        "comparison_until_time": comparison_until_text,
+        "last_7_days_from": _date_text(last_7_from),
+        "last_7_days_to": today_text,
+    }
 
     labels = activity_maps["labels"]
     b2c_codes = activity_maps["b2c_codes"]
@@ -680,37 +834,27 @@ def _build_payload(rows, activity_maps):
     redes_by_type_today = defaultdict(int)
     city_stats = {}
     all_notdone_by_day = defaultdict(int)
-    dashboard_rows = []
+    filter_type_metrics = {}
 
     for item in rows:
         item_date = str(item.get("date") or "").strip()
         status = str(item.get("status") or "nao_informado").strip().lower() or "nao_informado"
         activity_type = str(item.get("activityType") or "").strip()
         activity_type_filter_code = _dashboard_type_filter_code(activity_type)
-        activity_type_label = _dashboard_type_label(activity_type, labels)
         city = str(item.get("city") or "Não informado").strip() or "Não informado"
 
-        dashboard_rows.append({
-            "date": item_date,
-            "status": status,
-            "activityType": activity_type,
-            "activityTypeFilterCode": activity_type_filter_code,
-            "activityTypeLabel": activity_type_label,
-            "city": city,
-            "endTime": str(item.get("endTime") or "").strip(),
-            "apptNumber": str(item.get("apptNumber") or "").strip(),
-            "customerRating": str(item.get("XA_AV_CLI") or "").strip(),
-            "customerRatingCategory": str(item.get("XA_AV_CLI_CAT") or "").strip(),
-            "customerRatingSubcategory": str(item.get("XA_AV_CLI_SUB_CAT") or "").strip(),
-            "customerRatingCompleted": str(item.get("XA_AV_CLI_CON") or "").strip(),
-            "group": (
-                "redes"
-                if activity_type in redes_codes
-                else "b2c"
-                if activity_type in b2c_codes
-                else "outros"
-            ),
-        })
+        _accumulate_filter_metrics(
+            filter_type_metrics,
+            activity_type_filter_code,
+            item_date,
+            status,
+            city,
+            item.get("endTime"),
+            today_text=today_text,
+            date_from=periods["last_7_days_from"],
+            date_to=periods["last_7_days_to"],
+            comparison_until_time=comparison_until_time,
+        )
 
         if status == "notdone":
             all_notdone_by_day[item_date] += 1
@@ -827,15 +971,11 @@ def _build_payload(rows, activity_maps):
         key=lambda item: item["label"],
     )
 
+    filter_read_model = _finalize_filter_read_model(filter_type_metrics)
+
     return {
         "generated_at": _dt_text(_now()),
-        "periods": {
-            "today": today_text,
-            "same_weekday_last_week": last_week_text,
-            "comparison_until_time": comparison_until_text,
-            "last_7_days_from": _date_text(last_7_from),
-            "last_7_days_to": today_text,
-        },
+        "periods": periods,
         "kpis": {
             "b2c_completed_today": b2c_completed_today,
             "redes_completed_today": redes_completed_today,
@@ -856,7 +996,7 @@ def _build_payload(rows, activity_maps):
         "last_7_days": last_7_days,
         "top_cities": top_cities[:10],
         "activity_options": activity_options,
-        "dashboard_rows": dashboard_rows,
+        "filter_read_model": filter_read_model,
         "customer_thermometer": _build_customer_thermometer(rows, today_text),
     }
 
@@ -892,6 +1032,13 @@ def get_or_start_dashboard_snapshot():
     snapshot = _load_snapshot()
 
     if _snapshot_is_valid(snapshot):
+        payload = snapshot.get("payload") if isinstance(snapshot, dict) else None
+        has_legacy_rows = isinstance(payload, dict) and isinstance(payload.get("dashboard_rows"), list)
+        if has_legacy_rows and _try_mark_running():
+            _start_background_refresh()
+            snapshot = dict(snapshot)
+            snapshot["status"] = "running"
+            snapshot["started_at"] = _now()
         return _serialize_snapshot(snapshot)
 
     if snapshot and snapshot.get("status") == "running" and not _running_is_stale(snapshot):
@@ -904,18 +1051,39 @@ def get_or_start_dashboard_snapshot():
     return _serialize_snapshot(snapshot)
 
 
+def _prepare_payload_for_browser(payload):
+    """Garante o contrato compacto mesmo durante a transição de snapshots antigos."""
+    if not isinstance(payload, dict):
+        return {}
+
+    dashboard_rows = payload.get("dashboard_rows")
+    if not isinstance(dashboard_rows, list):
+        return payload
+
+    compact_payload = dict(payload)
+    if not isinstance(compact_payload.get("filter_read_model"), dict):
+        compact_payload["filter_read_model"] = _build_filter_read_model(
+            dashboard_rows,
+            compact_payload.get("periods") or {},
+        )
+    compact_payload.pop("dashboard_rows", None)
+    return compact_payload
+
+
 def _serialize_snapshot(snapshot):
     snapshot = snapshot or {}
+    raw_payload = snapshot.get("payload") or {}
+    browser_payload = _prepare_payload_for_browser(raw_payload)
 
     return {
         "status": snapshot.get("status") or "running",
-        "payload": snapshot.get("payload") or {},
+        "payload": browser_payload,
         "error_text": snapshot.get("error_text"),
         "updated_at": _dt_text(snapshot.get("updated_at")),
         "expires_at": _dt_text(snapshot.get("expires_at")),
         "started_at": _dt_text(snapshot.get("started_at")),
         "finished_at": _dt_text(snapshot.get("finished_at")),
-        "has_payload": bool(snapshot.get("payload")),
+        "has_payload": bool(raw_payload),
         "progress_percent": snapshot.get("progress_percent"),
         "progress_message": snapshot.get("progress_message"),
         "progress_updated_at": _dt_text(snapshot.get("progress_updated_at")),
@@ -923,20 +1091,19 @@ def _serialize_snapshot(snapshot):
 
 
 def get_dashboard_snapshot_status():
-    snapshot = _load_snapshot()
-    serialized = _serialize_snapshot(snapshot)
+    snapshot = _load_snapshot_status() or {}
 
     return {
-        "status": serialized["status"],
-        "updated_at": serialized["updated_at"],
-        "expires_at": serialized["expires_at"],
-        "started_at": serialized["started_at"],
-        "finished_at": serialized["finished_at"],
-        "has_payload": serialized["has_payload"],
-        "error_text": serialized["error_text"],
-        "progress_percent": serialized["progress_percent"],
-        "progress_message": serialized["progress_message"],
-        "progress_updated_at": serialized["progress_updated_at"],
+        "status": snapshot.get("status") or "running",
+        "updated_at": _dt_text(snapshot.get("updated_at")),
+        "expires_at": _dt_text(snapshot.get("expires_at")),
+        "started_at": _dt_text(snapshot.get("started_at")),
+        "finished_at": _dt_text(snapshot.get("finished_at")),
+        "has_payload": bool(snapshot.get("has_payload")),
+        "error_text": snapshot.get("error_text"),
+        "progress_percent": snapshot.get("progress_percent"),
+        "progress_message": snapshot.get("progress_message"),
+        "progress_updated_at": _dt_text(snapshot.get("progress_updated_at")),
     }
 def unlock_dashboard_snapshot() -> dict:
     now = _now()

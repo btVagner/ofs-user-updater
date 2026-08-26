@@ -6,3 +6,6 @@ __pycache__/
 instance/
 
 
+
+# Runtime/generated temporary uploads
+temp_uploads/

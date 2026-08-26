@@ -1,0 +1,26 @@
+# Demanda 10 - template systemd do worker operacional OFS.
+# Antes de instalar, substitua:
+#   __OFS_SERVICE_USER__ -> usuário Linux que executa a aplicação
+#   __OFS_PROJECT_DIR__  -> diretório absoluto do projeto
+# O worker já carrega __OFS_PROJECT_DIR__/.env via python-dotenv; não coloque
+# credenciais, tokens ou secrets diretamente nesta unit.
+
+[Unit]
+Description=OFS Technician Operational Worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=__OFS_SERVICE_USER__
+WorkingDirectory=__OFS_PROJECT_DIR__
+ExecStart=__OFS_PROJECT_DIR__/venv/bin/python __OFS_PROJECT_DIR__/tools/ofs_technician_operational_worker.py
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGINT
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

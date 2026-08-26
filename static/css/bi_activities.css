@@ -174,9 +174,9 @@
 }
 
 .bi-result.success {
-    background: rgba(31, 160, 99, 0.14);
-    border: 1px solid rgba(31, 160, 99, 0.35);
-    color: #bcffd9;
+    background: rgba(22, 101, 52, 0.28);
+    border: 1px solid rgba(34, 197, 94, 0.42);
+    color: #f3fff8;
 }
 
 .bi-result.error {
