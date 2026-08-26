@@ -1,7 +1,9 @@
 import argparse
 import json
 import logging
+import signal
 import sys
+import threading
 from datetime import date
 from pathlib import Path
 
@@ -60,7 +62,29 @@ def main():
                 print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
                 return 0
 
-            collector.run_forever()
+            stop_event = threading.Event()
+            interrupt_count = 0
+
+            def request_stop(signum, frame):
+                nonlocal interrupt_count
+                interrupt_count += 1
+                if interrupt_count == 1:
+                    print("[OFS_OPERATIONAL_WORKER] encerramento solicitado; aguardando ciclo em andamento finalizar")
+                    stop_event.set()
+                    return
+                raise KeyboardInterrupt
+
+            previous_sigint = signal.signal(signal.SIGINT, request_stop)
+            previous_sigterm = None
+            if hasattr(signal, "SIGTERM"):
+                previous_sigterm = signal.signal(signal.SIGTERM, request_stop)
+            try:
+                collector.run_forever(stop_predicate=stop_event.is_set)
+            finally:
+                signal.signal(signal.SIGINT, previous_sigint)
+                if previous_sigterm is not None:
+                    signal.signal(signal.SIGTERM, previous_sigterm)
+            print("[OFS_OPERATIONAL_WORKER] encerrado graciosamente")
             return 0
     except OperationalAlreadyRunning as exc:
         print(f"[OFS_OPERATIONAL_WORKER] {exc}")

@@ -113,6 +113,7 @@ def test_d10_systemd_template_has_safe_worker_lifecycle_without_embedded_secrets
     assert "tools/ofs_technician_operational_worker.py" in text
     assert "Restart=on-failure" in text
     assert "KillSignal=SIGINT" in text
+    assert "TimeoutStopSec=300" in text
     assert "WorkingDirectory=__OFS_PROJECT_DIR__" in text
     assert "Environment=" not in text
     assert "PASSWORD=" not in text
@@ -154,3 +155,16 @@ def test_d10_worker_has_success_observability_without_cursor_or_subscription_val
     assert "Recuperação de subscription concluída" in text
     assert 'LOGGER.info("%s", subscription_id)' not in text
     assert 'LOGGER.info("%s", next_page)' not in text
+
+
+def test_d10_worker_cli_handles_first_sigint_as_graceful_stop_request():
+    text = (ROOT / "tools/ofs_technician_operational_worker.py").read_text(encoding="utf-8")
+
+    assert "threading.Event()" in text
+    assert "signal.SIGINT" in text
+    assert "stop_event.set()" in text
+    assert "collector.run_forever(stop_predicate=stop_event.is_set)" in text
+    assert "encerramento solicitado; aguardando ciclo em andamento finalizar" in text
+    assert "encerrado graciosamente" in text
+    assert "if interrupt_count == 1" in text
+    assert "raise KeyboardInterrupt" in text

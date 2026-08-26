@@ -18,7 +18,7 @@ ExecStart=__OFS_PROJECT_DIR__/venv/bin/python __OFS_PROJECT_DIR__/tools/ofs_tech
 Restart=on-failure
 RestartSec=10
 KillSignal=SIGINT
-TimeoutStopSec=45
+TimeoutStopSec=300
 NoNewPrivileges=true
 PrivateTmp=true
 
