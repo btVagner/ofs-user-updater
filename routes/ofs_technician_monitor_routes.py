@@ -6,6 +6,7 @@ from flask import current_app, jsonify, request
 
 from core.auth import has_perm, login_required
 from services.ofs_technician_monitor_service import (
+    TREE_FILTERS,
     TechnicianMonitorService,
     default_monitor_work_date,
 )
@@ -106,12 +107,23 @@ def init_app(app):
                 },
             }), 400
 
+        filter_name = (request.args.get("filter") or "").strip().lower() or None
+        if filter_name is not None and filter_name not in TREE_FILTERS:
+            return jsonify({
+                "ok": False,
+                "error": {
+                    "code": "INVALID_TREE_FILTER",
+                    "message": "Parâmetro filter inválido.",
+                },
+            }), 400
+
         try:
             payload, _metrics = _service().build_tree(
                 work_date,
                 mode=mode,
                 parent_id=parent_id,
                 only_problems=_bool_arg("only_problems"),
+                filter_name=filter_name,
                 detail=_bool_arg("detail"),
             )
             return jsonify({"ok": True, "data": payload}), 200

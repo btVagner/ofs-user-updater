@@ -63,6 +63,7 @@ ACTIVITY_FIELDS = (
 )
 CURSOR_KEY = "technician_monitor"
 LOCK_NAME = "ofs_technician_operational_worker"
+CUSTOMER_HOME_ACTIVITY_CATEGORY = "customer_home"
 
 SENSITIVE_INLINE_RE = re.compile(
     r"(?i)(authorization|client[_-]?secret|password|passwd|access[_-]?token|refresh[_-]?token|bearer)\s*[:=]\s*[^\s,;]+"
@@ -828,30 +829,88 @@ class MySQLOperationalRepository:
                     (row["resource_timezone_iana"], now, work_date, resource_id),
                 )
 
-    def _recompute_counts_cur(self, cur, work_date: date, resource_ids: Iterable[str], now: datetime) -> None:
-        for resource_id in sorted(set(resource_ids)):
-            cur.execute(
-                """
-                SELECT status, COUNT(*) AS total
-                FROM ofs_activity_operational_state
-                WHERE work_date=%s AND resource_id=%s
-                GROUP BY status
-                """,
-                (work_date, resource_id),
-            )
-            counts = {str(row["status"]): int(row["total"]) for row in (cur.fetchall() or [])}
+    def _recompute_counts_cur(self, cur, work_date: date, resource_ids: Iterable[str], now: datetime) -> dict:
+        """Recompõe contadores Casa Cliente usando o mapa de tipos como fonte de verdade.
+
+        O read model de atividades continua preservando tipos internal/redes para auditoria e
+        reconciliação. Somente a derivação dos contadores operacionais é filtrada aqui.
+        `include_in_bi` não participa deste domínio.
+        """
+        resource_ids = sorted({_clean(resource_id) for resource_id in resource_ids if _clean(resource_id)})
+        if not resource_ids:
+            return {"technicians_recomputed": 0, "eligible_activities": 0, "open_activities": 0}
+
+        placeholders = ",".join(["%s"] * len(resource_ids))
+        cur.execute(
+            f"""
+            SELECT a.resource_id, a.status, COUNT(*) AS total
+            FROM ofs_activity_operational_state a
+            INNER JOIN ofs_activity_type_map atm
+                    ON atm.code COLLATE utf8mb4_unicode_ci = a.activity_type
+                   AND atm.category = %s
+                   AND atm.is_active = 1
+            WHERE a.work_date = %s
+              AND a.resource_id IN ({placeholders})
+            GROUP BY a.resource_id, a.status
+            """,
+            (CUSTOMER_HOME_ACTIVITY_CATEGORY, work_date, *resource_ids),
+        )
+
+        counts_by_resource = {resource_id: {} for resource_id in resource_ids}
+        eligible_activities = 0
+        for row in cur.fetchall() or []:
+            resource_id = _clean(row.get("resource_id"))
+            status = (_clean(row.get("status")) or "unknown").lower()
+            total = int(row.get("total") or 0)
+            if resource_id in counts_by_resource:
+                counts_by_resource[resource_id][status] = total
+                eligible_activities += total
+
+        update_rows = []
+        open_activities = 0
+        for resource_id in resource_ids:
+            counts = counts_by_resource[resource_id]
             values = [counts.get(status, 0) for status in ACTIVITY_STATUSES]
             open_count = sum(counts.get(status, 0) for status in OPEN_ACTIVITY_STATUSES)
+            open_activities += open_count
+            update_rows.append((*values, open_count, now, now, work_date, resource_id))
+
+        cur.executemany(
+            """
+            UPDATE ofs_technician_operational_state
+            SET pending_count=%s,enroute_count=%s,started_count=%s,suspended_count=%s,
+                completed_count=%s,notdone_count=%s,cancelled_count=%s,open_activity_count=%s,
+                last_reconciled_at=%s,updated_at=%s
+            WHERE work_date=%s AND resource_id=%s
+            """,
+            update_rows,
+        )
+        return {
+            "technicians_recomputed": len(resource_ids),
+            "eligible_activities": eligible_activities,
+            "open_activities": open_activities,
+        }
+
+    def recompute_counts_for_date(self, work_date: date, now: Optional[datetime] = None) -> dict:
+        """Recompõe localmente os contadores do dia sem qualquer chamada Oracle/OFS."""
+        now = now or utc_now_naive()
+        conn = self.connection_factory()
+        cur = conn.cursor(dictionary=True)
+        try:
             cur.execute(
-                """
-                UPDATE ofs_technician_operational_state
-                SET pending_count=%s,enroute_count=%s,started_count=%s,suspended_count=%s,
-                    completed_count=%s,notdone_count=%s,cancelled_count=%s,open_activity_count=%s,
-                    last_reconciled_at=%s,updated_at=%s
-                WHERE work_date=%s AND resource_id=%s
-                """,
-                (*values, open_count, now, now, work_date, resource_id),
+                "SELECT resource_id FROM ofs_technician_operational_state WHERE work_date=%s ORDER BY resource_id",
+                (work_date,),
             )
+            resource_ids = [row.get("resource_id") for row in (cur.fetchall() or []) if row.get("resource_id")]
+            result = self._recompute_counts_cur(cur, work_date, resource_ids, now)
+            conn.commit()
+            return {"work_date": work_date.isoformat(), **result}
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+            conn.close()
 
     def apply_route_baseline(self, route_rows: Sequence[dict], now: datetime) -> int:
         conn = self.connection_factory()

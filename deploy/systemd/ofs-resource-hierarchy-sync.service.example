@@ -1,0 +1,21 @@
+# Demanda 13 - sincronização estrutural horária da hierarquia OFS.
+# Antes de instalar, substitua:
+#   __OFS_SERVICE_USER__ -> usuário Linux que executa a aplicação
+#   __OFS_PROJECT_DIR__  -> diretório absoluto do projeto
+# O comando carrega __OFS_PROJECT_DIR__/.env via python-dotenv; não coloque
+# credenciais, tokens ou secrets diretamente nesta unit.
+
+[Unit]
+Description=OFS Resource Hierarchy Sync
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=__OFS_SERVICE_USER__
+WorkingDirectory=__OFS_PROJECT_DIR__
+ExecStart=__OFS_PROJECT_DIR__/venv/bin/python __OFS_PROJECT_DIR__/tools/sync_ofs_resource_hierarchy.py
+TimeoutStartSec=180
+KillSignal=SIGINT
+NoNewPrivileges=true
+PrivateTmp=true

@@ -43,6 +43,7 @@
 
 .technicians-header,
 .technicians-health-shell,
+.technicians-structure-status,
 .technicians-summary,
 .technicians-browser,
 .technicians-error {
@@ -114,6 +115,38 @@
 
 .technicians-health-shell {
     padding: 14px 16px;
+}
+
+.technicians-structure-status {
+    padding: 11px 14px;
+    font-size: 0.86rem;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+.technicians-structure-status.running {
+    border-color: #b9d1e5;
+    background: #eef6fc;
+    color: #225f98;
+}
+
+.technicians-structure-status.stale,
+.technicians-structure-status.unknown {
+    border-color: #e2c79a;
+    background: #fff8e8;
+    color: #7d580e;
+}
+
+.technicians-structure-status.error {
+    border-color: #e4b9b7;
+    background: #fff0ef;
+    color: #8f2b28;
+}
+
+.technicians-structure-status.updated {
+    border-color: #b9dcc5;
+    background: #edf8f0;
+    color: #25643a;
 }
 
 .technicians-health-neutral {
@@ -252,7 +285,7 @@
 
 .technicians-stat.ok { border-color: #c4dfcd; background: #f1f9f3; }
 .technicians-stat.attention { border-color: #ead29f; background: #fff8e8; }
-.technicians-stat.alert { border-color: #e6bbb9; background: #fff1f0; }
+.technicians-stat.kpi-alert { border-color: #e6bbb9; background: #fff1f0; }
 .technicians-stat.stale,
 .technicians-stat.unknown { border-color: #d9c7e5; background: #f9f3fc; }
 
@@ -566,4 +599,237 @@
     .technicians-health-head {
         display: grid;
     }
+}
+
+/* Demanda 12 — leitura operacional compacta */
+.technicians-clusters {
+    border: 1px solid #ddd9d1;
+    border-radius: var(--ofs-radius-lg);
+    background: #ffffff;
+    box-shadow: var(--ofs-shadow-sm);
+    overflow: hidden;
+}
+
+.technicians-section-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid #e4e0d8;
+}
+
+.technicians-section-heading h3 {
+    margin: 0;
+    color: #1d2329;
+    font-size: 1.05rem;
+}
+
+.technicians-section-heading small {
+    max-width: 560px;
+    color: #6c757e;
+    font-size: 0.74rem;
+    line-height: 1.4;
+}
+
+.technicians-cluster-table-wrap {
+    overflow-x: auto;
+}
+
+.technicians-cluster-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+}
+
+.technicians-cluster-table th,
+.technicians-cluster-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #ece8e1;
+    text-align: left;
+    vertical-align: middle;
+    font-size: 0.78rem;
+}
+
+.technicians-cluster-table th {
+    color: #5d6770;
+    background: #f8f6f1;
+    font-weight: 800;
+}
+
+.technicians-cluster-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.technicians-cluster-link,
+.technicians-cluster-metric {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #225f98;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.technicians-cluster-link:hover,
+.technicians-cluster-link:focus-visible,
+.technicians-cluster-metric:hover,
+.technicians-cluster-metric:focus-visible {
+    text-decoration: underline;
+    outline: none;
+}
+
+.technicians-cluster-link:focus-visible,
+.technicians-cluster-metric:focus-visible {
+    box-shadow: var(--ofs-focus-ring);
+}
+
+.technicians-stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+    align-items: stretch;
+}
+
+.technicians-stat {
+    width: 100%;
+    min-height: 82px;
+    box-sizing: border-box;
+    margin: 0;
+    text-align: left;
+}
+
+button.technicians-stat {
+    appearance: none;
+    font: inherit;
+    cursor: pointer;
+}
+
+button.technicians-stat:hover,
+button.technicians-stat:focus-visible {
+    border-color: #9ebdd7;
+    outline: none;
+}
+
+button.technicians-stat:focus-visible {
+    box-shadow: var(--ofs-focus-ring);
+}
+
+button.technicians-stat.active {
+    border-color: #3979ad;
+    box-shadow: inset 0 0 0 2px #3979ad;
+}
+
+.technicians-node-details.technicians-node-grid {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) minmax(130px, 1fr) minmax(90px, .7fr) minmax(105px, .8fr) minmax(220px, 1.8fr);
+    gap: 8px 14px;
+    margin-top: 7px;
+    align-items: start;
+}
+
+.technicians-fact {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    color: #48535d;
+    font-size: 0.76rem;
+    line-height: 1.3;
+}
+
+.technicians-fact > strong {
+    color: #7a838c;
+    font-size: 0.64rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.technicians-alert-fact {
+    color: #8e2d29;
+}
+
+.technicians-alert-message {
+    display: block;
+    font-weight: 800;
+}
+
+.technicians-state-missing {
+    color: #6f5a82;
+    font-weight: 700;
+}
+
+.technicians-node-grid.aggregate .technicians-alert-fact {
+    color: #74541a;
+}
+
+/* Pills ficam restritas ao banner global de health; linhas da árvore usam colunas compactas. */
+.technicians-node-row .technicians-badge {
+    display: none;
+}
+
+@media (max-width: 1080px) {
+    .technicians-node-details.technicians-node-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .technicians-alert-fact {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 720px) {
+    .technicians-section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .technicians-node-details.technicians-node-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .technicians-alert-fact {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 460px) {
+    .technicians-node-details.technicians-node-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .technicians-alert-fact {
+        grid-column: auto;
+    }
+}
+
+/* D12 refinement: compact KPI row and positive route-active signal. */
+.technicians-stat-grid {
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    gap: 7px;
+}
+
+.technicians-stat {
+    min-height: 58px;
+    padding: 8px 10px;
+    border-radius: 7px;
+}
+
+.technicians-stat span {
+    font-size: 0.68rem;
+    line-height: 1.15;
+}
+
+.technicians-stat strong {
+    margin-top: 5px;
+    font-size: 1.08rem;
+}
+
+.technicians-fact.positive {
+    border-radius: 6px;
+    background: #eef8f1;
+}
+
+.technicians-fact.positive > span:last-child {
+    color: #25643a;
+    font-weight: 800;
 }

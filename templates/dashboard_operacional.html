@@ -357,10 +357,14 @@
           <h2>Técnicos e Rotas</h2>
           <p>Estado operacional, rotas, atividades e integridade do read model local.</p>
         </div>
-        <button type="button" class="technicians-refresh-button" data-technicians-refresh aria-label="Atualizar monitor de técnicos">
-          Atualizar
+        <button type="button" class="technicians-refresh-button" data-technicians-refresh
+          aria-label="Atualizar leitura local do monitor de técnicos"
+          title="Recarrega os dados locais. A sincronização com o OFS é automática.">
+          Atualizar leitura
         </button>
       </div>
+
+      <div class="technicians-structure-status hidden" data-technicians-structure-status aria-live="polite"></div>
 
       <div class="technicians-health-shell" data-technicians-health aria-live="polite">
         <span class="technicians-health-neutral">Os dados serão carregados somente ao abrir esta aba.</span>
@@ -374,14 +378,27 @@
         </div>
       </section>
 
+      <section class="technicians-clusters" aria-labelledby="technicians-clusters-title">
+        <div class="technicians-section-heading">
+          <div>
+            <span class="technicians-kicker">Comparativo operacional</span>
+            <h3 id="technicians-clusters-title">Visão por cluster</h3>
+          </div>
+          <small>Programados = técnicos WORKING no dia. Sobreaviso e fora de jornada não entram no denominador.</small>
+        </div>
+        <div class="technicians-cluster-table-wrap" data-technicians-clusters>
+          <p class="technicians-empty">Abra a aba para carregar os clusters.</p>
+        </div>
+      </section>
+
       <section class="technicians-browser" aria-label="Hierarquia operacional de técnicos">
         <div class="technicians-toolbar">
           <div class="technicians-filter-group" role="group" aria-label="Filtros operacionais" data-technicians-filters>
             <button type="button" class="active" aria-pressed="true" data-technicians-filter="all">Todos</button>
             <button type="button" aria-pressed="false" data-technicians-filter="problems">Somente problemas</button>
-            <button type="button" aria-pressed="false" data-technicians-filter="waiting">Aguardando ativação</button>
-            <button type="button" aria-pressed="false" data-technicians-filter="active">Rota ativa</button>
-            <button type="button" aria-pressed="false" data-technicians-filter="open">OS iniciada/aberta</button>
+            <button type="button" aria-pressed="false" data-technicians-filter="waiting_route">Aguardando ativação</button>
+            <button type="button" aria-pressed="false" data-technicians-filter="active_route">Rota ativa</button>
+            <button type="button" aria-pressed="false" data-technicians-filter="open">OS abertas</button>
           </div>
 
           <label class="technicians-search">

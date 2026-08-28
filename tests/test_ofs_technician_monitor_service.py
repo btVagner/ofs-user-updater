@@ -12,6 +12,7 @@ from services.ofs_technician_monitor_service import (
     MonitorSnapshot,
     MySQLTechnicianMonitorRepository,
     TechnicianMonitorService,
+    _cluster_payload,
 )
 
 
@@ -140,6 +141,29 @@ def test_summary_one_working_technician_waiting_route_after_tolerance():
     assert payload["routes"]["aguardando_ativacao"] == 1
     assert payload["operational"]["atencao"] == 1
     assert payload["alert_codes"]["ROUTE_NOT_STARTED"] == 1
+
+
+def test_extra_working_counts_as_working_and_active_for_cluster_activation():
+    now = now_utc(12)
+    operational = [
+        state_row(
+            "T1",
+            calendar_record_type="extra_working",
+            route_state="active",
+            route_started_at=datetime(2026, 8, 26, 8, 2),
+        )
+    ]
+    service = service_for(basic_hierarchy(), operational, health(now))
+
+    summary, _ = service.build_summary(WORK_DATE, root_resource_id="02", now=now)
+    tree, _ = service.build_tree(WORK_DATE, root_resource_id="02", now=now)
+    clusters = {item["resource_id"]: item for item in tree["clusters"]}
+
+    assert summary["schedule"]["working"] == 1
+    assert summary["routes"]["ativa"] == 1
+    assert clusters["GR1"]["working_count"] == 1
+    assert clusters["GR1"]["working_active_route_count"] == 1
+    assert clusters["GR1"]["activation_percent"] == 100.0
 
 
 def test_summary_on_call_and_non_working_remain_separate():
@@ -374,3 +398,92 @@ def test_monitor_probe_can_run_directly_from_tools_directory():
     )
     assert result.returncode == 0, result.stderr
     assert "Mede as APIs locais do monitor de técnicos" in result.stdout
+
+
+def test_d12_filter_active_route_prunes_server_side_and_propagates_to_children():
+    now = now_utc(12)
+    hierarchy = basic_hierarchy() + [
+        hierarchy_row("GR2", "02", "GR", 1),
+        hierarchy_row("T2", "GR2", "TCP", 2),
+    ]
+    operational = [
+        state_row("T1", route_state="active", route_started_at=datetime(2026, 8, 26, 8, 2)),
+        state_row("T2", route_state="ended", route_started_at=datetime(2026, 8, 26, 8), route_ended_at=datetime(2026, 8, 26, 11)),
+    ]
+    service = service_for(hierarchy, operational, health(now))
+    root, _ = service.build_tree(WORK_DATE, root_resource_id="02", now=now, filter_name="active_route")
+    assert root["filter"] == "active_route"
+    assert [cluster["resource_id"] for cluster in root["clusters"]] == ["GR1"]
+    children, _ = service.build_tree(WORK_DATE, root_resource_id="02", now=now, parent_id="02", filter_name="active_route")
+    assert [node["resource_id"] for node in children["nodes"]] == ["GR1"]
+
+
+def test_d12_only_problems_ignores_global_stale_but_keeps_missing_state_individual():
+    now = now_utc(12)
+    hierarchy = basic_hierarchy() + [hierarchy_row("T2", "BK1", "TCP", 3)]
+    operational = [state_row("T1", route_state="active", route_started_at=datetime(2026, 8, 26, 8, 2))]
+    service = service_for(hierarchy, operational, health(now, activities_status="error"))
+    payload, _ = service.build_tree(WORK_DATE, root_resource_id="02", now=now, parent_id="BK1", only_problems=True)
+    assert payload["filter"] == "problems"
+    assert [node["resource_id"] for node in payload["nodes"]] == ["T2"]
+    assert payload["nodes"][0]["has_operational_state"] is False
+
+
+def test_d12_cluster_programmed_definition_and_activation_percent():
+    now = now_utc(12)
+    hierarchy = basic_hierarchy() + [
+        hierarchy_row("T2", "BK1", "TCP", 3),
+        hierarchy_row("T3", "BK1", "TCW", 3),
+        hierarchy_row("GR2", "02", "GR", 1),
+        hierarchy_row("T4", "GR2", "TCV", 2),
+    ]
+    operational = [
+        state_row("T1", route_state="active", route_started_at=datetime(2026, 8, 26, 8, 2)),
+        state_row("T2", route_state="not_started"),
+        state_row("T3", calendar_record_type="on-call", calendar_start_at=None, calendar_end_at=None),
+        state_row("T4", calendar_record_type="non-working", calendar_start_at=None, calendar_end_at=None),
+    ]
+    payload, _ = service_for(hierarchy, operational, health(now)).build_tree(WORK_DATE, root_resource_id="02", now=now)
+    clusters = {item["resource_id"]: item for item in payload["clusters"]}
+    assert clusters["GR1"]["working_count"] == 2
+    assert clusters["GR1"]["active_route_count"] == 1
+    assert clusters["GR1"]["activation_percent"] == 50.0
+    assert clusters["GR2"]["working_count"] == 0
+    assert clusters["GR2"]["activation_percent"] is None
+
+
+def test_cluster_activation_percent_uses_only_working_technicians_with_active_route():
+    node = {
+        "resource_id": "GRX",
+        "resource_name": "Cluster X",
+        "resource_type": "GR",
+        "aggregates": {
+            "working_count": 2,
+            "active_route_count": 5,
+            "working_active_route_count": 1,
+            "waiting_route_count": 0,
+            "alert_count": 0,
+        },
+    }
+    payload = _cluster_payload(node)
+    assert payload["active_route_count"] == 5
+    assert payload["working_active_route_count"] == 1
+    assert payload["activation_percent"] == 50.0
+
+
+def test_cluster_activation_percent_has_no_denominator_when_no_working_technician():
+    node = {
+        "resource_id": "GRX",
+        "resource_name": "Cluster X",
+        "resource_type": "GR",
+        "aggregates": {
+            "working_count": 0,
+            "active_route_count": 7,
+            "working_active_route_count": 0,
+            "waiting_route_count": 0,
+            "alert_count": 0,
+        },
+    }
+    payload = _cluster_payload(node)
+    assert payload["active_route_count"] == 7
+    assert payload["activation_percent"] is None

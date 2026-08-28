@@ -30,6 +30,11 @@ def parse_args():
     mode.add_argument("--baseline-once", action="store_true", help="Executa baseline/recovery completo uma vez e encerra.")
     mode.add_argument("--events-once", action="store_true", help="Lê/drena Events até o cursor atual e encerra.")
     mode.add_argument("--status", action="store_true", help="Exibe apenas métricas locais MySQL; não consulta OFS.")
+    mode.add_argument(
+        "--recompute-counts-once",
+        action="store_true",
+        help="Recompõe contadores Casa Cliente do read model local; não consulta OFS.",
+    )
     parser.add_argument("--date", default=None, help="Data YYYY-MM-DD para baseline/status. Padrão: hoje.")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     return parser.parse_args()
@@ -45,11 +50,16 @@ def main():
         print(json.dumps(repository.operational_metrics(target_date), ensure_ascii=False, indent=2, sort_keys=True))
         return 0
 
-    settings = OperationalSettings.from_env()
-    collector = TechnicianOperationalCollector(repository=repository, settings=settings)
-
     try:
         with mysql_operational_lock():
+            if args.recompute_counts_once:
+                result = repository.recompute_counts_for_date(target_date)
+                result["metrics"] = repository.operational_metrics(target_date)
+                print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+                return 0
+
+            settings = OperationalSettings.from_env()
+            collector = TechnicianOperationalCollector(repository=repository, settings=settings)
             if args.baseline_once:
                 result = collector.run_baseline(target_date)
                 result["metrics"] = repository.operational_metrics(target_date)

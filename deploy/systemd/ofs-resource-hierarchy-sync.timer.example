@@ -1,0 +1,15 @@
+# Demanda 13 - timer da sincronização estrutural OFS.
+# A unit .service correspondente deve estar instalada com o mesmo nome base.
+
+[Unit]
+Description=Hourly OFS Resource Hierarchy Sync
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1h
+AccuracySec=1min
+Persistent=true
+Unit=ofs-resource-hierarchy-sync.service
+
+[Install]
+WantedBy=timers.target

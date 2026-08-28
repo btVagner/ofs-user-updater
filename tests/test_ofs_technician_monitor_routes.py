@@ -17,6 +17,7 @@ class FakeMonitorService:
             "mode": kwargs["mode"],
             "parent_id": kwargs["parent_id"],
             "only_problems": kwargs["only_problems"],
+            "filter": kwargs["filter_name"],
             "detail": kwargs["detail"],
             "nodes": [],
         }, {}
@@ -84,6 +85,7 @@ def test_tree_authorized_user_supports_incremental_contract(monkeypatch):
     assert data["mode"] == "children"
     assert data["parent_id"] == "BK1"
     assert data["only_problems"] is True
+    assert data["filter"] is None
     assert data["detail"] is True
 
 
@@ -133,3 +135,19 @@ def test_internal_read_error_does_not_leak_sql_or_exception(monkeypatch):
     assert "secret_should_not_leak" not in body
     assert "SELECT" not in body
     assert response.get_json()["error"]["code"] == "READ_MODEL_ERROR"
+
+
+def test_tree_accepts_d12_server_filter(monkeypatch):
+    client = make_app(monkeypatch, FakeMonitorService()).test_client()
+    login_session(client, allowed=True)
+    response = client.get("/dashboard/technicians/tree?date=2026-08-26&filter=active_route")
+    assert response.status_code == 200
+    assert response.get_json()["data"]["filter"] == "active_route"
+
+
+def test_invalid_tree_filter_is_400(monkeypatch):
+    client = make_app(monkeypatch, FakeMonitorService()).test_client()
+    login_session(client, allowed=True)
+    response = client.get("/dashboard/technicians/tree?date=2026-08-26&filter=not-valid")
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "INVALID_TREE_FILTER"

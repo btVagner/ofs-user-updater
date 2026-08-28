@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from datetime import datetime, timezone
+import re
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlencode
 
@@ -13,6 +14,7 @@ from ofs.config import get_ofs_root_resource_id
 PAGE_LIMIT = 100
 MAX_PAGES = 1000
 LOCK_NAME = "ofs_resource_hierarchy_sync"
+SYNC_SOURCE_NAME = "hierarchy"
 RESOURCE_FIELDS = (
     "resourceId",
     "parentResourceId",
@@ -45,6 +47,34 @@ def _utc_now_naive() -> datetime:
 def _http_status(exc: Exception) -> Optional[int]:
     response = getattr(exc, "response", None)
     return getattr(response, "status_code", None)
+
+
+def _safe_error_code(exc: Exception) -> str:
+    status = _http_status(exc)
+    if status is not None:
+        return f"OFS_HTTP_{status}"[:64]
+    name = re.sub(r"[^A-Z0-9_]+", "_", exc.__class__.__name__.upper()).strip("_")
+    return (name or "HIERARCHY_SYNC_ERROR")[:64]
+
+
+def _safe_error_text(exc: Exception) -> str:
+    status = _http_status(exc)
+    if status is not None:
+        return f"Falha HTTP {status} durante a sincronização da hierarquia OFS."
+
+    text = str(exc or "").strip()
+    if not text:
+        return "Falha durante a sincronização da hierarquia OFS."
+
+    # O erro persistido pode ser exibido pela API local. Evite carregar URLs,
+    # query strings e valores com nomes típicos de credenciais para o banco/UI.
+    text = re.sub(r"https?://\S+", "<url>", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"(?i)\b(password|passwd|token|access_token|client_secret|secret|authorization|assertion)\b\s*[:=]\s*[^\s,;]+",
+        r"\1=<redacted>",
+        text,
+    )
+    return text[:500]
 
 
 def _is_fields_compatibility_error(exc: Exception) -> bool:
@@ -494,6 +524,52 @@ class MySQLHierarchyRepository:
     def __init__(self, connection_factory: Callable = get_connection):
         self.connection_factory = connection_factory
 
+    def update_sync_status(
+        self,
+        *,
+        status: str,
+        started_at: Optional[datetime] = None,
+        success_at: Optional[datetime] = None,
+        finished_at: Optional[datetime] = None,
+        error_code: Optional[str] = None,
+        error_message: Optional[str] = None,
+    ) -> None:
+        conn = self.connection_factory()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                """
+                INSERT INTO ofs_operational_sync_state
+                    (source_name,last_started_at,last_success_at,last_finished_at,status,error_code,error_message,updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                ON DUPLICATE KEY UPDATE
+                    last_started_at=COALESCE(VALUES(last_started_at),last_started_at),
+                    last_success_at=COALESCE(VALUES(last_success_at),last_success_at),
+                    last_finished_at=COALESCE(VALUES(last_finished_at),last_finished_at),
+                    status=VALUES(status),
+                    error_code=VALUES(error_code),
+                    error_message=VALUES(error_message),
+                    updated_at=VALUES(updated_at)
+                """,
+                (
+                    SYNC_SOURCE_NAME,
+                    started_at,
+                    success_at,
+                    finished_at,
+                    status,
+                    error_code,
+                    error_message,
+                    _utc_now_naive(),
+                ),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+            conn.close()
+
     def replace_snapshot(self, rows: List[dict], root_resource_id: str, seen_at: datetime) -> int:
         if not rows:
             raise HierarchySyncError("Snapshot vazio não será persistido.")
@@ -609,22 +685,64 @@ def sync_resource_hierarchy(
     use_lock: bool = True,
     seen_at: Optional[datetime] = None,
 ) -> dict:
-    """Sincroniza o estado atual da hierarquia OFS de forma idempotente."""
+    """Sincroniza o estado atual da hierarquia OFS de forma idempotente.
+
+    Quando o repositório oferece ``update_sync_status`` (caso padrão MySQL),
+    a execução também publica health estrutural em ``ofs_operational_sync_state``
+    usando a fonte isolada ``hierarchy``. As regras operacionais continuam
+    filtrando apenas Events/Activities/Calendars/Routes.
+    """
     repository = repository or MySQLHierarchyRepository()
     seen_at = seen_at or _utc_now_naive()
 
-    if use_lock:
-        with mysql_sync_lock():
-            return _sync_without_lock(
+    def run_once() -> dict:
+        started_at = _utc_now_naive()
+        update_status = getattr(repository, "update_sync_status", None)
+        if callable(update_status):
+            update_status(status="running", started_at=started_at)
+
+        try:
+            result = _sync_without_lock(
                 client=client,
                 root_resource_id=root_resource_id,
                 repository=repository,
                 seen_at=seen_at,
             )
+        except Exception as exc:
+            finished_at = _utc_now_naive()
+            if callable(update_status):
+                try:
+                    update_status(
+                        status="error",
+                        finished_at=finished_at,
+                        error_code=_safe_error_code(exc),
+                        error_message=_safe_error_text(exc),
+                    )
+                except Exception:
+                    # Não esconda a causa original caso a própria persistência
+                    # de health também esteja indisponível.
+                    pass
+            raise
 
-    return _sync_without_lock(
-        client=client,
-        root_resource_id=root_resource_id,
-        repository=repository,
-        seen_at=seen_at,
-    )
+        finished_at = _utc_now_naive()
+        if callable(update_status):
+            update_status(
+                status="ok",
+                success_at=finished_at,
+                finished_at=finished_at,
+                error_code=None,
+                error_message=None,
+            )
+        return {
+            **result,
+            "hierarchy_sync_status": "ok",
+            "hierarchy_last_success_at_utc": finished_at.isoformat(timespec="seconds"),
+            "sync_started_at_utc": started_at.isoformat(timespec="seconds"),
+            "sync_finished_at_utc": finished_at.isoformat(timespec="seconds"),
+        }
+
+    if use_lock:
+        with mysql_sync_lock():
+            return run_once()
+
+    return run_once()

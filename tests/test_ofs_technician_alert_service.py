@@ -122,6 +122,13 @@ def test_afternoon_shift_uses_real_calendar_times():
     assert late["alert_codes"] == [ALERT_ROUTE_NOT_STARTED]
 
 
+@pytest.mark.parametrize("record_type", ["extra_working", "extra-working", "extraworking"])
+def test_extra_working_is_treated_as_working_schedule(record_type):
+    result = classify(row=base_row(calendar_record_type=record_type), now=now_utc(12))
+    assert result["schedule_state"] == SCHEDULE_WORKING
+    assert result["route_state"] == ROUTE_WAITING
+
+
 def test_non_working_never_generates_route_delay():
     result = classify(row=base_row(calendar_record_type="non-working", calendar_start_at=None, calendar_end_at=None), now=now_utc(15))
     assert result["schedule_state"] == SCHEDULE_NON_WORKING

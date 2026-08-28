@@ -41,6 +41,8 @@ from services.ofs_technician_alert_service import (
 TECHNICIAN_RESOURCE_TYPES = frozenset({"TCV", "TCP", "TCW"})
 HEALTH_SOURCES = (SOURCE_EVENTS, SOURCE_ACTIVITIES, SOURCE_CALENDARS, SOURCE_ROUTES)
 RUNTIME_HEALTH_SOURCES = (SOURCE_EVENTS, SOURCE_ACTIVITIES, SOURCE_CALENDARS)
+HIERARCHY_HEALTH_SOURCE = "hierarchy"
+DEFAULT_HIERARCHY_STALE_SECONDS = 2 * 60 * 60
 
 SCHEDULE_KEYS = {
     SCHEDULE_WORKING: "working",
@@ -71,6 +73,16 @@ KNOWN_ALERT_CODES = (
     ALERT_ROUTE_ACTIVE_AFTER_SHIFT,
     ALERT_ACTIVITY_OPEN_AFTER_SHIFT,
 )
+TREE_FILTERS = frozenset({
+    "problems",
+    "alert",
+    "attention",
+    "waiting_route",
+    "active_route",
+    "started",
+    "suspended",
+    "open",
+})
 
 HIERARCHY_SQL = """
     SELECT
@@ -110,7 +122,7 @@ HEALTH_SQL = """
         error_message,
         updated_at
     FROM ofs_operational_sync_state
-    WHERE source_name IN ('events','activities','calendars','routes')
+    WHERE source_name IN ('events','activities','calendars','routes','hierarchy')
 """
 
 
@@ -203,10 +215,12 @@ class TechnicianMonitorService:
         self,
         repository: Optional[MySQLTechnicianMonitorRepository] = None,
         classifier: Optional[TechnicianAlertClassifier] = None,
+        hierarchy_stale_seconds: int = DEFAULT_HIERARCHY_STALE_SECONDS,
     ):
         self.repository = repository or MySQLTechnicianMonitorRepository()
         self.classifier = classifier or TechnicianAlertClassifier()
         self.settings: AlertRuleSettings = self.classifier.settings
+        self.hierarchy_stale_seconds = max(int(hierarchy_stale_seconds), 60)
 
     def build_summary(
         self,
@@ -235,10 +249,12 @@ class TechnicianMonitorService:
         mode: str = "children",
         parent_id: Optional[str] = None,
         only_problems: bool = False,
+        filter_name: Optional[str] = None,
         detail: bool = False,
     ) -> Tuple[dict, dict]:
         if mode not in {"full", "children"}:
             raise ValueError("mode deve ser 'full' ou 'children'.")
+        effective_filter = _normalize_tree_filter(filter_name, only_problems=only_problems)
 
         context, metrics = self._build_context(
             work_date,
@@ -252,6 +268,7 @@ class TechnicianMonitorService:
             mode=mode,
             parent_id=parent_id,
             only_problems=only_problems,
+            filter_name=effective_filter,
             detail=detail,
         )
         metrics["aggregation_ms"] = (time.perf_counter() - started) * 1000.0
@@ -321,6 +338,7 @@ class TechnicianMonitorService:
         if effective_now.tzinfo is None:
             effective_now = effective_now.replace(tzinfo=timezone.utc)
         health = self._health_payload(snapshot.health_by_source, effective_now)
+        hierarchy_sync = self._hierarchy_sync_payload(snapshot.health_by_source, effective_now)
 
         metrics = dict(snapshot.query_metrics_ms)
         metrics["mysql_queries_total"] = 3
@@ -337,8 +355,10 @@ class TechnicianMonitorService:
             "classifications": classifications,
             "classification_by_id": classification_by_id,
             "health": health,
+            "hierarchy_sync": hierarchy_sync,
             "data_available": bool(snapshot.operational_rows),
             "missing_operational_count": missing_operational_count,
+            "operational_resource_ids": frozenset(state_by_id),
             "generated_at": effective_now.astimezone(timezone.utc).isoformat(),
         }, metrics
 
@@ -366,6 +386,58 @@ class TechnicianMonitorService:
             "overall_integrity": INTEGRITY_KEYS[overall],
             "sources": sources,
             "events_caught_up": sources[SOURCE_EVENTS].get("caught_up"),
+        }
+
+    def _hierarchy_sync_payload(
+        self,
+        health_by_source: Mapping[str, Mapping[str, Any]],
+        now: datetime,
+    ) -> dict:
+        row = health_by_source.get(HIERARCHY_HEALTH_SOURCE)
+        evaluated = evaluate_source_health(
+            HIERARCHY_HEALTH_SOURCE,
+            row,
+            now_utc=now.astimezone(timezone.utc),
+            threshold_seconds=self.hierarchy_stale_seconds,
+        )
+        raw_status = str((row or {}).get("status") or "").strip().lower() or None
+        if raw_status == "running":
+            display_state = "running"
+        elif raw_status in {"error", "failed", "failure"}:
+            display_state = "error"
+        elif evaluated.get("state") == INTEGRITY_STALE:
+            display_state = "stale"
+        elif evaluated.get("state") == INTEGRITY_UNKNOWN:
+            display_state = "unknown"
+        else:
+            display_state = "ok"
+
+        def iso(value: Any) -> Optional[str]:
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                if value.tzinfo is None:
+                    value = value.replace(tzinfo=timezone.utc)
+                return value.astimezone(timezone.utc).isoformat()
+            text = str(value).strip()
+            return text or None
+
+        last_success_at = evaluated.get("last_success_at")
+        return {
+            "source": HIERARCHY_HEALTH_SOURCE,
+            "status": raw_status,
+            "state": display_state,
+            "freshness_state": evaluated.get("state"),
+            "age_seconds": evaluated.get("age_seconds"),
+            "threshold_seconds": self.hierarchy_stale_seconds,
+            "last_started_at": iso((row or {}).get("last_started_at")),
+            "last_success_at": last_success_at,
+            "last_finished_at": iso((row or {}).get("last_finished_at")),
+            "error_code": (row or {}).get("error_code"),
+            "error_message": (row or {}).get("error_message"),
+            # O timestamp de último snapshot válido é também a versão estrutural
+            # observável pelo browser. Não depende do health operacional.
+            "version": last_success_at,
         }
 
     def _summary_payload(self, context: Mapping[str, Any]) -> dict:
@@ -405,6 +477,7 @@ class TechnicianMonitorService:
             "suspended_count": suspended_count,
             "open_activity_count": open_activity_count,
             "health": context["health"],
+            "hierarchy_sync": context["hierarchy_sync"],
             "generated_at": context["generated_at"],
         }
 
@@ -415,6 +488,7 @@ class TechnicianMonitorService:
         mode: str,
         parent_id: Optional[str],
         only_problems: bool,
+        filter_name: Optional[str],
         detail: bool,
     ) -> dict:
         nodes_by_id: Dict[str, dict] = {}
@@ -434,10 +508,17 @@ class TechnicianMonitorService:
                 "depth": int(row.get("depth") or 0),
                 "has_children": False,
                 "aggregates": _empty_aggregates(),
-                "technician": _technician_payload(classification, detail=detail) if classification else None,
+                "technician": _technician_payload(
+                    classification,
+                    detail=detail,
+                    has_operational_state=resource_id in context["operational_resource_ids"],
+                ) if classification else None,
             }
             if classification:
-                node["aggregates"] = _technician_aggregates(classification)
+                node["aggregates"] = _technician_aggregates(
+                    classification,
+                    has_operational_state=resource_id in context["operational_resource_ids"],
+                )
             nodes_by_id[resource_id] = node
             children_by_parent.setdefault(parent_id_value, []).append(resource_id)
 
@@ -467,9 +548,7 @@ class TechnicianMonitorService:
         root_ids.sort(key=lambda rid: (nodes_by_id[rid]["depth"], rid))
 
         def selected(child_id: str) -> bool:
-            if not only_problems:
-                return True
-            return _has_problem(nodes_by_id[child_id]["aggregates"])
+            return _matches_tree_filter(nodes_by_id[child_id]["aggregates"], filter_name)
 
         if mode == "children":
             if parent_id is None:
@@ -493,12 +572,22 @@ class TechnicianMonitorService:
                     rid,
                     nodes_by_id,
                     children_by_parent,
-                    only_problems=only_problems,
+                    filter_name=filter_name,
                     path=frozenset(),
                 )
                 for rid in root_ids
                 if selected(rid)
             ]
+
+        clusters: List[dict] = []
+        if mode == "children" and parent_id is None:
+            for root_id in root_ids:
+                for cluster_id in sorted(
+                    children_by_parent.get(root_id, []),
+                    key=lambda rid: (nodes_by_id[rid]["depth"], rid),
+                ):
+                    if _matches_tree_filter(nodes_by_id[cluster_id]["aggregates"], filter_name):
+                        clusters.append(_cluster_payload(nodes_by_id[cluster_id]))
 
         return {
             "work_date": context["work_date"].isoformat(),
@@ -508,13 +597,16 @@ class TechnicianMonitorService:
             "parent_id": parent_id if mode == "children" else None,
             "parent_found": parent_found,
             "only_problems": only_problems,
+            "filter": filter_name,
             "detail": detail,
             "total_nodes": len(nodes_by_id),
             "total_technicians": len(context["technician_rows"]),
             "technicians_with_operational_state": len(context["operational_rows"]),
             "technicians_without_operational_state": context["missing_operational_count"],
             "nodes": nodes,
+            "clusters": clusters,
             "health": context["health"],
+            "hierarchy_sync": context["hierarchy_sync"],
             "hierarchy_warnings": warnings,
             "generated_at": context["generated_at"],
         }
@@ -542,26 +634,33 @@ def _empty_aggregates() -> dict:
         "working_count": 0,
         "waiting_route_count": 0,
         "active_route_count": 0,
+        "working_active_route_count": 0,
         "ended_route_count": 0,
         "attention_count": 0,
         "alert_count": 0,
         "integrity_degraded_count": 0,
+        "missing_state_count": 0,
         "started_count": 0,
         "suspended_count": 0,
         "open_activity_count": 0,
     }
 
 
-def _technician_aggregates(classification: Mapping[str, Any]) -> dict:
+def _technician_aggregates(classification: Mapping[str, Any], *, has_operational_state: bool = True) -> dict:
     aggregate = _empty_aggregates()
     aggregate["technician_count"] = 1
     aggregate["working_count"] = int(classification.get("schedule_state") == SCHEDULE_WORKING)
     aggregate["waiting_route_count"] = int(classification.get("route_state") == ROUTE_WAITING)
     aggregate["active_route_count"] = int(classification.get("route_state") == ROUTE_ACTIVE)
+    aggregate["working_active_route_count"] = int(
+        classification.get("schedule_state") == SCHEDULE_WORKING
+        and classification.get("route_state") == ROUTE_ACTIVE
+    )
     aggregate["ended_route_count"] = int(classification.get("route_state") == ROUTE_ENDED)
     aggregate["attention_count"] = int(classification.get("operational_severity") == SEVERITY_ATTENTION)
     aggregate["alert_count"] = int(classification.get("operational_severity") == SEVERITY_ALERT)
     aggregate["integrity_degraded_count"] = int(classification.get("integrity_state") != INTEGRITY_OK)
+    aggregate["missing_state_count"] = int(not has_operational_state)
     aggregate["started_count"] = int(classification.get("started_count") or 0)
     aggregate["suspended_count"] = int(classification.get("suspended_count") or 0)
     aggregate["open_activity_count"] = int(classification.get("open_activity_count") or 0)
@@ -573,17 +672,46 @@ def _add_aggregates(target: dict, source: Mapping[str, Any]) -> None:
         target[key] += int(source.get(key) or 0)
 
 
-def _has_problem(aggregates: Mapping[str, Any]) -> bool:
-    return any(
-        int(aggregates.get(key) or 0) > 0
-        for key in ("attention_count", "alert_count", "integrity_degraded_count")
-    )
+def _normalize_tree_filter(filter_name: Optional[str], *, only_problems: bool) -> Optional[str]:
+    value = str(filter_name or "").strip().lower() or None
+    if value is None and only_problems:
+        return "problems"
+    if value is not None and value not in TREE_FILTERS:
+        raise ValueError("filter inválido")
+    return value
 
 
-def _technician_payload(classification: Optional[Mapping[str, Any]], *, detail: bool) -> Optional[dict]:
+def _matches_tree_filter(aggregates: Mapping[str, Any], filter_name: Optional[str]) -> bool:
+    if filter_name is None:
+        return True
+    if filter_name == "problems":
+        return any(
+            int(aggregates.get(key) or 0) > 0
+            for key in ("attention_count", "alert_count", "missing_state_count")
+        )
+    key_by_filter = {
+        "alert": "alert_count",
+        "attention": "attention_count",
+        "waiting_route": "waiting_route_count",
+        "active_route": "active_route_count",
+        "started": "started_count",
+        "suspended": "suspended_count",
+        "open": "open_activity_count",
+    }
+    aggregate_key = key_by_filter.get(filter_name)
+    return aggregate_key is not None and int(aggregates.get(aggregate_key) or 0) > 0
+
+
+def _technician_payload(
+    classification: Optional[Mapping[str, Any]],
+    *,
+    detail: bool,
+    has_operational_state: bool,
+) -> Optional[dict]:
     if not classification:
         return None
     payload = {
+        "has_operational_state": bool(has_operational_state),
         "schedule_state": classification.get("schedule_state"),
         "route_state": classification.get("route_state"),
         "operational_severity": classification.get("operational_severity"),
@@ -604,6 +732,25 @@ def _technician_payload(classification: Optional[Mapping[str, Any]], *, detail: 
     if detail:
         payload["decision_reasons"] = list(classification.get("decision_reasons") or [])
     return payload
+
+
+def _cluster_payload(node: Mapping[str, Any]) -> dict:
+    aggregates = dict(node.get("aggregates") or {})
+    working_count = int(aggregates.get("working_count") or 0)
+    active_route_count = int(aggregates.get("active_route_count") or 0)
+    working_active_route_count = int(aggregates.get("working_active_route_count") or 0)
+    activation_percent = None if working_count == 0 else round((working_active_route_count / working_count) * 100.0, 1)
+    return {
+        "resource_id": node["resource_id"],
+        "resource_name": node["resource_name"],
+        "resource_type": node["resource_type"],
+        "working_count": working_count,
+        "active_route_count": active_route_count,
+        "working_active_route_count": working_active_route_count,
+        "activation_percent": activation_percent,
+        "waiting_route_count": int(aggregates.get("waiting_route_count") or 0),
+        "alert_count": int(aggregates.get("alert_count") or 0),
+    }
 
 
 def _flat_node(node: Mapping[str, Any]) -> dict:
@@ -627,7 +774,7 @@ def _nested_node(
     nodes_by_id: Mapping[str, Mapping[str, Any]],
     children_by_parent: Mapping[Optional[str], Sequence[str]],
     *,
-    only_problems: bool,
+    filter_name: Optional[str],
     path: frozenset[str],
 ) -> dict:
     node = nodes_by_id[resource_id]
@@ -639,8 +786,8 @@ def _nested_node(
         children_by_parent.get(resource_id, []),
         key=lambda rid: (nodes_by_id[rid]["depth"], rid),
     )
-    if only_problems:
-        child_ids = [rid for rid in child_ids if _has_problem(nodes_by_id[rid]["aggregates"])]
+    if filter_name is not None:
+        child_ids = [rid for rid in child_ids if _matches_tree_filter(nodes_by_id[rid]["aggregates"], filter_name)]
 
     result = _flat_node(node)
     result["children"] = [
@@ -648,7 +795,7 @@ def _nested_node(
             child_id,
             nodes_by_id,
             children_by_parent,
-            only_problems=only_problems,
+            filter_name=filter_name,
             path=next_path,
         )
         for child_id in child_ids

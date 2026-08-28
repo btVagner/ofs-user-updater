@@ -70,6 +70,8 @@ def main():
         f"{result['inactive_confirmed_by_recheck']}"
     )
     print(f"seen_at_utc: {result['seen_at_utc']}")
+    print(f"hierarchy_sync_status: {result['hierarchy_sync_status']}")
+    print(f"hierarchy_last_success_at_utc: {result['hierarchy_last_success_at_utc']}")
     print(f"elapsed_seconds: {elapsed:.2f}")
     return 0
 

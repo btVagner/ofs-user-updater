@@ -242,7 +242,10 @@ def evaluate_source_health(
 
 def _normalize_schedule_state(record_type: Any) -> str:
     value = (_clean(record_type) or "").lower().replace("_", "-")
-    if value == "working":
+    if value in {"working", "extra-working", "extraworking"}:
+        # OFS usa extra_working para jornadas extraordinárias. Para o monitor
+        # operacional isso continua sendo uma jornada válida do dia e deve
+        # participar de working_count e da taxa de ativação.
         return SCHEDULE_WORKING
     if value in {"non-working", "nonworking"}:
         return SCHEDULE_NON_WORKING
