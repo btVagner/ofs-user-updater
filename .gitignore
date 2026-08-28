@@ -1,11 +1,12 @@
 .env
 venv/
+.venv/
 __pycache__/
+*.py[cod]
+.pytest_cache/
 
 # Runtime/generated Flask files
 instance/
-
-
 
 # Runtime/generated temporary uploads
 # Arquivos operacionais podem conter dados de clientes/OS e nunca devem entrar no Git.
