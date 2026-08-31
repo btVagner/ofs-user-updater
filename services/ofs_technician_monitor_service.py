@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -43,6 +43,8 @@ HEALTH_SOURCES = (SOURCE_EVENTS, SOURCE_ACTIVITIES, SOURCE_CALENDARS, SOURCE_ROU
 RUNTIME_HEALTH_SOURCES = (SOURCE_EVENTS, SOURCE_ACTIVITIES, SOURCE_CALENDARS)
 HIERARCHY_HEALTH_SOURCE = "hierarchy"
 DEFAULT_HIERARCHY_STALE_SECONDS = 2 * 60 * 60
+ROUTE_HISTORY_RETENTION_DAYS = 7
+ROUTE_HISTORY_DISPLAY_TIMEZONE = "America/Sao_Paulo"
 
 SCHEDULE_KEYS = {
     SCHEDULE_WORKING: "working",
@@ -125,6 +127,24 @@ HEALTH_SQL = """
     WHERE source_name IN ('events','activities','calendars','routes','hierarchy')
 """
 
+ROUTE_HISTORY_SQL = """
+    SELECT
+        s.work_date,
+        s.resource_id,
+        s.route_started_at,
+        s.route_reactivated_at,
+        s.route_ended_at,
+        s.resource_timezone,
+        s.resource_timezone_iana
+    FROM ofs_technician_operational_state s
+    JOIN ofs_resource_hierarchy h ON h.resource_id = s.resource_id
+    WHERE s.resource_id = %s
+      AND s.work_date BETWEEN %s AND %s
+      AND h.root_resource_id = %s
+      AND h.resource_type IN ('TCV','TCP','TCW')
+    ORDER BY s.work_date DESC
+"""
+
 
 @dataclass(frozen=True)
 class MonitorSnapshot:
@@ -180,6 +200,32 @@ class MySQLTechnicianMonitorRepository:
                 health_by_source=health_by_source,
                 query_metrics_ms=metrics,
             )
+        finally:
+            cur.close()
+            conn.close()
+
+    def load_route_history(
+        self,
+        resource_id: str,
+        *,
+        end_date: date,
+        retention_days: int = ROUTE_HISTORY_RETENTION_DAYS,
+        root_resource_id: Optional[str] = None,
+    ) -> Tuple[List[dict], float]:
+        root_resource_id = root_resource_id or get_ofs_root_resource_id()
+        retention_days = max(1, min(int(retention_days), ROUTE_HISTORY_RETENTION_DAYS))
+        start_date = end_date - timedelta(days=retention_days - 1)
+        conn = self.connection_factory()
+        cur = conn.cursor(dictionary=True)
+        try:
+            started = time.perf_counter()
+            cur.execute(
+                ROUTE_HISTORY_SQL,
+                (str(resource_id), start_date, end_date, root_resource_id),
+            )
+            rows = [dict(row) for row in (cur.fetchall() or [])]
+            elapsed_ms = (time.perf_counter() - started) * 1000.0
+            return rows, elapsed_ms
         finally:
             cur.close()
             conn.close()
@@ -274,6 +320,41 @@ class TechnicianMonitorService:
         metrics["aggregation_ms"] = (time.perf_counter() - started) * 1000.0
         metrics.update(_serialized_metrics(tree_payload))
         return tree_payload, metrics
+
+    def build_route_history(
+        self,
+        resource_id: str,
+        *,
+        end_date: Optional[date] = None,
+        root_resource_id: Optional[str] = None,
+    ) -> Tuple[dict, dict]:
+        resource_id = str(resource_id or "").strip()
+        if not resource_id:
+            raise ValueError("resource_id é obrigatório.")
+        end_date = end_date or default_monitor_work_date(settings=self.settings)
+        rows, query_ms = self.repository.load_route_history(
+            resource_id,
+            end_date=end_date,
+            retention_days=ROUTE_HISTORY_RETENTION_DAYS,
+            root_resource_id=root_resource_id or get_ofs_root_resource_id(),
+        )
+        days = [_route_history_day_payload(row) for row in rows]
+        days.sort(key=lambda item: item["work_date"], reverse=True)
+        payload = {
+            "resource_id": resource_id,
+            "window_start": (end_date - timedelta(days=ROUTE_HISTORY_RETENTION_DAYS - 1)).isoformat(),
+            "window_end": end_date.isoformat(),
+            "retention_days": ROUTE_HISTORY_RETENTION_DAYS,
+            "data_available": bool(days),
+            "display_timezone": _route_history_display_timezone(rows),
+            "days": days,
+        }
+        metrics = {
+            "mysql_queries_total": 1,
+            "route_history_query_ms": query_ms,
+        }
+        metrics.update(_serialized_metrics(payload))
+        return payload, metrics
 
     def _build_context(
         self,
@@ -610,6 +691,64 @@ class TechnicianMonitorService:
             "hierarchy_warnings": warnings,
             "generated_at": context["generated_at"],
         }
+
+
+def _route_history_timezone(row: Mapping[str, Any]) -> ZoneInfo:
+    candidates = (
+        str(row.get("resource_timezone_iana") or "").strip(),
+        ROUTE_HISTORY_DISPLAY_TIMEZONE,
+    )
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            return ZoneInfo(candidate)
+        except (ZoneInfoNotFoundError, ValueError):
+            continue
+    return ZoneInfo("UTC")
+
+
+def _route_history_time(value: Any, tz: ZoneInfo) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    # MySQL DATETIME values in this read model are wall-clock values. Keep that
+    # semantics when naive; only convert timestamps that already carry timezone.
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(tz)
+    return parsed.strftime("%H:%M")
+
+
+def _route_history_day_payload(row: Mapping[str, Any]) -> dict:
+    work_date = row.get("work_date")
+    if isinstance(work_date, datetime):
+        work_date = work_date.date()
+    if not isinstance(work_date, date):
+        work_date = date.fromisoformat(str(work_date))
+    tz = _route_history_timezone(row)
+    return {
+        "work_date": work_date.isoformat(),
+        "date_label": work_date.strftime("%d/%m/%Y"),
+        "activation_time": _route_history_time(row.get("route_started_at"), tz),
+        "reactivation_time": _route_history_time(row.get("route_reactivated_at"), tz),
+        "end_time": _route_history_time(row.get("route_ended_at"), tz),
+        "timezone": getattr(tz, "key", str(tz)),
+    }
+
+
+def _route_history_display_timezone(rows: Sequence[Mapping[str, Any]]) -> str:
+    if rows:
+        return getattr(_route_history_timezone(rows[0]), "key", ROUTE_HISTORY_DISPLAY_TIMEZONE)
+    return ROUTE_HISTORY_DISPLAY_TIMEZONE
 
 
 def default_monitor_work_date(

@@ -13,7 +13,8 @@
     data-unlock-url="{{ url_for('dashboard_unlock') }}" data-can-unlock="{{ '1' if is_admin else '0' }}"
     data-current-updated-at="{{ snapshot.updated_at or '' }}"
     data-technicians-summary-url="{{ url_for('technician_monitor_summary') }}"
-    data-technicians-tree-url="{{ url_for('technician_monitor_tree') }}">
+    data-technicians-tree-url="{{ url_for('technician_monitor_tree') }}"
+    data-technicians-route-history-url-template="{{ url_for('technician_monitor_route_history', resource_id='__RESOURCE_ID__') }}">
     <section class="dashboard-header">
       <div>
         <span class="dashboard-kicker">Visão operacional</span>

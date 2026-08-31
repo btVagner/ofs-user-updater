@@ -75,6 +75,37 @@ def init_app(app):
             current_app.logger.exception("Falha ao consultar summary local de técnicos.")
             return _internal_error()
 
+    @app.route("/dashboard/technicians/<resource_id>/route-history")
+    @login_required
+    def technician_monitor_route_history(resource_id):
+        if not has_perm(PERMISSION):
+            return _denied()
+
+        resource_id = str(resource_id or "").strip()
+        if not resource_id:
+            return jsonify({
+                "ok": False,
+                "error": {
+                    "code": "INVALID_RESOURCE_ID",
+                    "message": "resource_id é obrigatório.",
+                },
+            }), 400
+
+        try:
+            payload, _metrics = _service().build_route_history(resource_id)
+            return jsonify({"ok": True, "data": payload}), 200
+        except ValueError:
+            return jsonify({
+                "ok": False,
+                "error": {
+                    "code": "INVALID_RESOURCE_ID",
+                    "message": "resource_id inválido.",
+                },
+            }), 400
+        except Exception:
+            current_app.logger.exception("Falha ao consultar histórico local de rota do técnico.")
+            return _internal_error()
+
     @app.route("/dashboard/technicians/tree")
     @login_required
     def technician_monitor_tree():

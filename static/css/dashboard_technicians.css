@@ -833,3 +833,86 @@ button.technicians-stat.active {
     color: #25643a;
     font-weight: 800;
 }
+
+/* D14 — histórico diário de ativação/encerramento carregado sob demanda */
+.technicians-route-history {
+    margin: 0 9px 8px 45px;
+    padding: 9px 10px 10px;
+    border: 1px solid #e1ded7;
+    border-radius: 8px;
+    background: #fbfaf7;
+}
+
+.technicians-route-history-title {
+    display: block;
+    margin-bottom: 7px;
+    color: #34414c;
+    font-size: 0.76rem;
+}
+
+.technicians-route-history-grid {
+    display: grid;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid #e4e0d8;
+    border-radius: 6px;
+    background: #ffffff;
+}
+
+.technicians-route-history-row {
+    display: grid;
+    grid-template-columns: minmax(92px, 1fr) minmax(82px, 0.85fr) minmax(82px, 0.85fr);
+    gap: 8px;
+    align-items: center;
+    min-height: 30px;
+    padding: 5px 8px;
+    border-top: 1px solid #ece8e1;
+    color: #4f5b65;
+    font-size: 0.74rem;
+}
+
+.technicians-route-history-row:first-child {
+    border-top: 0;
+}
+
+.technicians-route-history-row.header {
+    background: #f3f1ec;
+    color: #5c6670;
+    font-size: 0.69rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.technicians-route-history-row:not(.header) > span:first-child {
+    color: #28333c;
+    font-weight: 700;
+}
+
+.technicians-route-history-missing {
+    color: #88919a;
+    cursor: help;
+}
+
+.technicians-route-history-state {
+    margin: 0;
+    color: #6f7881;
+    font-size: 0.75rem;
+}
+
+.technicians-route-history-state.error {
+    color: #972e2a;
+}
+
+@media (max-width: 720px) {
+    .technicians-route-history {
+        margin-left: 40px;
+        margin-right: 6px;
+    }
+
+    .technicians-route-history-row {
+        grid-template-columns: minmax(86px, 1fr) minmax(70px, 0.8fr) minmax(70px, 0.8fr);
+        gap: 5px;
+        padding-inline: 6px;
+    }
+}

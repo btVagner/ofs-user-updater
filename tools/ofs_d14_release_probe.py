@@ -88,6 +88,7 @@ def _static_release_checks() -> dict:
     routes = _read("routes/ofs_technician_monitor_routes.py")
     js = _read("static/js/dashboard_technicians.js")
     hierarchy = _read("services/ofs_resource_hierarchy_service.py")
+    template = _read("templates/dashboard_operacional.html")
     hierarchy_tool = _read("tools/sync_ofs_resource_hierarchy.py")
     worker_unit = _read("deploy/systemd/ofs-technician-operational-worker.service.example")
     hierarchy_service = _read("deploy/systemd/ofs-resource-hierarchy-sync.service.example")
@@ -153,6 +154,21 @@ def _static_release_checks() -> dict:
             and "!!health.events_caught_up" not in js
         ),
         "monitor_request_path_has_no_ofs_client": "OFSClient" not in monitor and "requests." not in monitor,
+        "route_history_mysql_only": (
+            "ROUTE_HISTORY_SQL" in monitor
+            and "FROM ofs_technician_operational_state s" in monitor
+            and "s.resource_id = %s" in monitor
+            and "s.work_date BETWEEN %s AND %s" in monitor
+            and "build_route_history" in monitor
+            and "OFSClient" not in monitor
+            and "requests." not in monitor
+        ),
+        "route_history_lazy_on_technician_expand": (
+            "data-technicians-route-history-url-template" in template
+            and "data-technician-toggle" in js
+            and "await loadRouteHistory(resourceId" in js
+            and "Promise.allSettled([loadSummary(), loadChildren(null" in js
+        ),
         "hierarchy_sync_has_no_baseline_or_get_route": hierarchy_no_baseline,
         "hierarchy_failure_preserves_snapshot_pattern": (
             "snapshot = fetch_resource_hierarchy_snapshot" in hierarchy

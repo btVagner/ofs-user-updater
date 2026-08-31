@@ -169,8 +169,9 @@ Com DevTools > Network limpo:
 2. No primeiro clique, confirmar exatamente o carregamento do `summary` + raiz `tree?mode=children`.
 3. Expandir um ramo e confirmar `parent_id=<id>`.
 4. Clicar KPIs/filtros e confirmar propagação de `filter=` e/ou `only_problems=1` server-side.
-5. Confirmar ausência de `mode=full` em todas as requests.
-6. Durante `systemctl start ofs-resource-hierarchy-sync.service`, repetir navegação e confirmar que a home/monitor continuam respondendo.
+5. Expandir um técnico e confirmar uma única request específica de `route-history`, sem chamada Oracle/OFS e sem carregar histórico dos demais técnicos.
+6. Confirmar ausência de `mode=full` em todas as requests.
+7. Durante `systemctl start ofs-resource-hierarchy-sync.service`, repetir navegação e confirmar que a home/monitor continuam respondendo.
 
 Registrar screenshots ou HAR sem cookies/Authorization/credenciais.
 
@@ -184,6 +185,7 @@ Validar no prefixo real `/ofs`:
 - BI Activities;
 - DDC Mensageria;
 - Atualizar leitura do monitor;
+- Histórico de rota de um técnico com os dias disponíveis do read model;
 - worker operacional ativo;
 - sync/timer da hierarquia ativo.
 
@@ -214,8 +216,8 @@ O manifesto deve registrar `forbidden_members=[]` e `secret_scan_issues=[]`.
 - hierarchy status `ok`, `last_success_at` recente e timer saudável;
 - worker ativo com lifecycle/lock corretos;
 - retenção sem datas futuras/expiradas;
-- Network incremental validado em navegador real;
-- smoke das rotas principais OK;
+- Network incremental validado em navegador real, incluindo histórico carregado apenas na expansão do técnico;
+- smoke das rotas principais e do histórico de rota OK;
 - Git limpo e commit registrado;
 - ZIP sanitizado e SHA-256 registrado.
 

@@ -4,10 +4,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const summaryUrl = root.dataset.techniciansSummaryUrl;
     const treeUrl = root.dataset.techniciansTreeUrl;
+    const routeHistoryUrlTemplate = root.dataset.techniciansRouteHistoryUrlTemplate;
     const tabs = Array.from(document.querySelectorAll("[data-dashboard-view]"));
     const osPanel = document.querySelector('[data-dashboard-view-panel="os"]');
     const techniciansPanel = document.querySelector('[data-dashboard-view-panel="technicians"]');
-    if (!summaryUrl || !treeUrl || !tabs.length || !osPanel || !techniciansPanel) return;
+    if (!summaryUrl || !treeUrl || !routeHistoryUrlTemplate || !tabs.length || !osPanel || !techniciansPanel) return;
 
     const summaryContainer = techniciansPanel.querySelector("[data-technicians-summary]");
     const healthContainer = techniciansPanel.querySelector("[data-technicians-health]");
@@ -56,6 +57,10 @@ document.addEventListener("DOMContentLoaded", function () {
         rootResourceId: null,
         childCache: new Map(),
         expanded: new Set(),
+        technicianExpanded: new Set(),
+        routeHistoryCache: new Map(),
+        routeHistoryLoading: new Set(),
+        routeHistoryErrors: new Map(),
         loadingParents: new Set(),
         parentErrors: new Map(),
         pollTimer: null,
@@ -189,6 +194,10 @@ document.addEventListener("DOMContentLoaded", function () {
     function clearHierarchyCache() {
         state.childCache.clear();
         state.expanded.clear();
+        state.technicianExpanded.clear();
+        state.routeHistoryCache.clear();
+        state.routeHistoryLoading.clear();
+        state.routeHistoryErrors.clear();
         state.parentErrors.clear();
         state.loadingParents.clear();
         state.clusters = [];
@@ -468,6 +477,120 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    function routeHistoryUrl(resourceId) {
+        return routeHistoryUrlTemplate.replace("__RESOURCE_ID__", encodeURIComponent(String(resourceId)));
+    }
+
+    async function loadRouteHistory(resourceId, options) {
+        const id = String(resourceId);
+        const force = options && options.force;
+        if (!force && state.routeHistoryCache.has(id)) {
+            return { data: state.routeHistoryCache.get(id), bytes: 0, cached: true };
+        }
+        state.routeHistoryLoading.add(id);
+        state.routeHistoryErrors.delete(id);
+        renderTree();
+        try {
+            const result = await fetchJson(routeHistoryUrl(id));
+            state.routeHistoryCache.set(id, result.data || {});
+            return result;
+        } catch (error) {
+            state.routeHistoryErrors.set(id, error.message || "Falha ao carregar o histórico de rota.");
+            throw error;
+        } finally {
+            state.routeHistoryLoading.delete(id);
+            renderTree();
+        }
+    }
+
+    function routeHistoryValue(value) {
+        if (value) {
+            const text = document.createElement("span");
+            text.textContent = value;
+            return text;
+        }
+        const missing = document.createElement("span");
+        missing.className = "technicians-route-history-missing";
+        missing.textContent = "—";
+        missing.title = "Ainda não há informação";
+        missing.setAttribute("aria-label", "Ainda não há informação");
+        return missing;
+    }
+
+    function appendRouteHistory(container, node) {
+        const id = String(node.resource_id || "");
+        const history = state.routeHistoryCache.get(id);
+        const section = document.createElement("section");
+        section.className = "technicians-route-history";
+        section.setAttribute("aria-label", `Histórico de rota de ${node.resource_name || id}`);
+
+        const title = document.createElement("strong");
+        title.className = "technicians-route-history-title";
+        title.textContent = "Histórico de rota";
+        section.appendChild(title);
+
+        if (state.routeHistoryLoading.has(id)) {
+            const loading = document.createElement("p");
+            loading.className = "technicians-route-history-state";
+            loading.textContent = "Carregando histórico local...";
+            section.appendChild(loading);
+            container.appendChild(section);
+            return;
+        }
+
+        if (state.routeHistoryErrors.has(id)) {
+            const error = document.createElement("p");
+            error.className = "technicians-route-history-state error";
+            error.textContent = state.routeHistoryErrors.get(id);
+            section.appendChild(error);
+            container.appendChild(section);
+            return;
+        }
+
+        const days = history && Array.isArray(history.days) ? history.days : [];
+        if (!days.length) {
+            const empty = document.createElement("p");
+            empty.className = "technicians-route-history-state";
+            empty.textContent = "Não há dias disponíveis no read model para este técnico.";
+            section.appendChild(empty);
+            container.appendChild(section);
+            return;
+        }
+
+        const table = document.createElement("div");
+        table.className = "technicians-route-history-grid";
+        table.setAttribute("role", "table");
+        const header = document.createElement("div");
+        header.className = "technicians-route-history-row header";
+        header.setAttribute("role", "row");
+        ["Data", "Ativação", "Inativação"].forEach((label) => {
+            const cell = document.createElement("span");
+            cell.setAttribute("role", "columnheader");
+            cell.textContent = label;
+            header.appendChild(cell);
+        });
+        table.appendChild(header);
+
+        days.forEach((day) => {
+            const row = document.createElement("div");
+            row.className = "technicians-route-history-row";
+            row.setAttribute("role", "row");
+            const dateCell = document.createElement("span");
+            dateCell.setAttribute("role", "cell");
+            dateCell.textContent = day.date_label || day.work_date || "—";
+            const activationCell = document.createElement("span");
+            activationCell.setAttribute("role", "cell");
+            activationCell.appendChild(routeHistoryValue(day.activation_time));
+            const endCell = document.createElement("span");
+            endCell.setAttribute("role", "cell");
+            endCell.appendChild(routeHistoryValue(day.end_time));
+            row.append(dateCell, activationCell, endCell);
+            table.appendChild(row);
+        });
+        section.appendChild(table);
+        container.appendChild(section);
+    }
+
     function isTechnicianNode(node) {
         return Object.prototype.hasOwnProperty.call(node || {}, "schedule_state");
     }
@@ -568,16 +691,18 @@ document.addEventListener("DOMContentLoaded", function () {
         item.setAttribute("role", "treeitem");
         item.setAttribute("aria-level", String(level));
         item.dataset.resourceId = id;
-        const expanded = state.expanded.has(id);
-        if (node.has_children) item.setAttribute("aria-expanded", expanded ? "true" : "false");
+        const technician = isTechnicianNode(node);
+        const expanded = node.has_children ? state.expanded.has(id) : technician && state.technicianExpanded.has(id);
+        if (node.has_children || technician) item.setAttribute("aria-expanded", expanded ? "true" : "false");
 
         const row = document.createElement("div");
         row.className = "technicians-node-row";
-        if (node.has_children) {
+        if (node.has_children || technician) {
             const toggle = document.createElement("button");
             toggle.type = "button";
             toggle.className = "technicians-tree-toggle";
-            toggle.dataset.treeToggle = id;
+            if (node.has_children) toggle.dataset.treeToggle = id;
+            else toggle.dataset.technicianToggle = id;
             toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
             toggle.setAttribute("aria-label", `${expanded ? "Recolher" : "Expandir"} ${node.resource_name || id}`);
             toggle.textContent = expanded ? "−" : "+";
@@ -602,6 +727,8 @@ document.addEventListener("DOMContentLoaded", function () {
         if (isTechnicianNode(node)) appendTechnicianDetails(copy, node); else appendAggregateDetails(copy, node);
         row.appendChild(copy);
         item.appendChild(row);
+
+        if (technician && expanded) appendRouteHistory(item, node);
 
         if (node.has_children && expanded) {
             const key = cacheKey(id);
@@ -680,6 +807,10 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!state.initialized) return;
         state.childCache.clear();
         state.expanded.clear();
+        state.technicianExpanded.clear();
+        state.routeHistoryCache.clear();
+        state.routeHistoryLoading.clear();
+        state.routeHistoryErrors.clear();
         state.parentErrors.clear();
         state.clusters = [];
         renderClusters();
@@ -823,6 +954,25 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (tree) {
         tree.addEventListener("click", async function (event) {
+            const technicianButton = event.target.closest("[data-technician-toggle]");
+            if (technicianButton && tree.contains(technicianButton)) {
+                const resourceId = technicianButton.dataset.technicianToggle;
+                if (!resourceId) return;
+                if (state.technicianExpanded.has(resourceId)) {
+                    state.technicianExpanded.delete(resourceId);
+                    state.routeHistoryCache.delete(resourceId);
+                    state.routeHistoryErrors.delete(resourceId);
+                    renderTree();
+                    return;
+                }
+                state.technicianExpanded.add(resourceId);
+                renderTree();
+                try { await loadRouteHistory(resourceId, { force: false }); }
+                catch (error) { showError(error.message || "Não foi possível carregar o histórico local de rota."); }
+                renderTree();
+                return;
+            }
+
             const button = event.target.closest("[data-tree-toggle]");
             if (!button || !tree.contains(button)) return;
             const resourceId = button.dataset.treeToggle;
