@@ -10,8 +10,9 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import date, datetime, time as dt_time, timedelta, timezone
+from datetime import date, datetime, time as dt_time, timedelta, timezone, tzinfo
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import requests
 
@@ -68,6 +69,7 @@ CUSTOMER_HOME_ACTIVITY_CATEGORY = "customer_home"
 SENSITIVE_INLINE_RE = re.compile(
     r"(?i)(authorization|client[_-]?secret|password|passwd|access[_-]?token|refresh[_-]?token|bearer)\s*[:=]\s*[^\s,;]+"
 )
+ROUTE_TIMEZONE_OFFSET_RE = re.compile(r"(?i)UTC\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?")
 
 
 
@@ -183,6 +185,51 @@ def _parse_local_datetime(value: Any) -> Optional[datetime]:
         return datetime.fromisoformat(text.replace("Z", "+00:00")).replace(tzinfo=None)
     except ValueError:
         return None
+
+
+def _route_timezone(values: Iterable[Any]) -> Optional[tzinfo]:
+    """Resolve IANA ou descricao UTC do recurso sem assumir um fallback global."""
+    for value in values:
+        text = _clean(value)
+        if not text:
+            continue
+        try:
+            return ZoneInfo(text)
+        except (ZoneInfoNotFoundError, ValueError):
+            match = ROUTE_TIMEZONE_OFFSET_RE.search(text)
+            if not match:
+                continue
+            sign = 1 if match.group(1) == "+" else -1
+            hours = int(match.group(2))
+            minutes = int(match.group(3) or 0)
+            if hours > 23 or minutes > 59:
+                continue
+            return timezone(sign * timedelta(hours=hours, minutes=minutes))
+    return None
+
+
+def _parse_route_event_datetime(value: Any, timezone_values: Iterable[Any]) -> Optional[datetime]:
+    """Converte UTC explicito para o relogio do recurso e preserva offsets locais.
+
+    Events pode enviar o mesmo campo ora como horario local com offset, ora como
+    instante UTC (``Z``/``+00:00``). Sem timezone confiavel do recurso, um UTC
+    explicito nao e gravado para evitar materializar outro horario incorreto.
+    """
+    text = _clean(value)
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return _parse_local_datetime(text)
+    if parsed.tzinfo is None:
+        return parsed
+    if parsed.utcoffset() != timedelta(0):
+        return parsed.replace(tzinfo=None)
+    resource_timezone = _route_timezone(timezone_values)
+    if resource_timezone is None:
+        return None
+    return parsed.astimezone(resource_timezone).replace(tzinfo=None)
 
 
 def _combine_local(work_date: date, hhmm: Any) -> Optional[datetime]:
@@ -378,6 +425,10 @@ def parse_route_event(event: dict) -> Optional[dict]:
     elif event_type in {"routeCreated", "routeUpdated"}:
         route_state = None
 
+    resource_timezone = _clean(changes.get("timeZone") or details.get("timeZone"))
+    resource_timezone_iana = _clean(changes.get("resourceTimeZoneIANA") or details.get("resourceTimeZoneIANA"))
+    timezone_values = (resource_timezone_iana, resource_timezone)
+
     return {
         "kind": "route",
         "event_type": event_type,
@@ -386,12 +437,16 @@ def parse_route_event(event: dict) -> Optional[dict]:
         "resource_id": resource_id,
         "work_date": work_date,
         "route_state": route_state,
-        "route_started_at": _parse_local_datetime(changes.get("activated")) if event_type == "routeActivated" else None,
-        "route_reactivated_at": _parse_local_datetime(changes.get("reactivated")) if event_type == "routeReactivated" else None,
-        "route_ended_at": _parse_local_datetime(changes.get("deactivated")) if event_type == "routeDeactivated" else None,
+        "route_started_at": _parse_route_event_datetime(changes.get("activated"), timezone_values) if event_type == "routeActivated" else None,
+        "route_reactivated_at": _parse_route_event_datetime(changes.get("reactivated"), timezone_values) if event_type == "routeReactivated" else None,
+        "route_ended_at": _parse_route_event_datetime(changes.get("deactivated"), timezone_values) if event_type == "routeDeactivated" else None,
+        "route_started_at_raw": changes.get("activated") if event_type == "routeActivated" else None,
+        "route_reactivated_at_raw": changes.get("reactivated") if event_type == "routeReactivated" else None,
+        "route_ended_at_raw": changes.get("deactivated") if event_type == "routeDeactivated" else None,
         "calendar_start_at": _combine_local(work_date, changes.get("calendarTimeFrom")),
         "calendar_end_at": _combine_local(work_date, changes.get("calendarTimeTo")),
-        "resource_timezone": _clean(changes.get("timeZone")),
+        "resource_timezone": resource_timezone,
+        "resource_timezone_iana": resource_timezone_iana,
     }
 
 
@@ -1168,13 +1223,34 @@ class MySQLOperationalRepository:
         if op["resource_id"] not in technician_ids:
             return False
         cur.execute(
-            "SELECT route_last_event_at,route_last_event_type,route_last_event_fingerprint,route_state FROM ofs_technician_operational_state WHERE work_date=%s AND resource_id=%s FOR UPDATE",
+            "SELECT route_last_event_at,route_last_event_type,route_last_event_fingerprint,route_state,resource_timezone,resource_timezone_iana FROM ofs_technician_operational_state WHERE work_date=%s AND resource_id=%s FOR UPDATE",
             (op["work_date"], op["resource_id"]),
         )
         current = cur.fetchone()
         if current and not event_should_apply(current.get("route_last_event_at"), current.get("route_last_event_fingerprint"), op["event_at"], op["fingerprint"]):
             return False
         route_state = op.get("route_state") or (current.get("route_state") if current else None) or "unknown"
+        timezone_values = (
+            op.get("resource_timezone_iana"),
+            (current or {}).get("resource_timezone_iana"),
+            op.get("resource_timezone"),
+            (current or {}).get("resource_timezone"),
+        )
+        route_timestamps = {}
+        for field in ("route_started_at", "route_reactivated_at", "route_ended_at"):
+            raw_value = op.get(f"{field}_raw")
+            if raw_value is None:
+                route_timestamps[field] = op.get(field)
+                continue
+            route_timestamps[field] = _parse_route_event_datetime(raw_value, timezone_values)
+            if _clean(raw_value) is not None and route_timestamps[field] is None:
+                LOGGER.warning(
+                    "Timestamp UTC de rota ignorado sem timezone confiavel resource_id=%s work_date=%s event_type=%s field=%s",
+                    op["resource_id"],
+                    op["work_date"],
+                    op["event_type"],
+                    field,
+                )
         cur.execute(
             """
             INSERT INTO ofs_technician_operational_state
@@ -1193,8 +1269,8 @@ class MySQLOperationalRepository:
                 resource_timezone=COALESCE(VALUES(resource_timezone),resource_timezone),updated_at=VALUES(updated_at)
             """,
             (
-                op["work_date"], op["resource_id"], route_state, op["event_type"], op.get("route_started_at"),
-                op.get("route_reactivated_at"), op.get("route_ended_at"), op["event_at"], op["event_type"], op["fingerprint"],
+                op["work_date"], op["resource_id"], route_state, op["event_type"], route_timestamps["route_started_at"],
+                route_timestamps["route_reactivated_at"], route_timestamps["route_ended_at"], op["event_at"], op["event_type"], op["fingerprint"],
                 op.get("calendar_start_at"), op.get("calendar_end_at"), op.get("resource_timezone"), now,
             ),
         )

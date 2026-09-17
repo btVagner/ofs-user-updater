@@ -332,6 +332,107 @@ def test_route_activated_keeps_event_at_utc_and_started_at_local():
     assert op["route_started_at"] == datetime(2026, 9, 17, 8, 0)
 
 
+def test_route_event_z_uses_timezone_embedded_in_event():
+    op = parse_route_event(
+        {
+            "eventType": "routeDeactivated",
+            "time": "2026-09-17T16:52:10Z",
+            "routeDetails": {
+                "resourceId": "7143",
+                "date": "2026-09-17",
+                "resourceTimeZoneIANA": "America/Sao_Paulo",
+            },
+            "routeChanges": {"deactivated": "2026-09-17T16:52:00Z"},
+        }
+    )
+    assert op["route_ended_at"] == datetime(2026, 9, 17, 13, 52)
+    assert op["event_at"] == datetime(2026, 9, 17, 16, 52, 10)
+
+
+def test_route_event_z_without_embedded_timezone_defers_wall_clock_conversion():
+    op = parse_route_event(
+        {
+            "eventType": "routeDeactivated",
+            "time": "2026-09-17T16:52:10Z",
+            "routeDetails": {"resourceId": "7143", "date": "2026-09-17"},
+            "routeChanges": {"deactivated": "2026-09-17T16:52:00Z"},
+        }
+    )
+    assert op["route_ended_at"] is None
+    assert op["route_ended_at_raw"] == "2026-09-17T16:52:00Z"
+    assert op["event_at"] == datetime(2026, 9, 17, 16, 52, 10)
+
+
+class _RouteTimezoneCursor:
+    def __init__(self, current):
+        self.current = current
+        self.executed = []
+
+    def execute(self, sql, params=None):
+        self.executed.append((" ".join(sql.split()), params))
+
+    def fetchone(self):
+        return self.current
+
+
+@pytest.mark.parametrize(
+    "timezone_data,event_value,expected",
+    [
+        ({"resource_timezone_iana": "America/Sao_Paulo"}, "2026-09-17T16:51:00Z", datetime(2026, 9, 17, 13, 51)),
+        ({"resource_timezone": "America/Manaus"}, "2026-09-17T16:51:00+00:00", datetime(2026, 9, 17, 12, 51)),
+        ({"resource_timezone": "(UTC-03:00) Sao Paulo - Brasilia Time (BRT)"}, "2026-09-17T16:51:00Z", datetime(2026, 9, 17, 13, 51)),
+        ({"resource_timezone_iana": "America/Sao_Paulo"}, "2026-09-17T13:51:00-03:00", datetime(2026, 9, 17, 13, 51)),
+    ],
+)
+def test_route_event_utc_timestamp_uses_resource_timezone_on_write(timezone_data, event_value, expected):
+    current = {
+        "route_last_event_at": None,
+        "route_last_event_fingerprint": None,
+        "route_state": "ended",
+        "resource_timezone": None,
+        "resource_timezone_iana": None,
+        **timezone_data,
+    }
+    cursor = _RouteTimezoneCursor(current)
+    op = parse_route_event(
+        {
+            "eventType": "routeReactivated",
+            "time": "2026-09-17T16:51:53Z",
+            "routeDetails": {"resourceId": "7361", "date": "2026-09-17"},
+            "routeChanges": {"reactivated": event_value},
+        }
+    )
+    repository = MySQLOperationalRepository(connection_factory=lambda: None)
+    assert repository._apply_route_event_cur(cursor, op, datetime(2026, 9, 17, 16, 52), {"7361"}) is True
+    insert_params = cursor.executed[1][1]
+    assert insert_params[5] == expected
+    assert insert_params[7] == datetime(2026, 9, 17, 16, 51, 53)
+
+
+def test_route_event_utc_timestamp_without_resource_timezone_is_not_written(caplog):
+    cursor = _RouteTimezoneCursor(
+        {
+            "route_last_event_at": None,
+            "route_last_event_fingerprint": None,
+            "route_state": "ended",
+            "resource_timezone": None,
+            "resource_timezone_iana": None,
+        }
+    )
+    op = parse_route_event(
+        {
+            "eventType": "routeReactivated",
+            "time": "2026-09-17T16:51:53Z",
+            "routeDetails": {"resourceId": "7361", "date": "2026-09-17"},
+            "routeChanges": {"reactivated": "2026-09-17T16:51:00Z"},
+        }
+    )
+    repository = MySQLOperationalRepository(connection_factory=lambda: None)
+    assert repository._apply_route_event_cur(cursor, op, datetime(2026, 9, 17, 16, 52), {"7361"}) is True
+    assert cursor.executed[1][1][5] is None
+    assert "ignorado sem timezone confiavel" in caplog.text
+
+
 def test_retention_is_exactly_today_minus_six():
     assert retention_cutoff(date(2026, 8, 26), 7) == date(2026, 8, 20)
 
