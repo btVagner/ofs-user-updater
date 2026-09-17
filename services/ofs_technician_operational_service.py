@@ -157,6 +157,34 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
         return None
 
 
+def _parse_local_datetime(value: Any) -> Optional[datetime]:
+    """Preserva o relogio local recebido, descartando apenas o offset.
+
+    Os campos operacionais de rota sao DATETIME sem timezone no read model.
+    Diferentemente de ``_parse_datetime``, esta funcao nao converte o instante
+    para UTC antes de remover o ``tzinfo``.
+    """
+    text = _clean(value)
+    if not text:
+        return None
+    candidates = (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%dT%H:%M:%S%z",
+    )
+    for fmt in candidates:
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=None)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
 def _combine_local(work_date: date, hhmm: Any) -> Optional[datetime]:
     text = _clean(hhmm)
     if not text:
@@ -254,9 +282,9 @@ def normalize_calendar_item(item: dict) -> Optional[dict]:
 
 
 def normalize_route_baseline(resource_id: str, work_date: date, payload: dict, *, reconciled_at: datetime) -> dict:
-    started = _parse_datetime(payload.get("routeStartTime"))
-    reactivated = _parse_datetime(payload.get("routeReactivationTime"))
-    ended = _parse_datetime(payload.get("routeEndTime"))
+    started = _parse_local_datetime(payload.get("routeStartTime"))
+    reactivated = _parse_local_datetime(payload.get("routeReactivationTime"))
+    ended = _parse_local_datetime(payload.get("routeEndTime"))
     if ended:
         state = "ended"
     elif started or reactivated:
@@ -358,9 +386,9 @@ def parse_route_event(event: dict) -> Optional[dict]:
         "resource_id": resource_id,
         "work_date": work_date,
         "route_state": route_state,
-        "route_started_at": _parse_datetime(changes.get("activated")) if event_type == "routeActivated" else None,
-        "route_reactivated_at": _parse_datetime(changes.get("reactivated")) if event_type == "routeReactivated" else None,
-        "route_ended_at": _parse_datetime(changes.get("deactivated")) if event_type == "routeDeactivated" else None,
+        "route_started_at": _parse_local_datetime(changes.get("activated")) if event_type == "routeActivated" else None,
+        "route_reactivated_at": _parse_local_datetime(changes.get("reactivated")) if event_type == "routeReactivated" else None,
+        "route_ended_at": _parse_local_datetime(changes.get("deactivated")) if event_type == "routeDeactivated" else None,
         "calendar_start_at": _combine_local(work_date, changes.get("calendarTimeFrom")),
         "calendar_end_at": _combine_local(work_date, changes.get("calendarTimeTo")),
         "resource_timezone": _clean(changes.get("timeZone")),
@@ -623,6 +651,58 @@ class MySQLOperationalRepository:
                 (root_resource_id,),
             )
             return list(cur.fetchall() or [])
+        finally:
+            cur.close()
+            conn.close()
+
+    def get_route_timestamp_rows(self, work_date: date) -> List[dict]:
+        """Lista somente os campos necessarios para reconciliar uma data."""
+        conn = self.connection_factory()
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """
+                SELECT work_date, resource_id, route_started_at, route_reactivated_at,
+                       route_ended_at, route_last_event_type
+                FROM ofs_technician_operational_state
+                WHERE work_date=%s
+                ORDER BY resource_id
+                """,
+                (work_date,),
+            )
+            return list(cur.fetchall() or [])
+        finally:
+            cur.close()
+            conn.close()
+
+    def update_route_timestamps(self, work_date: date, resource_id: str, values: dict, *, now: Optional[datetime] = None) -> int:
+        """Atualiza somente timestamps de rota permitidos para uma linha exata."""
+        allowed = ("route_started_at", "route_reactivated_at", "route_ended_at")
+        fields = [field for field in allowed if field in values]
+        unknown = set(values) - set(allowed)
+        if unknown:
+            raise ValueError(f"Campos de rota nao permitidos: {sorted(unknown)}")
+        if not fields:
+            return 0
+
+        conn = self.connection_factory()
+        cur = conn.cursor()
+        try:
+            assignments = ",".join(f"{field}=%s" for field in fields)
+            cur.execute(
+                f"UPDATE ofs_technician_operational_state SET {assignments},updated_at=%s WHERE work_date=%s AND resource_id=%s",
+                tuple(values[field] for field in fields) + (now or utc_now_naive(), work_date, str(resource_id)),
+            )
+            updated = max(int(cur.rowcount or 0), 0)
+            if updated != 1:
+                raise OperationalError(
+                    f"Linha de rota nao encontrada para resource_id={resource_id} work_date={work_date.isoformat()}"
+                )
+            conn.commit()
+            return updated
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             cur.close()
             conn.close()

@@ -219,6 +219,22 @@ def test_route_baseline_states():
     assert ended["route_state"] == "ended"
 
 
+def test_route_baseline_preserves_local_wall_clock_with_offset():
+    row = normalize_route_baseline(
+        "T1",
+        date(2026, 9, 17),
+        {
+            "routeStartTime": "2026-09-17T08:07:00-03:00",
+            "routeReactivationTime": "2026-09-17T09:15:00-03:00",
+            "routeEndTime": "2026-09-17T18:02:00-03:00",
+        },
+        reconciled_at=datetime(2026, 9, 17, 21, 0),
+    )
+    assert row["route_started_at"] == datetime(2026, 9, 17, 8, 7)
+    assert row["route_reactivated_at"] == datetime(2026, 9, 17, 9, 15)
+    assert row["route_ended_at"] == datetime(2026, 9, 17, 18, 2)
+
+
 @pytest.mark.parametrize(
     "event_type,expected",
     [
@@ -280,6 +296,40 @@ def test_route_event_parser_is_dimension_specific():
     assert op["route_state"] == "active"
     assert op["work_date"] == date(2026, 8, 26)
     assert op["calendar_start_at"] == datetime(2026, 8, 26, 8, 0)
+
+
+@pytest.mark.parametrize(
+    "event_type,change_key,result_key,value,expected",
+    [
+        ("routeReactivated", "reactivated", "route_reactivated_at", "2026-09-17T09:15:00-03:00", datetime(2026, 9, 17, 9, 15)),
+        ("routeDeactivated", "deactivated", "route_ended_at", "2026-09-17T18:02:00-03:00", datetime(2026, 9, 17, 18, 2)),
+        ("routeActivated", "activated", "route_started_at", "2026-09-17 08:02", datetime(2026, 9, 17, 8, 2)),
+    ],
+)
+def test_route_event_preserves_local_wall_clock(event_type, change_key, result_key, value, expected):
+    op = parse_route_event(
+        {
+            "eventType": event_type,
+            "time": "2026-09-17T11:00:00Z",
+            "routeDetails": {"resourceId": "T1", "date": "2026-09-17"},
+            "routeChanges": {change_key: value},
+        }
+    )
+    assert op[result_key] == expected
+    assert op["event_at"] == datetime(2026, 9, 17, 11, 0)
+
+
+def test_route_activated_keeps_event_at_utc_and_started_at_local():
+    op = parse_route_event(
+        {
+            "eventType": "routeActivated",
+            "time": "2026-09-17T11:00:00Z",
+            "routeDetails": {"resourceId": "7671", "date": "2026-09-17"},
+            "routeChanges": {"activated": "2026-09-17T08:00:00-03:00"},
+        }
+    )
+    assert op["event_at"] == datetime(2026, 9, 17, 11, 0)
+    assert op["route_started_at"] == datetime(2026, 9, 17, 8, 0)
 
 
 def test_retention_is_exactly_today_minus_six():
