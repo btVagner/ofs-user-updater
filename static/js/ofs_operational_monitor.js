@@ -9,27 +9,27 @@
     late: "OS em alerta",
     idle: "Técnicos sem OS",
     notStarted: "Rotas não iniciadas",
-    slot: "Fora do slot",
+    slot: "Fora do turno",
     black: "Clientes Black",
   };
   const NOTES = {
     late: "Status iniciado; tempo decorrido acima da duração acrescida da tolerância.",
     idle: "Rota ativa, sem atividades reais pendentes, iniciadas ou em deslocamento e dentro da jornada conhecida.",
     notStarted: "Técnicos ativos com jornada no dia, rota ainda não ativada e atraso acima do parâmetro.",
-    slot: "OS com início igual ou posterior ao fim do respectivo slot operacional.",
+    slot: "OS com início igual ou posterior ao fim do respectivo turno operacional.",
     black: "OS do dia com XA_CLI_ATRI igual a 1, inclusive atividades finalizadas.",
   };
   const HEADERS = {
     late: ["OS / Atividade", "Técnico", "Área", "Tipo", "Início", "Duração prevista", "Tempo decorrido", "Limite", "Excesso", "Status"],
     idle: ["Técnico", "Resource ID", "Área", "Rota iniciada", "Turno", "OS elegíveis", "Situação"],
     notStarted: ["Técnico", "Resource ID", "Área", "Turno previsto", "Início previsto", "Atraso", "Situação"],
-    slot: ["OS / Atividade", "Técnico", "Área", "Tipo", "TimeSlot", "Início da OS", "Limite do slot", "Atraso", "Status"],
+    slot: ["OS / Atividade", "Técnico", "Área", "Tipo", "Turno", "Início da OS", "Limite do turno", "Atraso", "Status"],
     black: ["OS / Atividade", "Técnico", "Área", "Tipo", "Início previsto / real", "Status", "XA_CLI_ATRI"],
   };
 
   const q = (selector) => root.querySelector(selector);
   const qa = (selector) => Array.from(root.querySelectorAll(selector));
-  const state = { mode: "all", view: "late", snapshot: null, payload: null, rows: {}, busy: false, timer: null };
+  const state = { mode: "all", view: "late", snapshot: null, payload: null, rows: {}, selectedBuckets: new Set(), busy: false, timer: null };
 
   function normalized(value) {
     return String(value == null ? "" : value).trim().toLocaleLowerCase("pt-BR");
@@ -88,19 +88,62 @@
 
   function currentRows() {
     const search = normalized(q("[data-search]").value);
-    const region = q("[data-region]").value;
+    const status = q("[data-status]").value;
     return (state.rows[state.view] || []).filter((row) => {
-      if (region && row.area !== region) return false;
+      if (state.selectedBuckets.size && !state.selectedBuckets.has(row.area)) return false;
+      if (status && normalized(row.status) !== status) return false;
       if (!search) return true;
       return [row.id, row.appt, row.tech, row.resource_id, row.area, row.type, row.status, row.time_slot, row.customer]
         .some((value) => normalized(value).includes(search));
     });
   }
 
-  function replaceOptions(select, options) {
+  function replaceStatusOptions(select, options) {
     const selected = select.value;
-    select.replaceChildren(new Option("Todas as áreas", ""), ...options.map((value) => new Option(value, value)));
-    if (options.includes(selected)) select.value = selected;
+    select.replaceChildren(new Option("Todos os status", ""), ...options.map((value) => new Option(value, normalized(value))));
+    if (options.some((value) => normalized(value) === selected)) select.value = selected;
+    select.disabled = options.length === 0;
+  }
+
+  function renderBucketOptions(options) {
+    const available = new Set(options);
+    state.selectedBuckets.forEach((value) => {
+      if (!available.has(value)) state.selectedBuckets.delete(value);
+    });
+
+    const container = q("[data-bucket-options]");
+    const details = q("[data-bucket-filter]");
+    const wasOpen = details.open;
+    const fragment = document.createDocumentFragment();
+
+    const createOption = (labelText, value, checked, allOption) => {
+      const label = document.createElement("label");
+      label.className = allOption ? "om-bucket-all" : "";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = checked;
+      input.dataset.bucket = value;
+      input.addEventListener("change", () => {
+        if (allOption) state.selectedBuckets.clear();
+        else if (input.checked) state.selectedBuckets.add(value);
+        else state.selectedBuckets.delete(value);
+        renderTable();
+      });
+      const span = document.createElement("span");
+      span.textContent = labelText;
+      label.append(input, span);
+      return label;
+    };
+
+    fragment.appendChild(createOption("Todos os buckets", "", state.selectedBuckets.size === 0, true));
+    options.forEach((value) => fragment.appendChild(createOption(value, value, state.selectedBuckets.has(value), false)));
+    container.replaceChildren(fragment);
+    details.open = wasOpen;
+
+    const selected = Array.from(state.selectedBuckets);
+    q("[data-bucket-summary]").textContent = selected.length === 0
+      ? "Todos os buckets"
+      : selected.length === 1 ? selected[0] : `${selected.length} buckets selecionados`;
   }
 
   function renderTable() {
@@ -109,9 +152,12 @@
     q("[data-table-note]").textContent = NOTES[view] + (view === "slot" && q("[data-exclude-withdrawals]").checked ? " Retiradas excluídas." : "");
     qa("[data-view]").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
 
+    const sourceRows = state.rows[view] || [];
+    const buckets = Array.from(new Set(sourceRows.map((row) => row.area).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const statuses = Array.from(new Set(sourceRows.map((row) => row.status).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
+    renderBucketOptions(buckets);
+    replaceStatusOptions(q("[data-status]"), statuses);
     const rows = currentRows();
-    const regions = Array.from(new Set((state.rows[view] || []).map((row) => row.area))).sort((a, b) => a.localeCompare(b, "pt-BR"));
-    replaceOptions(q("[data-region]"), regions);
 
     const headRow = document.createElement("tr");
     HEADERS[view].forEach((title) => {
@@ -287,7 +333,8 @@
       button.setAttribute("aria-pressed", String(active));
     });
     q("[data-search]").value = "";
-    q("[data-region]").value = "";
+    state.selectedBuckets.clear();
+    q("[data-status]").value = "";
     render();
   }
 
@@ -315,7 +362,7 @@
   q("[data-delay]").addEventListener("input", render);
   q("[data-exclude-withdrawals]").addEventListener("change", render);
   q("[data-search]").addEventListener("input", renderTable);
-  q("[data-region]").addEventListener("change", renderTable);
+  q("[data-status]").addEventListener("change", renderTable);
   q("[data-refresh]").addEventListener("click", refreshSnapshot);
   q("[data-export]").addEventListener("click", exportCsv);
 

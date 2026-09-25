@@ -12,7 +12,7 @@
       <div>
         <span class="om-kicker">Oracle Field Service · leitura compartilhada</span>
         <h1>Monitor operacional</h1>
-        <p>OS além do prazo, técnicos com rota ativa sem OS disponível, atrasos de ativação, desvios de slot e clientes Black.</p>
+        <p>OS além do prazo, técnicos com rota ativa sem OS disponível, atrasos de ativação, desvios de turno e clientes Black.</p>
       </div>
       <div class="om-header-status">
         <span class="om-status-dot" data-status-dot></span>
@@ -30,7 +30,7 @@
           <button type="button" data-mode="late" aria-pressed="false">OS em alerta</button>
           <button type="button" data-mode="idle" aria-pressed="false">Técnicos sem OS</button>
           <button type="button" data-mode="notStarted" aria-pressed="false">Rotas não iniciadas</button>
-          <button type="button" data-mode="slot" aria-pressed="false">Fora do slot</button>
+          <button type="button" data-mode="slot" aria-pressed="false">Fora do turno</button>
           <button type="button" data-mode="black" aria-pressed="false">Clientes Black</button>
         </div>
       </div>
@@ -50,7 +50,7 @@
 
       <label class="om-check" data-withdrawal-param>
         <input type="checkbox" checked data-exclude-withdrawals>
-        <span>Excluir retiradas dos alertas fora do slot</span>
+        <span>Excluir retiradas dos alertas fora do turno</span>
       </label>
 
       <div class="om-actions">
@@ -68,7 +68,7 @@
       <article class="danger" data-kpi-card="late"><span>OS em alerta</span><strong data-kpi="late">—</strong><small>Em execução acima do limite</small></article>
       <article class="warning" data-kpi-card="idle"><span>Técnicos sem OS</span><strong data-kpi="idle">—</strong><small>Rota ativa dentro da jornada</small></article>
       <article class="violet" data-kpi-card="notStarted"><span>Rotas não iniciadas</span><strong data-kpi="notStarted">—</strong><small>Jornada iniciada e tolerância excedida</small></article>
-      <article class="danger" data-kpi-card="slot"><span>Fora do slot</span><strong data-kpi="slot">—</strong><small>Início igual ou posterior ao fim do slot</small></article>
+      <article class="danger" data-kpi-card="slot"><span>Fora do turno</span><strong data-kpi="slot">—</strong><small>Início igual ou posterior ao fim do turno</small></article>
       <article class="warning" data-kpi-card="black"><span>Clientes Black</span><strong data-kpi="black">—</strong><small>XA_CLI_ATRI = 1 no dia</small></article>
     </section>
 
@@ -76,7 +76,7 @@
       <button type="button" role="tab" class="is-active" data-view="late">OS em alerta <span data-count="late">—</span></button>
       <button type="button" role="tab" data-view="idle">Técnico sem OS <span data-count="idle">—</span></button>
       <button type="button" role="tab" data-view="notStarted">Rota não iniciada <span data-count="notStarted">—</span></button>
-      <button type="button" role="tab" data-view="slot">Fora do slot <span data-count="slot">—</span></button>
+      <button type="button" role="tab" data-view="slot">Fora do turno <span data-count="slot">—</span></button>
       <button type="button" role="tab" data-view="black">Clientes Black <span data-count="black">—</span></button>
     </nav>
 
@@ -85,7 +85,11 @@
         <div><h2 data-table-title>OS em alerta</h2><p data-table-note>Aguardando snapshot.</p></div>
         <div class="om-table-tools">
           <input type="search" placeholder="Filtrar ID, técnico, tipo ou área" aria-label="Filtrar resultados" data-search>
-          <select aria-label="Filtrar por área" data-region><option value="">Todas as áreas</option></select>
+          <details class="om-bucket-filter" data-bucket-filter>
+            <summary data-bucket-summary>Todos os buckets</summary>
+            <div class="om-bucket-menu" data-bucket-options></div>
+          </details>
+          <select aria-label="Filtrar por status" data-status><option value="">Todos os status</option></select>
         </div>
       </header>
       <div class="om-table-scroll">

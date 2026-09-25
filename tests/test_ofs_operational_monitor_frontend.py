@@ -22,8 +22,20 @@ def test_frontend_never_calls_oracle_and_has_all_plugin_views():
     assert "/rest/ofsc" not in script.lower()
     assert "clientsecret" not in script.lower()
     assert "fetch(root.dataset.refreshUrl" in script
-    for view in ("OS em alerta", "Técnicos sem OS", "Rotas não iniciadas", "Fora do slot", "Clientes Black"):
+    for view in ("OS em alerta", "Técnicos sem OS", "Rotas não iniciadas", "Fora do turno", "Clientes Black"):
         assert view in template
+
+
+def test_frontend_has_multi_bucket_checkboxes_and_status_filter():
+    script = (ROOT / "static" / "js" / "ofs_operational_monitor.js").read_text(encoding="utf-8")
+    template = (ROOT / "templates" / "ofs_operational_monitor.html").read_text(encoding="utf-8")
+    assert "data-bucket-filter" in template
+    assert "data-bucket-options" in template
+    assert "data-status" in template
+    assert "selectedBuckets: new Set()" in script
+    assert 'input.type = "checkbox"' in script
+    assert "state.selectedBuckets.has(row.area)" in script
+    assert "normalized(row.status) !== status" in script
 
 
 def test_migration_creates_shared_cache_lock_support_and_permission():
@@ -34,4 +46,3 @@ def test_migration_creates_shared_cache_lock_support_and_permission():
     assert "ofs.monitor_operacional" in sql
     assert "SNAPSHOT_TTL_SECONDS = 10 * 60" in service
     assert "GET_LOCK(%s,0)" in service
-
