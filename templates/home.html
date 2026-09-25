@@ -21,6 +21,19 @@
     {% endwith %}
 
     <div class="card-grid">
+      {% if has_perm('ofs.monitor_operacional') %}
+      <a href="{{ url_for('ofs_operational_monitor_page') }}" class="card">
+        <div class="card-top">
+          <span class="card-badge">Monitoramento</span>
+        </div>
+        <h3>Monitor operacional OFS</h3>
+        <div class="card-description">
+          <p>Acompanhe OS em alerta, técnicos sem OS, rotas não iniciadas, desvios de slot e clientes Black.</p>
+        </div>
+        <span class="card-arrow">Acessar &rarr;</span>
+      </a>
+      {% endif %}
+
       {% if has_perm('ofs.atualizar_tipo') %}
       <a href="{{ url_for('atualizar_user_type') }}" class="card">
         <div class="card-top">

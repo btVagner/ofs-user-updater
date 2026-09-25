@@ -1,0 +1,108 @@
+{% set page_css_files = ['css/ofs_operational_monitor.css'] %}
+{% include 'includes/head.html' %}
+
+<body>
+  {% include 'includes/navbar.html' %}
+
+  <main id="operational-monitor" class="operational-monitor fade-in"
+    data-data-url="{{ url_for('ofs_operational_monitor_data') }}"
+    data-refresh-url="{{ url_for('ofs_operational_monitor_refresh') }}"
+    data-scope="casa-cliente">
+    <header class="om-header">
+      <div>
+        <span class="om-kicker">Oracle Field Service · leitura compartilhada</span>
+        <h1>Monitor operacional</h1>
+        <p>OS além do prazo, técnicos com rota ativa sem OS disponível, atrasos de ativação, desvios de slot e clientes Black.</p>
+      </div>
+      <div class="om-header-status">
+        <span class="om-status-dot" data-status-dot></span>
+        <strong data-status-title>Carregando snapshot</strong>
+        <small data-status-detail>Consultando apenas a base local.</small>
+      </div>
+    </header>
+
+    <section class="om-card om-controls" aria-labelledby="om-control-title">
+      <div class="om-mode-picker">
+        <h2 id="om-control-title">O que deseja consultar?</h2>
+        <p>Trocar de visão ou filtro não chama o OFS. Os resultados usam o mesmo snapshot compartilhado.</p>
+        <div class="om-mode-options" role="group" aria-label="Tipo de consulta">
+          <button type="button" class="is-active" data-mode="all" aria-pressed="true">Consultar tudo</button>
+          <button type="button" data-mode="late" aria-pressed="false">OS em alerta</button>
+          <button type="button" data-mode="idle" aria-pressed="false">Técnicos sem OS</button>
+          <button type="button" data-mode="notStarted" aria-pressed="false">Rotas não iniciadas</button>
+          <button type="button" data-mode="slot" aria-pressed="false">Fora do slot</button>
+          <button type="button" data-mode="black" aria-pressed="false">Clientes Black</button>
+        </div>
+      </div>
+
+      <div class="om-parameters">
+        <label data-param="late">
+          <span>Tolerância de duração (%)</span>
+          <input type="number" min="0" max="500" step="1" value="20" data-tolerance>
+          <small>Tempo decorrido maior que a duração acrescida da tolerância.</small>
+        </label>
+        <label data-param="notStarted">
+          <span>Atraso para início da rota (min)</span>
+          <input type="number" min="0" max="1440" step="1" value="15" data-delay>
+          <small>Contado após o início previsto da jornada.</small>
+        </label>
+      </div>
+
+      <label class="om-check" data-withdrawal-param>
+        <input type="checkbox" checked data-exclude-withdrawals>
+        <span>Excluir retiradas dos alertas fora do slot</span>
+      </label>
+
+      <div class="om-actions">
+        <button type="button" class="om-primary" data-refresh>Atualizar snapshot local</button>
+        <button type="button" class="om-secondary" data-export disabled>Exportar CSV</button>
+        <span class="om-update-chip" data-last-update>Sem snapshot</span>
+      </div>
+      <div class="om-message" role="status" aria-live="polite" data-message>
+        Carregando o último snapshot compartilhado. Nenhuma chamada ao OFS é feita ao abrir esta tela.
+      </div>
+    </section>
+
+    <section class="om-kpis" aria-label="Resumo operacional">
+      <article data-kpi-card="all"><span>Técnicos consultados</span><strong data-kpi="tech">—</strong><small>Recursos ativos da macro</small></article>
+      <article class="danger" data-kpi-card="late"><span>OS em alerta</span><strong data-kpi="late">—</strong><small>Em execução acima do limite</small></article>
+      <article class="warning" data-kpi-card="idle"><span>Técnicos sem OS</span><strong data-kpi="idle">—</strong><small>Rota ativa dentro da jornada</small></article>
+      <article class="violet" data-kpi-card="notStarted"><span>Rotas não iniciadas</span><strong data-kpi="notStarted">—</strong><small>Jornada iniciada e tolerância excedida</small></article>
+      <article class="danger" data-kpi-card="slot"><span>Fora do slot</span><strong data-kpi="slot">—</strong><small>Início igual ou posterior ao fim do slot</small></article>
+      <article class="warning" data-kpi-card="black"><span>Clientes Black</span><strong data-kpi="black">—</strong><small>XA_CLI_ATRI = 1 no dia</small></article>
+    </section>
+
+    <nav class="om-tabs" role="tablist" aria-label="Visões operacionais" data-tabs>
+      <button type="button" role="tab" class="is-active" data-view="late">OS em alerta <span data-count="late">—</span></button>
+      <button type="button" role="tab" data-view="idle">Técnico sem OS <span data-count="idle">—</span></button>
+      <button type="button" role="tab" data-view="notStarted">Rota não iniciada <span data-count="notStarted">—</span></button>
+      <button type="button" role="tab" data-view="slot">Fora do slot <span data-count="slot">—</span></button>
+      <button type="button" role="tab" data-view="black">Clientes Black <span data-count="black">—</span></button>
+    </nav>
+
+    <section class="om-table-card">
+      <header>
+        <div><h2 data-table-title>OS em alerta</h2><p data-table-note>Aguardando snapshot.</p></div>
+        <div class="om-table-tools">
+          <input type="search" placeholder="Filtrar ID, técnico, tipo ou área" aria-label="Filtrar resultados" data-search>
+          <select aria-label="Filtrar por área" data-region><option value="">Todas as áreas</option></select>
+        </div>
+      </header>
+      <div class="om-table-scroll">
+        <table>
+          <thead data-thead></thead>
+          <tbody data-tbody><tr><td class="om-empty">Carregando dados locais...</td></tr></tbody>
+        </table>
+      </div>
+      <footer><span data-shown>0 registros</span><span data-data-status>Aguardando dados</span></footer>
+    </section>
+
+    <details class="om-card om-diagnostics">
+      <summary>Diagnóstico do snapshot e das fontes</summary>
+      <pre data-diagnostics>Nenhum snapshot carregado.</pre>
+    </details>
+  </main>
+
+  <script defer src="{{ url_for('static', filename='js/ofs_operational_monitor.js') }}"></script>
+  {% include 'includes/footer.html' %}
+</body>

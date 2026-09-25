@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -22,11 +22,40 @@ from services.ofs_technician_operational_service import (
     normalize_activity,
     normalize_calendar_item,
     normalize_route_baseline,
+    operational_today,
     parse_activity_event,
     parse_route_event,
     retention_cutoff,
     is_retained_work_date,
 )
+
+
+def test_monitor_activity_fields_are_preserved_in_read_model_normalization():
+    row = normalize_activity({
+        "activityId": "A-MONITOR",
+        "date": "2026-09-25",
+        "resourceId": "T1",
+        "status": "started",
+        "activityType": "INST",
+        "recordType": "regular",
+        "startTime": "2026-09-25 09:15:00",
+        "duration": 90,
+        "timeSlot": "08:00-12:00",
+        "XA_CLI_ATRI": "1",
+        "customerName": "Cliente teste",
+    })
+    assert row["record_type"] == "regular"
+    assert row["start_time"] == datetime(2026, 9, 25, 9, 15)
+    assert row["duration_minutes"] == 90
+    assert row["time_slot"] == "08:00-12:00"
+    assert row["is_black"] is True
+    assert row["customer_name"] == "Cliente teste"
+    assert {"recordType", "duration", "timeSlot", "XA_CLI_ATRI"}.issubset(ACTIVITY_FIELDS)
+
+
+def test_operational_day_uses_application_timezone_instead_of_utc_host(monkeypatch):
+    monkeypatch.setenv("OFS_OPERATIONAL_TIMEZONE", "America/Sao_Paulo")
+    assert operational_today(datetime(2026, 9, 26, 1, 30, tzinfo=timezone.utc)) == date(2026, 9, 25)
 
 
 class DummyAuth:
@@ -479,6 +508,52 @@ def test_baseline_then_events_closes_race_window():
     assert result["events_after_baseline"]["polls"] == 2
     assert repo.cursor["next_page"] == "opaque,marker-02"
     assert api.route_calls == 2
+
+
+def test_baseline_treats_missing_route_for_date_as_not_started():
+    repo = FakeRepo()
+    api = FakeAPI()
+    original_get_route = api.get_route
+
+    def get_route(resource_id, work_date):
+        if resource_id == "T2":
+            api.route_calls += 1
+            raise OperationalAPIError("route ausente", status_code=404, retryable=False)
+        return original_get_route(resource_id, work_date)
+
+    api.get_route = get_route
+    collector = TechnicianOperationalCollector(
+        api=api,
+        repository=repo,
+        settings=OperationalSettings(route_workers=2),
+        root_resource_id="02",
+    )
+
+    result = collector.run_baseline(date(2026, 8, 26))
+
+    route_by_resource = {row["resource_id"]: row for row in repo.route_rows}
+    assert result["routes"]["failures"] == 0
+    assert result["routes"]["api_calls"] == 2
+    assert route_by_resource["T2"]["route_state"] == "not_started"
+
+
+def test_baseline_keeps_non_404_route_errors_fatal():
+    repo = FakeRepo()
+    api = FakeAPI()
+
+    def get_route(resource_id, work_date):
+        raise OperationalAPIError("indisponível", status_code=503, retryable=True)
+
+    api.get_route = get_route
+    collector = TechnicianOperationalCollector(
+        api=api,
+        repository=repo,
+        settings=OperationalSettings(route_workers=2),
+        root_resource_id="02",
+    )
+
+    with pytest.raises(Exception, match="Baseline Route parcial: 2 de 2"):
+        collector.run_baseline(date(2026, 8, 26))
 
 
 def test_event_cursor_does_not_advance_when_commit_fails():

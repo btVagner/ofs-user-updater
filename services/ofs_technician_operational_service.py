@@ -58,9 +58,14 @@ ACTIVITY_FIELDS = (
     "date",
     "status",
     "activityType",
+    "recordType",
     "startTime",
     "endTime",
+    "duration",
+    "timeSlot",
     "resourceTimeZoneIANA",
+    "customerName",
+    "XA_CLI_ATRI",
 )
 CURSOR_KEY = "technician_monitor"
 LOCK_NAME = "ofs_technician_operational_worker"
@@ -104,6 +109,20 @@ def utc_now_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def operational_today(now: Optional[datetime] = None) -> date:
+    """Data operacional da aplicação, independente do timezone do host."""
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    zone_name = (os.getenv("OFS_OPERATIONAL_TIMEZONE") or "America/Sao_Paulo").strip()
+    try:
+        zone = ZoneInfo(zone_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        LOGGER.warning("OFS_OPERATIONAL_TIMEZONE inválido; usando America/Sao_Paulo")
+        zone = ZoneInfo("America/Sao_Paulo")
+    return now.astimezone(zone).date()
+
+
 def _clean(value: Any) -> Optional[str]:
     if value is None:
         return None
@@ -129,6 +148,26 @@ def _parse_date(value: Any) -> Optional[date]:
         return date.fromisoformat(text[:10])
     except ValueError:
         return None
+
+
+def _parse_non_negative_int(value: Any) -> Optional[int]:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
+
+
+def _parse_optional_bool(value: Any) -> Optional[bool]:
+    if value is None or value == "":
+        return None
+    if value is True or value == 1 or str(value).strip().lower() in {"1", "true", "yes", "sim"}:
+        return True
+    if value is False or value == 0 or str(value).strip().lower() in {"0", "false", "no", "nao", "não"}:
+        return False
+    return None
 
 
 def _parse_datetime(value: Any) -> Optional[datetime]:
@@ -294,6 +333,12 @@ def normalize_activity(item: dict, *, reconciled_at: Optional[datetime] = None) 
         "status": status,
         "appt_number": _clean(item.get("apptNumber")),
         "activity_type": _clean(item.get("activityType")),
+        "record_type": _clean(item.get("recordType")),
+        "start_time": _parse_local_datetime(item.get("startTime")),
+        "duration_minutes": _parse_non_negative_int(item.get("duration")),
+        "time_slot": _clean(item.get("timeSlot")),
+        "is_black": bool(_parse_optional_bool(item.get("XA_CLI_ATRI"))),
+        "customer_name": _clean(item.get("customerName")),
         "resource_timezone_iana": _clean(item.get("resourceTimeZoneIANA")),
         "last_event_at": None,
         "last_event_type": None,
@@ -399,6 +444,16 @@ def parse_activity_event(event: dict) -> Optional[dict]:
         "status": status.lower() if status else None,
         "appt_number": _clean(changes.get("apptNumber") or details.get("apptNumber")),
         "activity_type": _clean(changes.get("activityType") or details.get("activityType")),
+        "record_type": _clean(changes.get("recordType") or details.get("recordType")),
+        "start_time": _parse_local_datetime(changes.get("startTime") or details.get("startTime")),
+        "duration_minutes": _parse_non_negative_int(
+            changes.get("duration") if "duration" in changes else details.get("duration")
+        ),
+        "time_slot": _clean(changes.get("timeSlot") or details.get("timeSlot")),
+        "is_black": _parse_optional_bool(
+            changes.get("XA_CLI_ATRI") if "XA_CLI_ATRI" in changes else details.get("XA_CLI_ATRI")
+        ),
+        "customer_name": _clean(changes.get("customerName") or details.get("customerName")),
         "resource_timezone_iana": _clean(changes.get("resourceTimeZoneIANA") or details.get("resourceTimeZoneIANA")),
     }
 
@@ -911,18 +966,24 @@ class MySQLOperationalRepository:
                 cur.execute(
                     """
                     INSERT INTO ofs_activity_operational_state
-                        (activity_id,work_date,resource_id,status,appt_number,activity_type,resource_timezone_iana,
+                        (activity_id,work_date,resource_id,status,appt_number,activity_type,record_type,start_time,
+                         duration_minutes,time_slot,is_black,customer_name,resource_timezone_iana,
                          last_event_at,last_event_type,last_event_fingerprint,last_reconciled_at,updated_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s)
                     ON DUPLICATE KEY UPDATE
                         work_date=VALUES(work_date),resource_id=VALUES(resource_id),status=VALUES(status),
                         appt_number=VALUES(appt_number),activity_type=VALUES(activity_type),
+                        record_type=VALUES(record_type),start_time=VALUES(start_time),
+                        duration_minutes=VALUES(duration_minutes),time_slot=VALUES(time_slot),
+                        is_black=VALUES(is_black),customer_name=VALUES(customer_name),
                         resource_timezone_iana=VALUES(resource_timezone_iana),
                         last_reconciled_at=VALUES(last_reconciled_at),updated_at=VALUES(updated_at)
                     """,
                     (
                         row["activity_id"], row["work_date"], row["resource_id"], row["status"], row["appt_number"],
-                        row["activity_type"], row["resource_timezone_iana"], reconciled_at, reconciled_at,
+                        row["activity_type"], row["record_type"], row["start_time"], row["duration_minutes"],
+                        row["time_slot"], row["is_black"], row["customer_name"], row["resource_timezone_iana"],
+                        reconciled_at, reconciled_at,
                     ),
                 )
 
@@ -1086,7 +1147,7 @@ class MySQLOperationalRepository:
         unsafe = 0
         affected: set[Tuple[date, str]] = set()
         max_event_at: Optional[datetime] = None
-        retention_today = today or date.today()
+        retention_today = today or operational_today()
         try:
             cur.execute(
                 "SELECT subscription_id,next_page FROM ofs_event_cursor WHERE cursor_key=%s FOR UPDATE",
@@ -1171,7 +1232,7 @@ class MySQLOperationalRepository:
         if not new_date:
             return {"applied": False, "affected": set()}
 
-        retention_today = today or date.today()
+        retention_today = today or operational_today()
         new_date_retained = is_retained_work_date(new_date, retention_today, retention_days)
         affected: set[Tuple[date, str]] = set()
         if old_date and old_resource and is_retained_work_date(old_date, retention_today, retention_days):
@@ -1200,19 +1261,25 @@ class MySQLOperationalRepository:
         cur.execute(
             """
             INSERT INTO ofs_activity_operational_state
-                (activity_id,work_date,resource_id,status,appt_number,activity_type,resource_timezone_iana,
+                (activity_id,work_date,resource_id,status,appt_number,activity_type,record_type,start_time,
+                 duration_minutes,time_slot,is_black,customer_name,resource_timezone_iana,
                  last_event_at,last_event_type,last_event_fingerprint,last_reconciled_at,updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s)
             ON DUPLICATE KEY UPDATE
                 work_date=VALUES(work_date),resource_id=VALUES(resource_id),status=VALUES(status),
                 appt_number=COALESCE(VALUES(appt_number),appt_number),activity_type=COALESCE(VALUES(activity_type),activity_type),
+                record_type=COALESCE(VALUES(record_type),record_type),start_time=COALESCE(VALUES(start_time),start_time),
+                duration_minutes=COALESCE(VALUES(duration_minutes),duration_minutes),time_slot=COALESCE(VALUES(time_slot),time_slot),
+                is_black=COALESCE(VALUES(is_black),is_black),customer_name=COALESCE(VALUES(customer_name),customer_name),
                 resource_timezone_iana=COALESCE(VALUES(resource_timezone_iana),resource_timezone_iana),
                 last_event_at=VALUES(last_event_at),last_event_type=VALUES(last_event_type),
                 last_event_fingerprint=VALUES(last_event_fingerprint),updated_at=VALUES(updated_at)
             """,
             (
                 op["activity_id"], new_date, new_resource, new_status, op.get("appt_number"), op.get("activity_type"),
-                op.get("resource_timezone_iana"), op["event_at"], op["event_type"], op["fingerprint"], now,
+                op.get("record_type"), op.get("start_time"), op.get("duration_minutes"), op.get("time_slot"),
+                op.get("is_black"), op.get("customer_name"), op.get("resource_timezone_iana"),
+                op["event_at"], op["event_type"], op["fingerprint"], now,
             ),
         )
         if new_resource:
@@ -1458,7 +1525,20 @@ class TechnicianOperationalCollector:
 
         def fetch(technician: dict) -> Tuple[str, dict, int]:
             resource_id = str(technician["resource_id"])
-            payload, route_calls = self.api.get_route(resource_id, work_date)
+            try:
+                payload, route_calls = self.api.get_route(resource_id, work_date)
+            except OperationalAPIError as exc:
+                if exc.status_code != 404:
+                    raise
+                # A hierarquia pode conter um técnico válido sem Route criada
+                # para a data. Isso equivale a uma rota ainda não iniciada e
+                # não deve invalidar o baseline inteiro.
+                payload = {
+                    "resourceId": resource_id,
+                    "date": work_date.isoformat(),
+                    "items": [],
+                }
+                route_calls = 1
             return resource_id, payload, route_calls
 
         try:
@@ -1489,7 +1569,7 @@ class TechnicianOperationalCollector:
             raise
 
     def run_baseline(self, work_date: Optional[date] = None) -> dict:
-        work_date = work_date or date.today()
+        work_date = work_date or operational_today()
         started = time.perf_counter()
         if not self._technicians:
             self.refresh_technicians()
@@ -1530,7 +1610,7 @@ class TechnicianOperationalCollector:
             items, next_page = self.api.get_events(subscription_id, page)
             result = self.repository.apply_event_page(
                 subscription_id, page, next_page, items, utc_now_naive(), self._technician_ids,
-                today=date.today(), retention_days=self.settings.retention_days,
+                today=operational_today(), retention_days=self.settings.retention_days,
             )
             finished = utc_now_naive()
             self.repository.update_health("events", status="ok", success_at=finished, finished_at=finished)
@@ -1576,7 +1656,7 @@ class TechnicianOperationalCollector:
     def run_forever(self, *, stop_predicate: Optional[Callable[[], bool]] = None) -> None:
         stop_predicate = stop_predicate or (lambda: False)
         self.refresh_technicians()
-        current_date = date.today()
+        current_date = operational_today()
         LOGGER.info(
             "Worker operacional iniciado date=%s technicians=%s events_poll=%ss activities_reconcile=%ss calendars_reconcile=%ss retention_days=%s route_workers=%s",
             current_date.isoformat(),
@@ -1602,7 +1682,7 @@ class TechnicianOperationalCollector:
         next_calendars = time.monotonic() + self.settings.calendars_reconcile_seconds
 
         while not stop_predicate():
-            now_date = date.today()
+            now_date = operational_today()
             if now_date != current_date:
                 previous_date = current_date
                 current_date = now_date

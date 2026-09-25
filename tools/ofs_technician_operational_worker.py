@@ -20,6 +20,7 @@ from services.ofs_technician_operational_service import (  # noqa: E402
     OperationalSettings,
     TechnicianOperationalCollector,
     mysql_operational_lock,
+    operational_today,
     sanitize_operational_error,
 )
 
@@ -43,7 +44,7 @@ def parse_args():
 def main():
     args = parse_args()
     logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    target_date = date.fromisoformat(args.date) if args.date else date.today()
+    target_date = date.fromisoformat(args.date) if args.date else operational_today()
     repository = MySQLOperationalRepository()
 
     if args.status:

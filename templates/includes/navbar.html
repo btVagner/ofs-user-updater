@@ -60,6 +60,14 @@
     <div class="sidebar-section">
       <span class="sidebar-section-title">Operações</span>
 
+      {% if has_perm('ofs.monitor_operacional') %}
+      <a href="{{ url_for('ofs_operational_monitor_page') }}"
+        class="sidebar-link {% if request.endpoint in ['ofs_operational_monitor_page', 'ofs_operational_monitor_data', 'ofs_operational_monitor_refresh'] %}active{% endif %}">
+        <span class="sidebar-icon">MO</span>
+        <span class="sidebar-text">Monitor operacional</span>
+      </a>
+      {% endif %}
+
       {% if has_perm('bi_activities.acessar') %}
       <a href="{{ url_for('bi_activities_page') }}"
         class="sidebar-link {% if request.endpoint in ['bi_activities_page', 'bi_activities_jobs', 'bi_activities_coletar'] %}active{% endif %}">
