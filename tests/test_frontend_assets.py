@@ -37,6 +37,15 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertIn("session.usuario_logado", footer)
         self.assertIn("js/logs_table.js", footer)
 
+    def test_sidebar_uses_underlined_hover_and_has_no_oracle_docs_button(self):
+        navbar = read("templates/includes/navbar.html")
+        style = read("static/style.css")
+
+        self.assertNotIn("Documentação Oracle", navbar)
+        self.assertNotIn("docs.oracle.com", navbar)
+        self.assertIn(".sidebar-link:not(.active):hover::after", style)
+        self.assertIn("transform: scaleX(1);", style)
+
     def test_no_active_template_uses_datatables_or_legacy_users_table(self):
         template_text = "\n".join(
             path.read_text(encoding="utf-8-sig")

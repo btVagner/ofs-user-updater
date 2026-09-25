@@ -525,7 +525,18 @@ body.login-page {
 }
 
 .sidebar-link::after {
-    display: none;
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 2px;
+    height: 1px;
+    display: block;
+    background: rgba(116, 184, 255, 0.88);
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform 0.15s ease;
+    pointer-events: none;
 }
 
 .sidebar-icon {
@@ -554,16 +565,21 @@ body.login-page {
 .sidebar-link:hover,
 .sidebar-link:focus-visible {
     color: #ffffff;
-    background: var(--ofs-surface-soft);
-    border-color: var(--ofs-border);
+    background: transparent;
+    border-color: transparent;
     outline: none;
+}
+
+.sidebar-link:not(.active):hover::after,
+.sidebar-link:not(.active):focus-visible::after {
+    transform: scaleX(1);
 }
 
 .sidebar-link:hover .sidebar-icon,
 .sidebar-link:focus-visible .sidebar-icon {
     color: #d9ebff;
-    border-color: rgba(77, 163, 255, 0.30);
-    background: rgba(77, 163, 255, 0.07);
+    border-color: var(--ofs-border-soft);
+    background: transparent;
 }
 
 .sidebar-link.active {
@@ -582,10 +598,6 @@ body.login-page {
     color: #ffffff;
     background: transparent;
     border-color: transparent;
-}
-
-.sidebar-link-external {
-    margin-top: 1px;
 }
 
 .sidebar-footer {
@@ -641,16 +653,21 @@ body.login-page {
 .sidebar-link-danger:focus-visible,
 .sidebar-link-danger.active {
     color: #ffffff;
-    background: rgba(239, 83, 80, 0.08);
-    border-color: rgba(239, 83, 80, 0.22);
-    box-shadow: inset 2px 0 0 var(--ofs-danger);
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
 }
 
 .sidebar-link-danger:hover .sidebar-icon,
 .sidebar-link-danger:focus-visible .sidebar-icon {
     color: #ffffff;
-    background: rgba(239, 83, 80, 0.08);
-    border-color: rgba(239, 83, 80, 0.22);
+    background: transparent;
+    border-color: var(--ofs-border-soft);
+}
+
+.sidebar-link-danger:not(.active):hover::after,
+.sidebar-link-danger:not(.active):focus-visible::after {
+    background: var(--ofs-danger);
 }
 
 @media (max-width: 768px) {
