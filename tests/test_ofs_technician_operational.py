@@ -43,6 +43,7 @@ def test_monitor_activity_fields_are_preserved_in_read_model_normalization():
         "timeSlot": "08:00-12:00",
         "XA_CLI_ATRI": "1",
         "customerName": "Cliente teste",
+        "state": "sp",
     })
     assert row["record_type"] == "regular"
     assert row["start_time"] == datetime(2026, 9, 25, 9, 15)
@@ -50,7 +51,8 @@ def test_monitor_activity_fields_are_preserved_in_read_model_normalization():
     assert row["time_slot"] == "08:00-12:00"
     assert row["is_black"] is True
     assert row["customer_name"] == "Cliente teste"
-    assert {"recordType", "duration", "timeSlot", "XA_CLI_ATRI"}.issubset(ACTIVITY_FIELDS)
+    assert row["customer_state"] == "sp"
+    assert {"recordType", "duration", "timeSlot", "XA_CLI_ATRI", "state"}.issubset(ACTIVITY_FIELDS)
 
 
 def test_operational_day_uses_application_timezone_instead_of_utc_host(monkeypatch):
@@ -305,6 +307,16 @@ def test_activity_moved_uses_original_and_destination():
     assert op["resource_id"] == "T2"
     assert op["work_date"] == date(2026, 8, 27)
     assert op["status"] == "pending"
+
+
+def test_activity_event_preserves_customer_state_from_partial_changes():
+    op = parse_activity_event({
+        "eventType": "activityStarted",
+        "time": "2026-08-26 12:00:00",
+        "activityDetails": {"activityId": 7, "resourceId": "T1", "date": "2026-08-26"},
+        "activityChanges": {"state": "RS"},
+    })
+    assert op["customer_state"] == "RS"
 
 
 def test_event_duplicate_and_out_of_order_policy():

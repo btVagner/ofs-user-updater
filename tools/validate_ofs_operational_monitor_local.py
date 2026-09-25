@@ -78,10 +78,10 @@ def _insert_fixture(work_date):
             """
             INSERT INTO ofs_activity_operational_state
                 (activity_id,work_date,resource_id,status,appt_number,activity_type,record_type,
-                 start_time,duration_minutes,time_slot,is_black,customer_name,resource_timezone_iana,
+                 start_time,duration_minutes,time_slot,is_black,customer_name,customer_state,resource_timezone_iana,
                  last_reconciled_at,updated_at)
             VALUES (%s,%s,%s,'started','OS-LOCAL-1','INST','regular',%s,1,'08:00-12:00',1,
-                    'Cliente validação','America/Sao_Paulo',%s,%s)
+                    'Cliente validação','SP','America/Sao_Paulo',%s,%s)
             """,
             (ACTIVITY_IDS[0], work_date, RESOURCE_ID, start_of_day, now, now),
         )
@@ -89,10 +89,10 @@ def _insert_fixture(work_date):
             """
             INSERT INTO ofs_activity_operational_state
                 (activity_id,work_date,resource_id,status,appt_number,activity_type,record_type,
-                 start_time,duration_minutes,time_slot,is_black,customer_name,resource_timezone_iana,
+                 start_time,duration_minutes,time_slot,is_black,customer_name,customer_state,resource_timezone_iana,
                  last_reconciled_at,updated_at)
             VALUES (%s,%s,%s,'pending','OS-LOCAL-2','MAN','regular',%s,30,'08:00-12:00',0,
-                    'Cliente slot','America/Sao_Paulo',%s,%s)
+                    'Cliente slot','RS','America/Sao_Paulo',%s,%s)
             """,
             (ACTIVITY_IDS[1], work_date, RESOURCE_ID, outside_slot, now, now),
         )
@@ -195,4 +195,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

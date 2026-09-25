@@ -65,6 +65,7 @@ ACTIVITY_FIELDS = (
     "timeSlot",
     "resourceTimeZoneIANA",
     "customerName",
+    "state",
     "XA_CLI_ATRI",
 )
 CURSOR_KEY = "technician_monitor"
@@ -339,6 +340,7 @@ def normalize_activity(item: dict, *, reconciled_at: Optional[datetime] = None) 
         "time_slot": _clean(item.get("timeSlot")),
         "is_black": bool(_parse_optional_bool(item.get("XA_CLI_ATRI"))),
         "customer_name": _clean(item.get("customerName")),
+        "customer_state": _clean(item.get("state")),
         "resource_timezone_iana": _clean(item.get("resourceTimeZoneIANA")),
         "last_event_at": None,
         "last_event_type": None,
@@ -454,6 +456,7 @@ def parse_activity_event(event: dict) -> Optional[dict]:
             changes.get("XA_CLI_ATRI") if "XA_CLI_ATRI" in changes else details.get("XA_CLI_ATRI")
         ),
         "customer_name": _clean(changes.get("customerName") or details.get("customerName")),
+        "customer_state": _clean(changes.get("state") or details.get("state")),
         "resource_timezone_iana": _clean(changes.get("resourceTimeZoneIANA") or details.get("resourceTimeZoneIANA")),
     }
 
@@ -967,22 +970,23 @@ class MySQLOperationalRepository:
                     """
                     INSERT INTO ofs_activity_operational_state
                         (activity_id,work_date,resource_id,status,appt_number,activity_type,record_type,start_time,
-                         duration_minutes,time_slot,is_black,customer_name,resource_timezone_iana,
+                         duration_minutes,time_slot,is_black,customer_name,customer_state,resource_timezone_iana,
                          last_event_at,last_event_type,last_event_fingerprint,last_reconciled_at,updated_at)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s)
                     ON DUPLICATE KEY UPDATE
                         work_date=VALUES(work_date),resource_id=VALUES(resource_id),status=VALUES(status),
                         appt_number=VALUES(appt_number),activity_type=VALUES(activity_type),
                         record_type=VALUES(record_type),start_time=VALUES(start_time),
                         duration_minutes=VALUES(duration_minutes),time_slot=VALUES(time_slot),
-                        is_black=VALUES(is_black),customer_name=VALUES(customer_name),
+                        is_black=VALUES(is_black),customer_name=VALUES(customer_name),customer_state=VALUES(customer_state),
                         resource_timezone_iana=VALUES(resource_timezone_iana),
                         last_reconciled_at=VALUES(last_reconciled_at),updated_at=VALUES(updated_at)
                     """,
                     (
                         row["activity_id"], row["work_date"], row["resource_id"], row["status"], row["appt_number"],
                         row["activity_type"], row["record_type"], row["start_time"], row["duration_minutes"],
-                        row["time_slot"], row["is_black"], row["customer_name"], row["resource_timezone_iana"],
+                        row["time_slot"], row["is_black"], row["customer_name"], row["customer_state"],
+                        row["resource_timezone_iana"],
                         reconciled_at, reconciled_at,
                     ),
                 )
@@ -1262,15 +1266,16 @@ class MySQLOperationalRepository:
             """
             INSERT INTO ofs_activity_operational_state
                 (activity_id,work_date,resource_id,status,appt_number,activity_type,record_type,start_time,
-                 duration_minutes,time_slot,is_black,customer_name,resource_timezone_iana,
+                 duration_minutes,time_slot,is_black,customer_name,customer_state,resource_timezone_iana,
                  last_event_at,last_event_type,last_event_fingerprint,last_reconciled_at,updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s)
             ON DUPLICATE KEY UPDATE
                 work_date=VALUES(work_date),resource_id=VALUES(resource_id),status=VALUES(status),
                 appt_number=COALESCE(VALUES(appt_number),appt_number),activity_type=COALESCE(VALUES(activity_type),activity_type),
                 record_type=COALESCE(VALUES(record_type),record_type),start_time=COALESCE(VALUES(start_time),start_time),
                 duration_minutes=COALESCE(VALUES(duration_minutes),duration_minutes),time_slot=COALESCE(VALUES(time_slot),time_slot),
                 is_black=COALESCE(VALUES(is_black),is_black),customer_name=COALESCE(VALUES(customer_name),customer_name),
+                customer_state=COALESCE(VALUES(customer_state),customer_state),
                 resource_timezone_iana=COALESCE(VALUES(resource_timezone_iana),resource_timezone_iana),
                 last_event_at=VALUES(last_event_at),last_event_type=VALUES(last_event_type),
                 last_event_fingerprint=VALUES(last_event_fingerprint),updated_at=VALUES(updated_at)
@@ -1278,7 +1283,7 @@ class MySQLOperationalRepository:
             (
                 op["activity_id"], new_date, new_resource, new_status, op.get("appt_number"), op.get("activity_type"),
                 op.get("record_type"), op.get("start_time"), op.get("duration_minutes"), op.get("time_slot"),
-                op.get("is_black"), op.get("customer_name"), op.get("resource_timezone_iana"),
+                op.get("is_black"), op.get("customer_name"), op.get("customer_state"), op.get("resource_timezone_iana"),
                 op["event_at"], op["event_type"], op["fingerprint"], now,
             ),
         )

@@ -29,7 +29,11 @@
 
   const q = (selector) => root.querySelector(selector);
   const qa = (selector) => Array.from(root.querySelectorAll(selector));
-  const state = { mode: "all", view: "late", snapshot: null, payload: null, rows: {}, selectedBuckets: new Set(), busy: false, timer: null };
+  const state = {
+    mode: "all", view: "late", snapshot: null, payload: null, rows: {},
+    selectedBuckets: new Set(), selectedStates: new Set(), knownStates: new Set(),
+    busy: false, timer: null,
+  };
 
   function normalized(value) {
     return String(value == null ? "" : value).trim().toLocaleLowerCase("pt-BR");
@@ -90,12 +94,57 @@
     const search = normalized(q("[data-search]").value);
     const status = q("[data-status]").value;
     return (state.rows[state.view] || []).filter((row) => {
+      if (!rowStates(row).some((value) => state.selectedStates.has(value))) return false;
       if (state.selectedBuckets.size && !state.selectedBuckets.has(row.area)) return false;
       if (status && normalized(row.status) !== status) return false;
       if (!search) return true;
-      return [row.id, row.appt, row.tech, row.resource_id, row.area, row.type, row.status, row.time_slot, row.customer]
+      return [row.id, row.appt, row.tech, row.resource_id, row.area, row.type, row.status, row.time_slot, row.customer, ...rowStates(row)]
         .some((value) => normalized(value).includes(search));
     });
+  }
+
+  function rowStates(row) {
+    const values = Array.isArray(row.states) ? row.states : [row.state];
+    const normalizedStates = values.map((value) => String(value || "").trim()).filter(Boolean);
+    return normalizedStates.length ? normalizedStates : ["Sem UF"];
+  }
+
+  function renderStateOptions() {
+    const options = Array.from(new Set(
+      VIEW_KEYS.flatMap((view) => (state.rows[view] || []).flatMap(rowStates))
+    )).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const available = new Set(options);
+
+    state.selectedStates.forEach((value) => {
+      if (!available.has(value)) state.selectedStates.delete(value);
+    });
+    state.knownStates.forEach((value) => {
+      if (!available.has(value)) state.knownStates.delete(value);
+    });
+    options.forEach((value) => {
+      if (!state.knownStates.has(value)) state.selectedStates.add(value);
+      state.knownStates.add(value);
+    });
+
+    const fragment = document.createDocumentFragment();
+    options.forEach((value) => {
+      const button = document.createElement("button");
+      const selected = state.selectedStates.has(value);
+      button.type = "button";
+      button.textContent = value;
+      button.className = selected ? "is-active" : "";
+      button.setAttribute("aria-pressed", String(selected));
+      button.addEventListener("click", () => {
+        if (state.selectedStates.has(value)) state.selectedStates.delete(value);
+        else state.selectedStates.add(value);
+        renderStateOptions();
+        renderTable();
+      });
+      fragment.appendChild(button);
+    });
+    const container = q("[data-state-options]");
+    container.replaceChildren(fragment);
+    container.closest(".om-state-filter").hidden = options.length === 0;
   }
 
   function replaceStatusOptions(select, options) {
@@ -198,6 +247,7 @@
 
   function render() {
     computeRows();
+    renderStateOptions();
     const counts = {
       late: state.rows.late.length,
       idle: state.rows.idle.length,

@@ -38,11 +38,23 @@ def test_frontend_has_multi_bucket_checkboxes_and_status_filter():
     assert "normalized(row.status) !== status" in script
 
 
+def test_frontend_has_shared_uf_toggle_filter_for_every_view():
+    script = (ROOT / "static" / "js" / "ofs_operational_monitor.js").read_text(encoding="utf-8")
+    template = (ROOT / "templates" / "ofs_operational_monitor.html").read_text(encoding="utf-8")
+    assert "Estado (UF)" in template
+    assert "data-state-options" in template
+    assert "selectedStates: new Set()" in script
+    assert "VIEW_KEYS.flatMap" in script
+    assert 'button.setAttribute("aria-pressed", String(selected))' in script
+    assert "state.selectedStates.has(value)" in script
+
+
 def test_migration_creates_shared_cache_lock_support_and_permission():
     sql = (ROOT / "database" / "sql" / "20260925_ofs_operational_monitor_apply.sql").read_text(encoding="utf-8")
     service = (ROOT / "services" / "ofs_operational_monitor_service.py").read_text(encoding="utf-8")
     assert "ofs_operational_monitor_snapshot" in sql
     assert "ofs_operational_monitor_refresh_log" in sql
     assert "ofs.monitor_operacional" in sql
+    assert "customer_state" in sql
     assert "SNAPSHOT_TTL_SECONDS = 10 * 60" in service
     assert "GET_LOCK(%s,0)" in service

@@ -50,6 +50,13 @@ SET @ddl = IF(
 );
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+SET @ddl = IF(
+  EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=@schema_name AND table_name='ofs_activity_operational_state' AND column_name='customer_state'),
+  'DO 0',
+  'ALTER TABLE ofs_activity_operational_state ADD COLUMN customer_state VARCHAR(64) NULL AFTER customer_name'
+);
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 CREATE TABLE IF NOT EXISTS ofs_operational_monitor_snapshot (
     scope_key VARCHAR(32) NOT NULL,
     work_date DATE NULL,

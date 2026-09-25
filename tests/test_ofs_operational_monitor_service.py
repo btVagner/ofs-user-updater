@@ -36,7 +36,7 @@ def states():
 
 
 def activities():
-    base = {"work_date": WORK_DATE, "record_type": "regular", "customer_name": None, "resource_timezone_iana": "America/Sao_Paulo"}
+    base = {"work_date": WORK_DATE, "record_type": "regular", "customer_name": None, "customer_state": "sp", "resource_timezone_iana": "America/Sao_Paulo"}
     return [
         {**base, "activity_id": "A1", "resource_id": "T1", "status": "started", "appt_number": "OS1", "activity_type": "INST", "start_time": datetime(2026, 9, 25, 9, 0), "duration_minutes": 60, "time_slot": "08:00-12:00", "is_black": 1},
         {**base, "activity_id": "A2", "resource_id": "T1", "status": "pending", "appt_number": "OS2", "activity_type": "MAN", "start_time": datetime(2026, 9, 25, 12, 30), "duration_minutes": 30, "time_slot": "08:00 - 12:00", "is_black": 0},
@@ -63,6 +63,9 @@ def test_build_payload_matches_plugin_operational_views():
     assert next(row for row in payload["slot"] if row["id"] == "A3")["is_withdrawal"] is True
     assert [row["id"] for row in payload["black"]] == ["A1"]
     assert payload["late_candidates"][0]["area"].endswith("Regional Sul")
+    assert payload["late_candidates"][0]["states"] == ["SP"]
+    assert payload["idle"][0]["states"] == ["Sem UF"]
+    assert payload["not_started_candidates"][0]["states"] == ["Sem UF"]
 
 
 def test_invalid_scope_is_rejected_before_database_access():

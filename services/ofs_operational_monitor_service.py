@@ -181,7 +181,13 @@ def _area_for(resource_id: str, hierarchy_by_id: Mapping[str, dict]) -> str:
     return " / ".join(parts[-2:]) if parts else "Sem área"
 
 
+def _customer_state(value: Any) -> str:
+    normalized = str(value or "").strip().upper()
+    return normalized or "Sem UF"
+
+
 def _common_activity(row: Mapping[str, Any], technician: Mapping[str, Any], area: str) -> dict:
+    customer_state = _customer_state(row.get("customer_state"))
     return {
         "id": str(row.get("activity_id") or ""),
         "appt": str(row.get("appt_number") or ""),
@@ -193,6 +199,8 @@ def _common_activity(row: Mapping[str, Any], technician: Mapping[str, Any], area
         "status": str(row.get("status") or "—"),
         "time_slot": str(row.get("time_slot") or "—"),
         "customer": str(row.get("customer_name") or ""),
+        "state": customer_state,
+        "states": [customer_state],
     }
 
 
@@ -239,7 +247,7 @@ def build_monitor_payload(
             activities_by_resource.setdefault(resource_id, []).append(dict(row))
 
     result = {
-        "schema_version": 1,
+        "schema_version": 2,
         "scope": dict(scope),
         "work_date": work_date.isoformat(),
         "generated_at": now_utc.isoformat(timespec="seconds"),
@@ -287,6 +295,10 @@ def build_monitor_payload(
         area = _area_for(resource_id, hierarchy_by_id)
         resource_activities = activities_by_resource.get(resource_id, [])
         real_activities = [row for row in resource_activities if _is_real_os(row)]
+        technician_states = sorted(
+            {_customer_state(row.get("customer_state")) for row in real_activities},
+            key=str.casefold,
+        ) or ["Sem UF"]
 
         for activity in real_activities:
             common = _common_activity(activity, technician, area)
@@ -341,6 +353,7 @@ def build_monitor_payload(
                     ),
                     "os_count": 0,
                     "situation": "Rota ativa · sem OS" if shift_end else "Rota ativa · jornada indisponível",
+                    "states": technician_states,
                 })
         elif (
             state_name == "not_started" and shift_start and shift_end
@@ -360,6 +373,7 @@ def build_monitor_payload(
                     "shift_start_epoch_ms": start_epoch,
                     "shift_end_epoch_ms": end_epoch,
                     "situation": "Rota não ativada",
+                    "states": technician_states,
                 })
 
     result["idle"].sort(key=lambda row: row["tech"].casefold())
@@ -430,6 +444,7 @@ class MySQLOperationalMonitorRepository:
                 """
                 SELECT a.activity_id,a.work_date,a.resource_id,a.status,a.appt_number,a.activity_type,
                        a.record_type,a.start_time,a.duration_minutes,a.time_slot,a.is_black,a.customer_name,
+                       a.customer_state,
                        a.resource_timezone_iana
                 FROM ofs_activity_operational_state a
                 JOIN ofs_resource_hierarchy h ON h.resource_id=a.resource_id

@@ -8,7 +8,7 @@ SELECT column_name,column_type,is_nullable,column_default
 FROM information_schema.columns
 WHERE table_schema=DATABASE()
   AND table_name='ofs_activity_operational_state'
-  AND column_name IN ('record_type','start_time','duration_minutes','time_slot','is_black','customer_name')
+  AND column_name IN ('record_type','start_time','duration_minutes','time_slot','is_black','customer_name','customer_state')
 ORDER BY ordinal_position;
 
 SELECT recurso,descricao
@@ -25,4 +25,3 @@ ORDER BY pf.id;
 SELECT scope_key,status,work_date,refreshed_at,expires_at,requested_by_username,error_text
 FROM ofs_operational_monitor_snapshot
 ORDER BY scope_key;
-

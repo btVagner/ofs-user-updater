@@ -13,6 +13,9 @@ Esta entrega adiciona uma tela restrita que lê snapshots compartilhados no MySQ
    ./venv/bin/python tools/ofs_operational_monitor_schema.py --validate
    ```
 
+   A migração é idempotente. Em instalações que já possuem o monitor, ela acrescenta
+   somente `customer_state`, usado pelo filtro geográfico de UF.
+
 4. Sincronizar a hierarquia Casa e Cliente:
 
    ```bash
