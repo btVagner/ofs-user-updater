@@ -45,6 +45,7 @@ def test_frontend_has_shared_uf_toggle_filter_for_every_view():
     assert "data-state-options" in template
     assert "selectedStates: new Set()" in script
     assert "VIEW_KEYS.flatMap" in script
+    assert 'if (!container) return;' in script
     assert 'button.setAttribute("aria-pressed", String(selected))' in script
     assert "state.selectedStates.has(value)" in script
 

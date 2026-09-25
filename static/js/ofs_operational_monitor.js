@@ -126,6 +126,12 @@
       state.knownStates.add(value);
     });
 
+    const container = q("[data-state-options]");
+    // Durante uma atualização sem reinício imediato do Gunicorn, o navegador
+    // pode receber o asset novo enquanto o processo ainda renderiza o template
+    // antigo. Mantém a tabela funcional até as versões voltarem a coincidir.
+    if (!container) return;
+
     const fragment = document.createDocumentFragment();
     options.forEach((value) => {
       const button = document.createElement("button");
@@ -142,7 +148,6 @@
       });
       fragment.appendChild(button);
     });
-    const container = q("[data-state-options]");
     container.replaceChildren(fragment);
     container.closest(".om-state-filter").hidden = options.length === 0;
   }
