@@ -46,6 +46,19 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertIn(".sidebar-link:not(.active):hover::after", style)
         self.assertIn("transform: scaleX(1);", style)
 
+    def test_login_has_isolated_responsive_layout_and_accessible_fields(self):
+        login = read("templates/login.html")
+        login_css = read("static/css/login.css")
+
+        self.assertIn("css/login.css", login)
+        self.assertIn('class="login-shell"', login)
+        self.assertIn('id="username"', login)
+        self.assertIn('autocomplete="username"', login)
+        self.assertIn('id="password"', login)
+        self.assertIn('autocomplete="current-password"', login)
+        self.assertIn("@media (max-width: 760px)", login_css)
+        self.assertIn("prefers-reduced-motion", login_css)
+
     def test_no_active_template_uses_datatables_or_legacy_users_table(self):
         template_text = "\n".join(
             path.read_text(encoding="utf-8-sig")
