@@ -45,6 +45,9 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertNotIn("docs.oracle.com", navbar)
         self.assertIn(".sidebar-link:not(.active):hover::after", style)
         self.assertIn("transform: scaleX(1);", style)
+        self.assertIn("linear-gradient(180deg, #141c25", style)
+        self.assertIn(".sidebar-link.active::before", style)
+        self.assertIn("background: #e44c42;", style)
 
     def test_login_has_isolated_responsive_layout_and_accessible_fields(self):
         login = read("templates/login.html")
