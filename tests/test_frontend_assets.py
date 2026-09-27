@@ -47,7 +47,7 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertIn("transform: scaleX(1);", style)
         self.assertIn("linear-gradient(180deg, #141c25", style)
         self.assertIn(".sidebar-link.active::before", style)
-        self.assertIn("background: #e44c42;", style)
+        self.assertNotIn(".logo::before", style)
 
     def test_login_has_isolated_responsive_layout_and_accessible_fields(self):
         login = read("templates/login.html")

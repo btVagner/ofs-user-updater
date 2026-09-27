@@ -438,16 +438,6 @@ body.login-page {
     text-decoration: none;
 }
 
-.logo::before {
-    content: "";
-    width: 7px;
-    height: 7px;
-    margin-right: 8px;
-    border-radius: 50%;
-    background: #e44c42;
-    box-shadow: 0 0 0 4px rgba(228, 76, 66, 0.1);
-}
-
 .sidebar-logo-subtitle {
     display: block;
     margin-top: 5px;
@@ -3478,12 +3468,6 @@ html.sidebar-collapsed .sidebar-logo .logo {
     white-space: nowrap;
     font-size: 0;
     justify-content: center;
-}
-
-html.sidebar-collapsed .sidebar-logo .logo::before {
-    width: 8px;
-    height: 8px;
-    margin: 9px 0 0;
 }
 
 html.sidebar-collapsed .sidebar-logo-subtitle,
