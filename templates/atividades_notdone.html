@@ -13,12 +13,16 @@
   <div class="page-atividades">
 
     <div class="page-header">
-      <h2>Atividades (Improdutivas)</h2>
+      <div class="page-header-copy">
+        <span class="page-eyebrow">Acompanhamento operacional</span>
+        <h2>Atividades improdutivas</h2>
+        <p>Consulte as ocorrências pendentes e acompanhe as tratativas já realizadas.</p>
+      </div>
 
       <div class="kpis">
-        <span class="kpi">Total: <b id="kpiTotal">{{ total }}</b></span>
-        <span class="kpi">Pendentes: <b id="kpiPendentes">{{ pendentes }}</b></span>
-        <span class="kpi">Tratados: <b id="kpiTratados">{{ tratados }}</b></span>
+        <span class="kpi kpi-total">Total <b id="kpiTotal">{{ total }}</b></span>
+        <span class="kpi kpi-pending">Pendentes <b id="kpiPendentes">{{ pendentes }}</b></span>
+        <span class="kpi kpi-treated">Tratados <b id="kpiTratados">{{ tratados }}</b></span>
 
         <button type="button" id="btnExportacao" class="btn-secondary">
           Exportação
@@ -49,23 +53,27 @@
     {% endwith %}
 
     <div class="filtro-card">
+      <div class="filter-card-heading">
+        <strong>Período e escopo</strong>
+        <span>Defina os dados que serão consultados e atualizados.</span>
+      </div>
 
       <form method="GET"
         action="{{ url_for('atividades_notdone' if view_mode == 'pendentes' else 'atividades_notdone_tratadas') }}"
         class="filtro-form">
         <div>
-          <label>De</label>
-          <input type="date" name="dateFrom" value="{{ date_from }}">
+          <label for="notdoneDateFrom">De</label>
+          <input id="notdoneDateFrom" type="date" name="dateFrom" value="{{ date_from }}">
         </div>
 
         <div>
-          <label>Até</label>
-          <input type="date" name="dateTo" value="{{ date_to }}">
+          <label for="notdoneDateTo">Até</label>
+          <input id="notdoneDateTo" type="date" name="dateTo" value="{{ date_to }}">
         </div>
 
         <div>
-          <label>Recurso Pai</label>
-          <input type="text" name="resources" value="{{ resources }}" placeholder="MG">
+          <label for="notdoneResources">Recurso pai</label>
+          <input id="notdoneResources" type="text" name="resources" value="{{ resources }}" placeholder="Ex.: MG">
         </div>
 
         <button type="submit" class="btn-secondary">Filtrar dados para a API</button>
@@ -126,7 +134,7 @@
               </th>
               {% endif %}
 
-              <th style="width:150px;">Ações</th>
+              <th class="col-actions">Ações</th>
             </tr>
           </thead>
 
@@ -255,7 +263,7 @@
         </div>
 
         <div>
-          <label>Códigoda OS</label>
+          <label>Código da OS</label>
           <input id="m_apptNumber" readonly>
         </div>
 
@@ -305,7 +313,7 @@
         </div>
       </div>
 
-      <div class="modal-grid" style="margin-top:15px;">
+      <div class="modal-grid modal-grid-treatment">
         <div>
           <label>Tratativa</label>
           <input id="m_tratativa_status" readonly>
