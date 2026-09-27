@@ -43,7 +43,7 @@ def test_monitor_activity_fields_are_preserved_in_read_model_normalization():
         "timeSlot": "08:00-12:00",
         "XA_CLI_ATRI": "1",
         "customerName": "Cliente teste",
-        "state": "sp",
+        "stateProvince": "sp",
     })
     assert row["record_type"] == "regular"
     assert row["start_time"] == datetime(2026, 9, 25, 9, 15)
@@ -52,7 +52,7 @@ def test_monitor_activity_fields_are_preserved_in_read_model_normalization():
     assert row["is_black"] is True
     assert row["customer_name"] == "Cliente teste"
     assert row["customer_state"] == "sp"
-    assert {"recordType", "duration", "timeSlot", "XA_CLI_ATRI", "state"}.issubset(ACTIVITY_FIELDS)
+    assert {"recordType", "duration", "timeSlot", "XA_CLI_ATRI", "stateProvince"}.issubset(ACTIVITY_FIELDS)
 
 
 def test_operational_day_uses_application_timezone_instead_of_utc_host(monkeypatch):
@@ -314,7 +314,7 @@ def test_activity_event_preserves_customer_state_from_partial_changes():
         "eventType": "activityStarted",
         "time": "2026-08-26 12:00:00",
         "activityDetails": {"activityId": 7, "resourceId": "T1", "date": "2026-08-26"},
-        "activityChanges": {"state": "RS"},
+        "activityChanges": {"stateProvince": "RS"},
     })
     assert op["customer_state"] == "RS"
 

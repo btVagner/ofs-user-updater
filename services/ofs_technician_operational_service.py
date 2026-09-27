@@ -65,7 +65,7 @@ ACTIVITY_FIELDS = (
     "timeSlot",
     "resourceTimeZoneIANA",
     "customerName",
-    "state",
+    "stateProvince",
     "XA_CLI_ATRI",
 )
 CURSOR_KEY = "technician_monitor"
@@ -340,7 +340,7 @@ def normalize_activity(item: dict, *, reconciled_at: Optional[datetime] = None) 
         "time_slot": _clean(item.get("timeSlot")),
         "is_black": bool(_parse_optional_bool(item.get("XA_CLI_ATRI"))),
         "customer_name": _clean(item.get("customerName")),
-        "customer_state": _clean(item.get("state")),
+        "customer_state": _clean(item.get("stateProvince") or item.get("state")),
         "resource_timezone_iana": _clean(item.get("resourceTimeZoneIANA")),
         "last_event_at": None,
         "last_event_type": None,
@@ -456,7 +456,10 @@ def parse_activity_event(event: dict) -> Optional[dict]:
             changes.get("XA_CLI_ATRI") if "XA_CLI_ATRI" in changes else details.get("XA_CLI_ATRI")
         ),
         "customer_name": _clean(changes.get("customerName") or details.get("customerName")),
-        "customer_state": _clean(changes.get("state") or details.get("state")),
+        "customer_state": _clean(
+            changes.get("stateProvince") or details.get("stateProvince")
+            or changes.get("state") or details.get("state")
+        ),
         "resource_timezone_iana": _clean(changes.get("resourceTimeZoneIANA") or details.get("resourceTimeZoneIANA")),
     }
 
