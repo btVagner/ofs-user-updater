@@ -312,6 +312,7 @@ document.addEventListener("DOMContentLoaded", function () {
     resetPhoneField();
     setVal("m_customerName", a.customerName);
     setVal("m_city", a.city);
+    setVal("m_stateProvince", a.stateProvince);
     setVal("m_bucket", a.XA_ORIGIN_BUCKET);
     setVal("m_date", a.date);
     setVal("m_tskNot", a.XA_TSK_NOT);

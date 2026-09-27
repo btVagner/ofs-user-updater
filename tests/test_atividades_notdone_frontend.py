@@ -18,6 +18,20 @@ def test_notdone_page_preserves_both_operational_views_and_actions():
     assert "Finalizar tratativa" in template
 
 
+def test_notdone_page_exposes_server_side_state_filter_in_both_views():
+    template = read("templates/atividades_notdone.html")
+    javascript = read("static/js/atividades_notdone.js")
+
+    assert 'id="notdoneState"' in template
+    assert 'name="state"' in template
+    assert 'data-col="state">UF' in template
+    assert template.index('data-col="bucket"') < template.index('data-col="state">UF')
+    assert 'class="td-state"' in template
+    assert 'id="m_stateProvince"' in template
+    assert 'setVal("m_stateProvince", a.stateProvince);' in javascript
+    assert "state=state_filter or none" in template
+
+
 def test_notdone_page_has_clear_hierarchy_and_accessible_filters():
     template = read("templates/atividades_notdone.html")
 
@@ -41,3 +55,4 @@ def test_notdone_styles_cover_modal_table_and_responsive_states():
     assert ".pagination-wrap" in css
     assert "@media (max-width: 640px)" in css
     assert "@media (prefers-reduced-motion: reduce)" in css
+    assert ".td-state" in css

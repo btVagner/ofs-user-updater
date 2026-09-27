@@ -15,6 +15,12 @@ from core.utils import xlsx_auto_width
 
 PER_PAGE = 300
 
+BRAZIL_STATE_CODES = (
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
+    "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+)
+BRAZIL_STATE_CODE_SET = frozenset(BRAZIL_STATE_CODES)
+
 TIPOS_DESCONSIDERADOS = {
     "RET",
     "APR",
@@ -28,6 +34,68 @@ TIPOS_DESCONSIDERADOS = {
 }
 
 
+def normalize_state_value(value):
+    normalized = str(value or "").strip().upper()
+    return normalized[:64] or None
+
+
+def normalize_state_filter(value):
+    normalized = normalize_state_value(value)
+    return normalized if normalized in BRAZIL_STATE_CODE_SET else ""
+
+
+NOTDONE_SOURCE_UPSERT_SQL = """
+    INSERT INTO ofs_atividades_notdone
+    (
+        activity_id,
+        activity_type,
+        city,
+        state_province,
+        customer_number,
+        customer_phone,
+        customer_name,
+        appt_number,
+        origin_bucket,
+        tsk_not,
+        ser_clo_imp_ada,
+        resource_id,
+        date
+    )
+    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    ON DUPLICATE KEY UPDATE
+        activity_type = COALESCE(VALUES(activity_type), activity_type),
+        city = COALESCE(VALUES(city), city),
+        state_province = COALESCE(VALUES(state_province), state_province),
+        customer_number = COALESCE(VALUES(customer_number), customer_number),
+        customer_phone = COALESCE(VALUES(customer_phone), customer_phone),
+        customer_name = COALESCE(VALUES(customer_name), customer_name),
+        appt_number = COALESCE(VALUES(appt_number), appt_number),
+        origin_bucket = COALESCE(VALUES(origin_bucket), origin_bucket),
+        tsk_not = COALESCE(VALUES(tsk_not), tsk_not),
+        ser_clo_imp_ada = COALESCE(VALUES(ser_clo_imp_ada), ser_clo_imp_ada),
+        resource_id = COALESCE(VALUES(resource_id), resource_id),
+        `date` = COALESCE(VALUES(`date`), `date`)
+"""
+
+
+def build_notdone_source_values(activity):
+    return (
+        str(activity.get("activityId") or "").strip(),
+        str(activity.get("activityType") or "").strip().upper() or None,
+        str(activity.get("city") or "") or None,
+        normalize_state_value(activity.get("stateProvince") or activity.get("state")),
+        str(activity.get("customerNumber") or "") or None,
+        str(activity.get("customerPhone") or "") or None,
+        str(activity.get("customerName") or "") or None,
+        str(activity.get("apptNumber") or "") or None,
+        str(activity.get("XA_ORIGIN_BUCKET") or "") or None,
+        activity.get("XA_TSK_NOT"),
+        str(activity.get("XA_SER_CLO_IMP_ADA") or "") or None,
+        str(activity.get("resourceId") or "") or None,
+        str(activity.get("date") or "") or None,
+    )
+
+
 def init_app(app):
 
     def _parse_period():
@@ -35,6 +103,7 @@ def init_app(app):
         date_from = (request.args.get("dateFrom") or today).strip()
         date_to = (request.args.get("dateTo") or today).strip()
         resources = (request.args.get("resources") or "MG").strip()
+        state_filter = normalize_state_filter(request.args.get("state"))
 
         try:
             dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
@@ -61,20 +130,25 @@ def init_app(app):
         if page < 1:
             page = 1
 
-        return date_from, date_to, resources, page
+        return date_from, date_to, resources, state_filter, page
 
-    def _get_kpis(date_from, date_to):
+    def _get_kpis(date_from, date_to, state_filter):
         conn = get_connection()
         cur = conn.cursor(dictionary=True)
         try:
-            cur.execute("""
+            state_sql = " AND state_province = %s" if state_filter else ""
+            params = [date_from, date_to]
+            if state_filter:
+                params.append(state_filter)
+            cur.execute(f"""
                 SELECT
                     COUNT(*) AS total,
                     SUM(CASE WHEN tratado_em IS NULL THEN 1 ELSE 0 END) AS pendentes,
                     SUM(CASE WHEN tratado_em IS NOT NULL THEN 1 ELSE 0 END) AS tratados
                 FROM ofs_atividades_notdone
                 WHERE `date` BETWEEN %s AND %s
-            """, (date_from, date_to))
+                  {state_sql}
+            """, tuple(params))
             row = cur.fetchone() or {}
             return {
                 "total": int(row.get("total") or 0),
@@ -85,8 +159,12 @@ def init_app(app):
             cur.close()
             conn.close()
 
-    def _get_items(date_from, date_to, page, view_mode):
+    def _get_items(date_from, date_to, state_filter, page, view_mode):
         where_status = "tratado_em IS NULL" if view_mode == "pendentes" else "tratado_em IS NOT NULL"
+        state_sql = " AND state_province = %s" if state_filter else ""
+        filter_params = [date_from, date_to]
+        if state_filter:
+            filter_params.append(state_filter)
         offset = (page - 1) * PER_PAGE
 
         conn = get_connection()
@@ -98,7 +176,8 @@ def init_app(app):
                 FROM ofs_atividades_notdone
                 WHERE `date` BETWEEN %s AND %s
                   AND {where_status}
-            """, (date_from, date_to))
+                  {state_sql}
+            """, tuple(filter_params))
             total_items = int((cur.fetchone() or {}).get("total_items") or 0)
 
             total_pages = max(1, ceil(total_items / PER_PAGE)) if total_items else 1
@@ -113,6 +192,7 @@ def init_app(app):
                     activity_id AS activityId,
                     activity_type AS activityType,
                     city,
+                    state_province AS stateProvince,
                     customer_number AS customerNumber,
                     customer_name AS customerName,
                     appt_number AS apptNumber,
@@ -128,9 +208,10 @@ def init_app(app):
                 FROM ofs_atividades_notdone
                 WHERE `date` BETWEEN %s AND %s
                   AND {where_status}
+                  {state_sql}
                 ORDER BY {order_sql}
                 LIMIT %s OFFSET %s
-            """, (date_from, date_to, PER_PAGE, offset))
+            """, tuple(filter_params + [PER_PAGE, offset]))
             items = cur.fetchall()
 
             return items, total_items, total_pages, page
@@ -138,19 +219,22 @@ def init_app(app):
             cur.close()
             conn.close()
 
-    def _build_page_url(endpoint_name, page, date_from, date_to, resources):
+    def _build_page_url(endpoint_name, page, date_from, date_to, resources, state_filter):
         return url_for(
             endpoint_name,
             page=page,
             dateFrom=date_from,
             dateTo=date_to,
             resources=resources,
+            state=state_filter or None,
         )
 
     def _render_atividades_notdone(view_mode):
-        date_from, date_to, resources, page = _parse_period()
-        kpis = _get_kpis(date_from, date_to)
-        items, total_items, total_pages, current_page = _get_items(date_from, date_to, page, view_mode)
+        date_from, date_to, resources, state_filter, page = _parse_period()
+        kpis = _get_kpis(date_from, date_to, state_filter)
+        items, total_items, total_pages, current_page = _get_items(
+            date_from, date_to, state_filter, page, view_mode
+        )
 
         endpoint_name = "atividades_notdone" if view_mode == "pendentes" else "atividades_notdone_tratadas"
 
@@ -158,10 +242,14 @@ def init_app(app):
         next_page_url = None
 
         if current_page > 1:
-            prev_page_url = _build_page_url(endpoint_name, current_page - 1, date_from, date_to, resources)
+            prev_page_url = _build_page_url(
+                endpoint_name, current_page - 1, date_from, date_to, resources, state_filter
+            )
 
         if current_page < total_pages:
-            next_page_url = _build_page_url(endpoint_name, current_page + 1, date_from, date_to, resources)
+            next_page_url = _build_page_url(
+                endpoint_name, current_page + 1, date_from, date_to, resources, state_filter
+            )
 
         return render_template(
             "atividades_notdone.html",
@@ -169,6 +257,8 @@ def init_app(app):
             date_from=date_from,
             date_to=date_to,
             resources=resources,
+            state_filter=state_filter,
+            state_options=BRAZIL_STATE_CODES,
             total=kpis["total"],
             tratados=kpis["tratados"],
             pendentes=kpis["pendentes"],
@@ -189,35 +279,41 @@ def init_app(app):
         date_from = (request.form.get("dateFrom") or "").strip()
         date_to = (request.form.get("dateTo") or "").strip()
         current_view = (request.form.get("currentView") or "pendentes").strip().lower()
+        state_filter = normalize_state_filter(request.form.get("state"))
 
         redirect_endpoint = "atividades_notdone_tratadas" if current_view == "tratadas" else "atividades_notdone"
 
         if tipo not in {"clientes", "tratativas"}:
             flash("Tipo de exportação inválido.", "danger")
-            return redirect(url_for(redirect_endpoint))
+            return redirect(url_for(redirect_endpoint, state=state_filter or None))
 
         try:
             dt_from = datetime.strptime(date_from, "%Y-%m-%d").date()
             dt_to = datetime.strptime(date_to, "%Y-%m-%d").date()
         except Exception:
             flash("Informe um período válido (De / Até).", "danger")
-            return redirect(url_for(redirect_endpoint))
+            return redirect(url_for(redirect_endpoint, state=state_filter or None))
 
         if dt_to < dt_from:
             flash("O campo 'Até' não pode ser menor que 'De'.", "danger")
-            return redirect(url_for(redirect_endpoint))
+            return redirect(url_for(redirect_endpoint, state=state_filter or None))
 
         conn = get_connection()
         cur = conn.cursor(dictionary=True)
 
         try:
             if tipo == "clientes":
-                cur.execute("""
+                state_sql = " AND state_province = %s" if state_filter else ""
+                params = [date_from, date_to]
+                if state_filter:
+                    params.append(state_filter)
+                cur.execute(f"""
                     SELECT
                         activity_id,
                         activity_type,
                         `date`,
                         city,
+                        state_province,
                         customer_number,
                         customer_phone,
                         customer_name,
@@ -231,14 +327,15 @@ def init_app(app):
                         created_at
                     FROM ofs_atividades_notdone
                     WHERE `date` BETWEEN %s AND %s
+                      {state_sql}
                     ORDER BY `date` ASC, created_at DESC
-                """, (date_from, date_to))
+                """, tuple(params))
 
                 rows = cur.fetchall()
 
                 sheet_name = "Clientes"
                 headers = [
-                    "activity_id", "activity_type", "date", "city",
+                    "activity_id", "activity_type", "date", "city", "state_province",
                     "customer_number", "customer_phone", "customer_name",
                     "appt_number", "origin_bucket",
                     "ser_clo_imp_ada", "resource_id",
@@ -246,11 +343,16 @@ def init_app(app):
                 ]
 
             else:
-                cur.execute("""
+                state_sql = " AND n.state_province = %s" if state_filter else ""
+                params = [f"{dt_from} 00:00:00", f"{dt_to} 23:59:59"]
+                if state_filter:
+                    params.append(state_filter)
+                cur.execute(f"""
                     SELECT
                         h.id AS history_id,
                         h.activity_id,
                         n.activity_type,
+                        n.state_province,
                         n.customer_name,
                         n.customer_number,
                         n.appt_number,
@@ -263,14 +365,15 @@ def init_app(app):
                     LEFT JOIN ofs_atividades_notdone n
                       ON n.activity_id = h.activity_id
                     WHERE h.created_at BETWEEN %s AND %s
+                      {state_sql}
                     ORDER BY h.created_at DESC
-                """, (f"{dt_from} 00:00:00", f"{dt_to} 23:59:59"))
+                """, tuple(params))
 
                 rows = cur.fetchall()
 
                 sheet_name = "Tratativas"
                 headers = [
-                    "history_id", "activity_id", "activity_type",
+                    "history_id", "activity_id", "activity_type", "state_province",
                     "customer_name", "customer_number", "appt_number",
                     "action", "status", "obs", "actor_username", "created_at"
                 ]
@@ -311,6 +414,7 @@ def init_app(app):
                     "date_from": str(dt_from),
                     "date_to": str(dt_to),
                     "current_view": current_view,
+                    "state": state_filter or None,
                     "total_rows": len(rows),
                     "filename": filename,
                 },
@@ -346,6 +450,7 @@ def init_app(app):
         date_to = (request.form.get("dateTo") or today).strip()
         resources = (request.form.get("resources") or "MG").strip()
         current_view = (request.form.get("currentView") or "pendentes").strip().lower()
+        state_filter = normalize_state_filter(request.form.get("state"))
 
         redirect_endpoint = "atividades_notdone_tratadas" if current_view == "tratadas" else "atividades_notdone"
 
@@ -355,6 +460,7 @@ def init_app(app):
             "activityId",
             "activityType",
             "city",
+            "stateProvince",
             "customerNumber",
             "customerName",
             "customerPhone",
@@ -396,33 +502,21 @@ def init_app(app):
                 page += 1
         except Exception as e:
             flash(f"❌ Falha ao importar da API: {e}", "danger")
-            return redirect(url_for(redirect_endpoint, dateFrom=date_from, dateTo=date_to, resources=resources))
+            return redirect(url_for(
+                redirect_endpoint,
+                dateFrom=date_from,
+                dateTo=date_to,
+                resources=resources,
+                state=state_filter or None,
+            ))
 
         conn = get_connection()
         cur = conn.cursor()
 
         inserted = 0
-        skipped = 0
+        updated = 0
+        unchanged = 0
         ignored_types = 0
-
-        sql = """
-            INSERT IGNORE INTO ofs_atividades_notdone
-            (
-                activity_id,
-                activity_type,
-                city,
-                customer_number,
-                customer_phone,
-                customer_name,
-                appt_number,
-                origin_bucket,
-                tsk_not,
-                ser_clo_imp_ada,
-                resource_id,
-                date
-            )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """
 
         for a in items:
             activity_id = str(a.get("activityId") or "").strip()
@@ -435,34 +529,30 @@ def init_app(app):
                 ignored_types += 1
                 continue
 
-            cur.execute(sql, (
-                activity_id,
-                activity_type or None,
-                str(a.get("city") or "") or None,
-                str(a.get("customerNumber") or "") or None,
-                str(a.get("customerPhone") or "") or None,
-                str(a.get("customerName") or "") or None,
-                str(a.get("apptNumber") or "") or None,
-                str(a.get("XA_ORIGIN_BUCKET") or "") or None,
-                a.get("XA_TSK_NOT"),
-                str(a.get("XA_SER_CLO_IMP_ADA") or "") or None,
-                str(a.get("resourceId") or "") or None,
-                str(a.get("date") or "") or None,
-            ))
+            cur.execute(NOTDONE_SOURCE_UPSERT_SQL, build_notdone_source_values(a))
             if cur.rowcount == 1:
                 inserted += 1
+            elif cur.rowcount == 2:
+                updated += 1
             else:
-                skipped += 1
+                unchanged += 1
 
         conn.commit()
         cur.close()
         conn.close()
 
         flash(
-            f"✅ Importação concluída. Novos: {inserted} | Já existiam: {skipped} | Desconsiderados por tipo: {ignored_types}",
+            f"✅ Importação concluída. Novos: {inserted} | Atualizados: {updated} | "
+            f"Sem alteração: {unchanged} | Desconsiderados por tipo: {ignored_types}",
             "success"
         )
-        return redirect(url_for(redirect_endpoint, dateFrom=date_from, dateTo=date_to, resources=resources))
+        return redirect(url_for(
+            redirect_endpoint,
+            dateFrom=date_from,
+            dateTo=date_to,
+            resources=resources,
+            state=state_filter or None,
+        ))
 
     @app.route("/atividades-notdone/tratar", methods=["POST"])
     @login_required
@@ -582,6 +672,7 @@ def init_app(app):
                 activity_id AS activityId,
                 activity_type AS activityType,
                 city,
+                state_province AS stateProvince,
                 customer_number AS customerNumber,
                 customer_name AS customerName,
                 appt_number AS apptNumber,

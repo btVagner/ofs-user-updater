@@ -278,7 +278,7 @@ html[data-theme="dark"] body[data-view-mode] .modal-top h3 {
 
 .filtro-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(125px, 1fr)) auto;
+  grid-template-columns: repeat(4, minmax(105px, 1fr)) auto;
   align-items: end;
   gap: 12px;
   min-width: 0;
@@ -490,7 +490,7 @@ textarea:focus-visible {
 
 .tabela-atividades {
   width: 100%;
-  min-width: 860px;
+  min-width: 920px;
   border-collapse: separate;
   border-spacing: 0;
   color: var(--notdone-text);
@@ -553,6 +553,16 @@ textarea:focus-visible {
 .td-tratativa-status {
   color: var(--notdone-success) !important;
   font-weight: 700;
+}
+
+.td-state {
+  color: var(--notdone-accent-ink) !important;
+  font-weight: 800;
+  text-align: center !important;
+}
+
+.tabela-atividades th[data-col="state"] {
+  text-align: center;
 }
 
 .empty-row {

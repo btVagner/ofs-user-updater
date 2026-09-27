@@ -31,12 +31,12 @@
         <div class="kpis-break"></div>
 
         <div class="view-switch">
-          <a href="{{ url_for('atividades_notdone', dateFrom=date_from, dateTo=date_to, resources=resources) }}"
+          <a href="{{ url_for('atividades_notdone', dateFrom=date_from, dateTo=date_to, resources=resources, state=state_filter or none) }}"
             class="view-switch-btn {% if view_mode == 'pendentes' %}active{% endif %}">
             Pendentes
           </a>
 
-          <a href="{{ url_for('atividades_notdone_tratadas', dateFrom=date_from, dateTo=date_to, resources=resources) }}"
+          <a href="{{ url_for('atividades_notdone_tratadas', dateFrom=date_from, dateTo=date_to, resources=resources, state=state_filter or none) }}"
             class="view-switch-btn {% if view_mode == 'tratadas' %}active{% endif %}">
             Tratadas
           </a>
@@ -76,6 +76,16 @@
           <input id="notdoneResources" type="text" name="resources" value="{{ resources }}" placeholder="Ex.: MG">
         </div>
 
+        <div>
+          <label for="notdoneState">Estado (UF)</label>
+          <select id="notdoneState" name="state" class="form-control">
+            <option value="">Todas as UFs</option>
+            {% for state_code in state_options %}
+            <option value="{{ state_code }}" {% if state_filter == state_code %}selected{% endif %}>{{ state_code }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
         <button type="submit" class="btn-secondary">Filtrar dados para a API</button>
       </form>
 
@@ -83,6 +93,7 @@
         <input type="hidden" name="dateFrom" value="{{ date_from }}">
         <input type="hidden" name="dateTo" value="{{ date_to }}">
         <input type="hidden" name="resources" value="{{ resources }}">
+        <input type="hidden" name="state" value="{{ state_filter }}">
         <input type="hidden" name="currentView" value="{{ view_mode }}">
 
         <button type="submit" class="btn-primary">
@@ -99,7 +110,7 @@
 
     <div class="tabela-card">
       <div class="tabela-container">
-        <table class="tabela-atividades" data-empty-colspan="{{ 8 if view_mode == 'tratadas' else 6 }}">
+        <table class="tabela-atividades" data-empty-colspan="{{ 9 if view_mode == 'tratadas' else 7 }}">
           <thead>
             <tr>
               <th data-col="cliente">
@@ -114,6 +125,7 @@
                 Bucket
                 <button type="button" class="th-filter-btn" data-col="bucket">▾</button>
               </th>
+              <th data-col="state">UF</th>
               <th data-col="activitytype">
                 Tipo Atividade
                 <button type="button" class="th-filter-btn" data-col="activitytype">▾</button>
@@ -145,6 +157,7 @@
               <td data-col="cliente">{{ a.customerName or '-' }}</td>
               <td data-col="cidade">{{ a.city or '-' }}</td>
               <td data-col="bucket">{{ a.XA_ORIGIN_BUCKET or '-' }}</td>
+              <td data-col="state" class="td-state">{{ a.stateProvince or '-' }}</td>
               <td data-col="activitytype">{{ a.activityType or '-' }}</td>
               <td data-col="date">{{ a.date or '-' }}</td>
 
@@ -174,7 +187,7 @@
 
             {% if items|length == 0 %}
             <tr class="js-empty-row">
-              <td colspan="{{ 8 if view_mode == 'tratadas' else 6 }}" class="empty-row">
+              <td colspan="{{ 9 if view_mode == 'tratadas' else 7 }}" class="empty-row">
                 Nenhuma atividade encontrada.
               </td>
             </tr>
@@ -298,6 +311,11 @@
         </div>
 
         <div>
+          <label>Estado (UF)</label>
+          <input id="m_stateProvince" readonly>
+        </div>
+
+        <div>
           <label>Bucket de Origem</label>
           <input id="m_bucket" readonly>
         </div>
@@ -404,6 +422,7 @@
 
       <form method="POST" action="{{ url_for('atividades_notdone_exportar') }}">
         <input type="hidden" name="currentView" value="{{ view_mode }}">
+        <input type="hidden" name="state" value="{{ state_filter }}">
 
         <div class="modal-grid modal-grid-1">
           <div>
