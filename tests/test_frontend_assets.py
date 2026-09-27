@@ -62,6 +62,17 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertIn("@media (max-width: 760px)", login_css)
         self.assertIn("prefers-reduced-motion", login_css)
 
+    def test_reports_entry_cards_match_menu_card_density(self):
+        reports_css = read("static/css/relatorios.css")
+
+        self.assertIn(
+            "grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));",
+            reports_css,
+        )
+        self.assertIn("min-height: 210px;", reports_css)
+        self.assertIn("flex-direction: column;", reports_css)
+        self.assertIn('.report-main-btn::after {\n  content: "\\2192";', reports_css)
+
     def test_no_active_template_uses_datatables_or_legacy_users_table(self):
         template_text = "\n".join(
             path.read_text(encoding="utf-8-sig")
