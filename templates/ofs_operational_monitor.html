@@ -21,20 +21,7 @@
       </div>
     </header>
 
-    <section class="om-card om-controls" aria-labelledby="om-control-title">
-      <div class="om-mode-picker">
-        <h2 id="om-control-title">O que deseja consultar?</h2>
-        <p>Trocar de visão ou filtro não chama o OFS. Os resultados usam o mesmo snapshot compartilhado.</p>
-        <div class="om-mode-options" role="group" aria-label="Tipo de consulta">
-          <button type="button" class="is-active" data-mode="all" aria-pressed="true">Consultar tudo</button>
-          <button type="button" data-mode="late" aria-pressed="false">OS em alerta</button>
-          <button type="button" data-mode="idle" aria-pressed="false">Técnicos sem OS</button>
-          <button type="button" data-mode="notStarted" aria-pressed="false">Rotas não iniciadas</button>
-          <button type="button" data-mode="slot" aria-pressed="false">Fora do turno</button>
-          <button type="button" data-mode="black" aria-pressed="false">Clientes Black</button>
-        </div>
-      </div>
-
+    <section class="om-card om-controls" aria-label="Parâmetros e atualização do monitor">
       <div class="om-parameters">
         <label data-param="late">
           <span>Tolerância de duração (%)</span>
@@ -63,13 +50,13 @@
       </div>
     </section>
 
-    <section class="om-kpis" aria-label="Resumo operacional">
-      <article data-kpi-card="all"><span>Técnicos consultados</span><strong data-kpi="tech">—</strong><small>Recursos ativos da macro</small></article>
-      <article class="danger" data-kpi-card="late"><span>OS em alerta</span><strong data-kpi="late">—</strong><small>Em execução acima do limite</small></article>
-      <article class="warning" data-kpi-card="idle"><span>Técnicos sem OS</span><strong data-kpi="idle">—</strong><small>Rota ativa dentro da jornada</small></article>
-      <article class="violet" data-kpi-card="notStarted"><span>Rotas não iniciadas</span><strong data-kpi="notStarted">—</strong><small>Jornada iniciada e tolerância excedida</small></article>
-      <article class="danger" data-kpi-card="slot"><span>Fora do turno</span><strong data-kpi="slot">—</strong><small>Início igual ou posterior ao fim do turno</small></article>
-      <article class="warning" data-kpi-card="black"><span>Clientes Black</span><strong data-kpi="black">—</strong><small>XA_CLI_ATRI = 1 no dia</small></article>
+    <section class="om-kpis" aria-label="Visões do monitor operacional">
+      <button type="button" data-kpi-card="all" data-mode="all" aria-pressed="true" class="is-active"><span>Consultar tudo</span><strong data-kpi="tech">—</strong></button>
+      <button type="button" data-kpi-card="late" data-mode="late" aria-pressed="false"><span>OS em alerta</span><strong data-kpi="late">—</strong></button>
+      <button type="button" data-kpi-card="idle" data-mode="idle" aria-pressed="false"><span>Técnicos sem OS</span><strong data-kpi="idle">—</strong></button>
+      <button type="button" data-kpi-card="notStarted" data-mode="notStarted" aria-pressed="false"><span>Rotas não iniciadas</span><strong data-kpi="notStarted">—</strong></button>
+      <button type="button" data-kpi-card="slot" data-mode="slot" aria-pressed="false"><span>Fora do turno</span><strong data-kpi="slot">—</strong></button>
+      <button type="button" data-kpi-card="black" data-mode="black" aria-pressed="false"><span>Clientes Black</span><strong data-kpi="black">—</strong></button>
     </section>
 
     <nav class="om-tabs" role="tablist" aria-label="Visões operacionais" data-tabs>

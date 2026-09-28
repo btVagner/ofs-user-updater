@@ -264,9 +264,7 @@
     VIEW_KEYS.forEach((key) => {
       q(`[data-kpi="${key}"]`).textContent = state.payload ? counts[key].toLocaleString("pt-BR") : "—";
       q(`[data-count="${key}"]`).textContent = state.payload ? counts[key].toLocaleString("pt-BR") : "—";
-      q(`[data-kpi-card="${key}"]`).hidden = state.mode !== "all" && state.mode !== key;
     });
-    q('[data-kpi-card="all"]').hidden = state.mode !== "all";
     q("[data-tabs]").hidden = state.mode !== "all";
     qa("[data-param]").forEach((field) => { field.hidden = state.mode !== "all" && field.dataset.param !== state.mode; });
     q("[data-withdrawal-param]").hidden = !["all", "slot"].includes(state.mode);
