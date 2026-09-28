@@ -1,0 +1,70 @@
+{% set page_css_files = ['css/ofs_operational_monitor.css', 'css/ofs_operational_monitor_supervision.css'] %}
+{% include 'includes/head.html' %}
+<body>
+  {% include 'includes/navbar.html' %}
+  <main id="monitor-supervision" class="operational-monitor om-supervision" data-url="{{ url_for('ofs_operational_monitor_supervision_data') }}">
+    <header class="om-header">
+      <div><span class="om-kicker">Monitor operacional · supervisão</span><h1>Tratativas</h1>
+        <p>Acompanhe a atuação dos agentes e os casos em andamento. Dados locais do MySQL, sem consulta ao OFS.</p></div>
+      <a class="om-supervision-back" href="{{ url_for('ofs_operational_monitor_page') }}">Voltar ao monitor</a>
+    </header>
+    <section class="om-card om-supervision-filters" aria-label="Filtros de supervisão">
+      <label>Período
+        <select data-preset><option value="hour">1h</option><option value="six_hours">6h</option><option value="day">Último dia</option><option value="week">7 dias</option><option value="custom">Personalizado</option></select>
+      </label>
+      <label data-custom hidden>De <input type="date" data-start></label>
+      <label data-custom hidden>Até <input type="date" data-end></label>
+      <label>Ranking
+        <select data-top><option value="5">Top 5</option><option value="10">Top 10</option><option value="20">Top 20</option></select>
+      </label>
+      <button type="button" data-refresh>Atualizar dados</button>
+    </section>
+    <p class="om-supervision-message" data-message role="status" aria-live="polite">Carregando dados locais...</p>
+    <section class="om-supervision-summary" aria-label="Resumo das tratativas">
+      <article class="om-card om-supervision-metric">
+        <span>Resolvidas no período</span>
+        <strong data-total>—</strong>
+        <small data-period-label>Período selecionado</small>
+      </article>
+      <article class="om-card om-supervision-metric">
+        <span>Em análise agora</span>
+        <strong data-active-total>—</strong>
+        <small>Reservas vigentes, independentemente do período</small>
+      </article>
+      <article class="om-card om-supervision-metric">
+        <span>Aguardando hoje</span>
+        <strong data-waiting-total>—</strong>
+        <small data-work-date>Data operacional atual</small>
+      </article>
+    </section>
+    <section class="om-card om-supervision-panel om-supervision-active" aria-label="Casos em análise">
+      <div class="om-supervision-panel-head"><h2>Casos em análise</h2><span>Reservas vigentes · até 30 casos</span></div>
+      <div class="om-supervision-events" data-active></div>
+    </section>
+    <div class="om-supervision-grid">
+      <section class="om-card om-supervision-panel" aria-label="Ranking de resoluções">
+        <div class="om-supervision-panel-head"><h2>Resoluções por agente</h2><span data-ranking-label>Top 5 · período selecionado</span></div>
+        <ol data-ranking></ol>
+      </section>
+      <section class="om-card om-supervision-panel" aria-label="Atividade recente">
+        <div class="om-supervision-panel-head"><h2>Movimentações recentes</h2><span>Até 30 registros no período</span></div>
+        <div class="om-supervision-recent-filters">
+          <label>Ação
+            <select data-action>
+              <option value="">Todas as ações</option>
+              <option value="resolved">Resolvidas</option>
+              <option value="waiting">Aguardando</option>
+              <option value="open">Mantidas em aberto</option>
+            </select>
+          </label>
+          <label>Agente
+            <select data-agent><option value="">Todos os agentes</option></select>
+          </label>
+        </div>
+        <div class="om-supervision-events" data-recent></div>
+      </section>
+    </div>
+  </main>
+  <script defer src="{{ url_for('static', filename='js/ofs_operational_monitor_supervision.js') }}"></script>
+  {% include 'includes/footer.html' %}
+</body>

@@ -5,19 +5,15 @@
   if (!root) return;
 
   const VIEW_KEYS = ["late", "idle", "notStarted", "slot", "black"];
+  const ACTIVITY_TYPE_VIEWS = new Set(["late", "slot", "black"]);
+  const TREATABLE_VIEWS = new Set(["late", "idle", "notStarted", "slot"]);
+  const TREATMENT_LABELS = { open: "Em aberto", analysis: "Em análise", waiting: "Aguardando", resolved: "Resolvido" };
   const TITLES = {
     late: "OS em alerta",
     idle: "Técnicos sem OS",
     notStarted: "Rotas não iniciadas",
     slot: "Fora do turno",
     black: "Clientes Black",
-  };
-  const NOTES = {
-    late: "Status iniciado; tempo decorrido acima da duração acrescida da tolerância.",
-    idle: "Rota ativa, sem atividades reais pendentes, iniciadas ou em deslocamento e dentro da jornada conhecida.",
-    notStarted: "Técnicos ativos com jornada no dia, rota ainda não ativada e atraso acima do parâmetro.",
-    slot: "OS com início igual ou posterior ao fim do respectivo turno operacional.",
-    black: "OS do dia com XA_CLI_ATRI igual a 1, inclusive atividades finalizadas.",
   };
   const HEADERS = {
     late: ["OS / Atividade", "Técnico", "Área", "Tipo", "Início", "Duração prevista", "Tempo decorrido", "Limite", "Excesso", "Status"],
@@ -29,10 +25,19 @@
 
   const q = (selector) => root.querySelector(selector);
   const qa = (selector) => Array.from(root.querySelectorAll(selector));
+  const activityTypeSelect = q("[data-activity-type]");
+  // Durante um restart gradual, HTML antigo pode receber este asset novo.
+  // O monitor básico deve continuar carregando mesmo sem a UI de tratativas.
+  const treatmentUiReady = Boolean(
+    root.dataset.treatmentsUrl && root.dataset.claimUrl && root.dataset.changeUrl && root.dataset.csrf &&
+    q("[data-treatment-filter]") && q("[data-refresh-treatments]") && q("[data-treatment-dialog]")
+  );
+  const treatableView = (view) => treatmentUiReady && TREATABLE_VIEWS.has(view);
   const state = {
     mode: "all", view: "late", snapshot: null, payload: null, rows: {},
     selectedBuckets: new Set(), selectedStates: new Set(), knownStates: new Set(),
-    busy: false, timer: null,
+    busy: false, timer: null, treatments: new Map(), treatmentsLoaded: false,
+    treatmentRequestSerial: 0, activeTreatment: null, treatmentBusy: false, treatmentError: false,
   };
 
   function normalized(value) {
@@ -50,6 +55,24 @@
 
   function activityLabel(row) {
     return row.appt ? `${row.appt} · #${row.id}` : `#${row.id}`;
+  }
+
+  function itemKey(row, view) {
+    return String(["idle", "notStarted"].includes(view) ? row.resource_id : row.id);
+  }
+
+  function treatmentKey(row, view) {
+    return `${view}:${itemKey(row, view)}`;
+  }
+
+  function treatmentFor(row, view) {
+    return state.treatments.get(treatmentKey(row, view)) || { status: "open" };
+  }
+
+  function treatmentLabel(item) {
+    if (item.status === "analysis" && item.actor_username) return `Em análise · ${item.actor_username}`;
+    if (item.status === "resolved" && item.resolved_by_username) return `Resolvido · ${item.resolved_by_username}`;
+    return TREATMENT_LABELS[item.status] || "Em aberto";
   }
 
   function computeRows() {
@@ -93,14 +116,23 @@
   function currentRows() {
     const search = normalized(q("[data-search]").value);
     const status = q("[data-status]").value;
-    return (state.rows[state.view] || []).filter((row) => {
+    const activityType = activityTypeSelect && ACTIVITY_TYPE_VIEWS.has(state.view) ? activityTypeSelect.value : "";
+    const treatmentFilter = treatmentUiReady ? q("[data-treatment-filter]").value : "";
+    const rows = (state.rows[state.view] || []).filter((row) => {
       if (!rowStates(row).some((value) => state.selectedStates.has(value))) return false;
       if (state.selectedBuckets.size && !state.selectedBuckets.has(row.area)) return false;
+      if (activityType && String(row.type || "").trim() !== activityType) return false;
       if (status && normalized(row.status) !== status) return false;
+      if (treatableView(state.view) && treatmentFilter && treatmentFor(row, state.view).status !== treatmentFilter) return false;
       if (!search) return true;
       return [row.id, row.appt, row.tech, row.resource_id, row.area, row.type, row.status, row.time_slot, row.customer, ...rowStates(row)]
         .some((value) => normalized(value).includes(search));
     });
+    if (treatableView(state.view)) {
+      const order = { open: 0, waiting: 1, analysis: 2, resolved: 3 };
+      rows.sort((a, b) => (order[treatmentFor(a, state.view).status] ?? 0) - (order[treatmentFor(b, state.view).status] ?? 0));
+    }
+    return rows;
   }
 
   function rowStates(row) {
@@ -159,6 +191,22 @@
     select.disabled = options.length === 0;
   }
 
+  function renderActivityTypeOptions(rows, view) {
+    if (!activityTypeSelect) return;
+    const eligible = ACTIVITY_TYPE_VIEWS.has(view);
+    activityTypeSelect.hidden = !eligible;
+    if (!eligible) {
+      activityTypeSelect.value = "";
+      return;
+    }
+    const selected = activityTypeSelect.value;
+    const types = Array.from(new Set(rows.map((row) => String(row.type || "").trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+    activityTypeSelect.replaceChildren(new Option("Todos os tipos", ""), ...types.map((type) => new Option(type, type)));
+    if (types.includes(selected)) activityTypeSelect.value = selected;
+    activityTypeSelect.disabled = types.length === 0;
+  }
+
   function renderBucketOptions(options) {
     const available = new Set(options);
     state.selectedBuckets.forEach((value) => {
@@ -203,18 +251,20 @@
   function renderTable() {
     const view = state.view;
     q("[data-table-title]").textContent = TITLES[view];
-    q("[data-table-note]").textContent = NOTES[view] + (view === "slot" && q("[data-exclude-withdrawals]").checked ? " Retiradas excluídas." : "");
     qa("[data-view]").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
 
     const sourceRows = state.rows[view] || [];
     const buckets = Array.from(new Set(sourceRows.map((row) => row.area).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR"));
     const statuses = Array.from(new Set(sourceRows.map((row) => row.status).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
     renderBucketOptions(buckets);
+    renderActivityTypeOptions(sourceRows, view);
     replaceStatusOptions(q("[data-status]"), statuses);
+    if (treatmentUiReady) q("[data-treatment-filter]").hidden = !treatableView(view);
     const rows = currentRows();
 
     const headRow = document.createElement("tr");
-    HEADERS[view].forEach((title) => {
+    const headers = treatableView(view) ? ["Tratativa", "Ação", ...HEADERS[view]] : HEADERS[view];
+    headers.forEach((title) => {
       const th = document.createElement("th");
       th.textContent = title;
       headRow.appendChild(th);
@@ -226,7 +276,7 @@
     if (!state.payload || !rows.length) {
       const tr = document.createElement("tr");
       const td = document.createElement("td");
-      td.colSpan = HEADERS[view].length;
+      td.colSpan = headers.length;
       td.className = "om-empty";
       td.textContent = state.payload ? "Nenhum registro para os filtros e parâmetros atuais." : "Não há snapshot disponível para esta macro.";
       tr.appendChild(td);
@@ -235,10 +285,33 @@
       const fragment = document.createDocumentFragment();
       rows.slice(0, 150).forEach((item) => {
         const tr = document.createElement("tr");
+        const treatment = treatmentFor(item, view);
+        if (treatableView(view)) tr.classList.add(`om-treatment-${treatment.status}`);
+        if (treatableView(view)) {
+          const statusCell = document.createElement("td");
+          const badge = document.createElement("span");
+          badge.className = `om-treatment-badge om-treatment-badge-${treatment.status}`;
+          badge.textContent = treatmentLabel(treatment);
+          statusCell.appendChild(badge);
+          tr.appendChild(statusCell);
+          const actionCell = document.createElement("td");
+          if (root.dataset.canTreat === "true" && ["open", "waiting"].includes(treatment.status)) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "om-treat-button";
+            button.textContent = "Tratar";
+            button.disabled = !state.treatmentsLoaded || state.treatmentBusy;
+            button.addEventListener("click", () => claimTreatment(item, view));
+            actionCell.appendChild(button);
+          } else {
+            actionCell.textContent = "—";
+          }
+          tr.appendChild(actionCell);
+        }
         cells(item, view).forEach((value, index) => {
           const td = document.createElement("td");
           td.textContent = String(value == null ? "—" : value);
-          if ((view === "late" && index === 8) || (view === "slot" && index === 7) || (view === "notStarted" && index === 5)) td.classList.add("om-danger-text");
+          if (treatment.status !== "resolved" && ((view === "late" && index === 8) || (view === "slot" && index === 7) || (view === "notStarted" && index === 5))) td.classList.add("om-danger-text");
           tr.appendChild(td);
         });
         fragment.appendChild(tr);
@@ -246,7 +319,8 @@
       body.appendChild(fragment);
     }
     q("[data-shown]").textContent = `${rows.length.toLocaleString("pt-BR")} registro(s) filtrados · ${Math.min(rows.length, 150)} exibidos`;
-    q("[data-data-status]").textContent = state.payload ? "Snapshot compartilhado do MySQL" : "Sem snapshot";
+    q("[data-data-status]").textContent = state.payload ?
+      (!treatmentUiReady ? "Snapshot compartilhado do MySQL" : state.treatmentError ? "Tratativas indisponíveis" : state.treatmentsLoaded ? "Snapshot e tratativas do MySQL" : "Carregando tratativas...") : "Sem snapshot";
     q("[data-export]").disabled = !state.payload || state.busy;
   }
 
@@ -319,6 +393,9 @@
   function acceptSnapshot(snapshot) {
     state.snapshot = snapshot || {};
     state.payload = snapshot && snapshot.has_payload ? snapshot.payload : null;
+    state.treatmentsLoaded = false;
+    state.treatmentError = false;
+    state.treatments.clear();
     updateStatus();
     diagnostics();
     render();
@@ -326,6 +403,7 @@
     else if (!snapshot.has_payload) message("Ainda não há snapshot para esta macro. Quando a fonte local estiver sincronizada, use Atualizar snapshot local.", "warning");
     else if (snapshot.payload && snapshot.payload.diagnostics && snapshot.payload.diagnostics.data_complete === false) message("Snapshot carregado, mas uma ou mais fontes locais estão desatualizadas. Regras baseadas em ausência foram suprimidas para evitar falsos alertas.", "warning");
     else message("Dados carregados do snapshot compartilhado. Filtros, abas e exportação não geram chamadas ao OFS.");
+    if (state.payload && treatmentUiReady) loadTreatments();
   }
 
   async function readJson(response) {
@@ -334,17 +412,187 @@
     return body;
   }
 
+  async function loadTreatments() {
+    if (!treatmentUiReady || !state.payload) return;
+    const serial = ++state.treatmentRequestSerial;
+    try {
+      const scope = root.dataset.scope || "casa-cliente";
+      const response = await fetch(`${root.dataset.treatmentsUrl}?scope=${encodeURIComponent(scope)}`, {
+        headers: { Accept: "application/json" }, cache: "no-store",
+      });
+      const body = await readJson(response);
+      if (!response.ok || !body.ok) throw new Error((body.error && body.error.message) || "Falha ao atualizar tratativas.");
+      if (serial !== state.treatmentRequestSerial) return;
+      if (body.data.work_date !== state.payload.work_date ||
+          body.data.snapshot_refreshed_at !== state.snapshot.refreshed_at) {
+        // Uma tentativa de refresh pode falhar e preservar o payload do dia anterior.
+        // Recarregar o mesmo snapshot aqui criaria um ciclo sem fim de requests.
+        state.treatmentsLoaded = false;
+        state.treatmentError = true;
+        message("O snapshot exibido é anterior à fonte operacional atual. As tratativas ficam indisponíveis até um novo snapshot válido.", "warning");
+        renderTable();
+        return;
+      }
+      state.treatments = new Map((body.data.items || []).map((item) => [`${item.indicator}:${item.item_key}`, item]));
+      state.treatmentsLoaded = true;
+      const recovered = state.treatmentError;
+      state.treatmentError = false;
+      renderTable();
+      if (recovered) message("Tratativas locais sincronizadas novamente.");
+    } catch (error) {
+      if (serial !== state.treatmentRequestSerial) return;
+      state.treatmentsLoaded = false;
+      state.treatmentError = true;
+      message(error.message, "error");
+      renderTable();
+    }
+  }
+
+  async function postTreatment(url, payload) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json", "X-Monitor-CSRF": root.dataset.csrf },
+      body: JSON.stringify(Object.assign({ scope: root.dataset.scope || "casa-cliente" }, payload)),
+    });
+    const body = await readJson(response);
+    if (!response.ok || !body.ok) {
+      const error = new Error((body.error && body.error.message) || "Não foi possível salvar a tratativa.");
+      error.current = body.current;
+      throw error;
+    }
+    return body.data;
+  }
+
+  function treatmentIdentity(row, view) {
+    return { work_date: state.payload.work_date, indicator: view, item_key: itemKey(row, view) };
+  }
+
+  function updateLocalTreatment(item) {
+    if (!item) return;
+    // Uma resposta de polling anterior ao clique não pode restaurar estado velho.
+    state.treatmentRequestSerial += 1;
+    state.treatments.set(`${item.indicator}:${item.item_key}`, item);
+    state.treatmentsLoaded = true;
+    renderTable();
+  }
+
+  function renderTreatmentDetails(row, view) {
+    const details = q("[data-treatment-details]");
+    const entries = [
+      ["Visão", TITLES[view]],
+      [view === "idle" || view === "notStarted" ? "Técnico" : "OS / Atividade", view === "idle" || view === "notStarted" ? row.tech : activityLabel(row)],
+      ["Técnico / ID", `${row.tech || "—"} · ${row.resource_id || "—"}`],
+      ["Área", row.area],
+      ["UF", rowStates(row).join(", ")],
+    ];
+    if (view === "late") entries.push(["Início", row.start], ["Excesso", minutes(row.excess)]);
+    if (view === "idle") entries.push(["Turno", row.shift], ["Rota iniciada", row.route_start]);
+    if (view === "notStarted") entries.push(["Turno", row.shift], ["Atraso", minutes(row.late_minutes)]);
+    if (view === "slot") entries.push(["Turno", row.slot_label], ["Início da OS", row.start]);
+    entries.push(["Data operacional", state.payload.work_date]);
+    details.replaceChildren();
+    entries.forEach(([label, value]) => {
+      const wrap = document.createElement("div");
+      const dt = document.createElement("dt");
+      const dd = document.createElement("dd");
+      dt.textContent = label;
+      dd.textContent = value == null ? "—" : String(value);
+      wrap.append(dt, dd);
+      details.appendChild(wrap);
+    });
+  }
+
+  async function claimTreatment(row, view) {
+    if (!state.treatmentsLoaded || state.treatmentBusy || state.activeTreatment) return;
+    state.treatmentBusy = true;
+    renderTable();
+    const identity = treatmentIdentity(row, view);
+    try {
+      const data = await postTreatment(root.dataset.claimUrl, identity);
+      updateLocalTreatment(data.item);
+      state.activeTreatment = { ...identity, token: data.token };
+      renderTreatmentDetails(row, view);
+      q("[data-treatment-note]").value = data.item.note || "";
+      q("[data-treatment-feedback]").textContent = "Este caso está reservado para você enquanto o modal estiver aberto.";
+      q("[data-treatment-dialog]").showModal();
+    } catch (error) {
+      updateLocalTreatment(error.current);
+      message(error.message, "warning");
+      loadTreatments();
+    } finally {
+      state.treatmentBusy = false;
+      renderTable();
+    }
+  }
+
+  async function finishTreatment(action) {
+    if (!state.activeTreatment || state.treatmentBusy) return;
+    state.treatmentBusy = true;
+    qa("[data-treatment-action], [data-treatment-close]").forEach((button) => { button.disabled = true; });
+    const active = state.activeTreatment;
+    try {
+      const data = await postTreatment(root.dataset.changeUrl, {
+        ...active, action, note: q("[data-treatment-note]").value,
+      });
+      state.activeTreatment = null;
+      q("[data-treatment-dialog]").close();
+      updateLocalTreatment(data.item);
+      message(`Caso marcado como ${TREATMENT_LABELS[action].toLowerCase()}.`);
+      await loadTreatments();
+    } catch (error) {
+      updateLocalTreatment(error.current);
+      q("[data-treatment-feedback]").textContent = error.message;
+      if (error.current) {
+        state.activeTreatment = null;
+        q("[data-treatment-dialog]").close();
+        await loadTreatments();
+      }
+    } finally {
+      state.treatmentBusy = false;
+      qa("[data-treatment-action], [data-treatment-close]").forEach((button) => { button.disabled = false; });
+      renderTable();
+    }
+  }
+
+  async function releaseTreatment() {
+    const active = state.activeTreatment;
+    if (!active || state.treatmentBusy) return;
+    state.activeTreatment = null;
+    try {
+      const data = await postTreatment(root.dataset.changeUrl, { ...active, action: "release" });
+      updateLocalTreatment(data.item);
+    } catch (error) {
+      message(error.message, "warning");
+    } finally {
+      await loadTreatments();
+    }
+  }
+
+  async function renewTreatment() {
+    if (!state.activeTreatment || state.treatmentBusy || document.hidden) return;
+    try {
+      const data = await postTreatment(root.dataset.changeUrl, { ...state.activeTreatment, action: "renew" });
+      updateLocalTreatment(data.item);
+    } catch (error) {
+      state.activeTreatment = null;
+      q("[data-treatment-dialog]").close();
+      message(error.message, "warning");
+      loadTreatments();
+    }
+  }
+
   async function loadSnapshot() {
     state.busy = true;
     updateStatus();
     try {
       const scope = root.dataset.scope || "casa-cliente";
-      const response = await fetch(`${root.dataset.dataUrl}?scope=${encodeURIComponent(scope)}`, { headers: { Accept: "application/json" } });
+      const response = await fetch(`${root.dataset.dataUrl}?scope=${encodeURIComponent(scope)}`, { headers: { Accept: "application/json" }, cache: "no-store" });
       const body = await readJson(response);
       if (!response.ok || !body.ok) throw new Error((body.error && body.error.message) || "Não foi possível carregar o snapshot.");
       acceptSnapshot(body.data);
     } catch (error) {
       state.snapshot = null; state.payload = null;
+      state.treatmentsLoaded = false; state.treatments.clear();
       render();
       message(error.message, "error");
     } finally {
@@ -388,6 +636,8 @@
     q("[data-search]").value = "";
     state.selectedBuckets.clear();
     q("[data-status]").value = "";
+    if (activityTypeSelect) activityTypeSelect.value = "";
+    if (treatmentUiReady) q("[data-treatment-filter]").value = "";
     render();
   }
 
@@ -400,7 +650,13 @@
   function exportCsv() {
     if (!state.payload) return;
     const rows = currentRows();
-    const content = [HEADERS[state.view].map(escapeCsv).join(";"), ...rows.map((row) => cells(row, state.view).map(escapeCsv).join(";"))].join("\r\n");
+    const treatable = treatableView(state.view);
+    const headers = treatable ? ["Tratativa", "Responsável", ...HEADERS[state.view]] : HEADERS[state.view];
+    const content = [headers.map(escapeCsv).join(";"), ...rows.map((row) => {
+      const treatment = treatmentFor(row, state.view);
+      const values = treatable ? [TREATMENT_LABELS[treatment.status], treatment.resolved_by_username || treatment.actor_username || "", ...cells(row, state.view)] : cells(row, state.view);
+      return values.map(escapeCsv).join(";");
+    })].join("\r\n");
     const url = URL.createObjectURL(new Blob(["\ufeff" + content], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
@@ -416,8 +672,24 @@
   q("[data-exclude-withdrawals]").addEventListener("change", render);
   q("[data-search]").addEventListener("input", renderTable);
   q("[data-status]").addEventListener("change", renderTable);
+  if (activityTypeSelect) activityTypeSelect.addEventListener("change", renderTable);
+  if (treatmentUiReady) q("[data-treatment-filter]").addEventListener("change", renderTable);
   q("[data-refresh]").addEventListener("click", refreshSnapshot);
+  if (treatmentUiReady) q("[data-refresh-treatments]").addEventListener("click", loadTreatments);
   q("[data-export]").addEventListener("click", exportCsv);
+  if (treatmentUiReady) {
+    qa("[data-treatment-action]").forEach((button) => button.addEventListener("click", () => finishTreatment(button.dataset.treatmentAction)));
+    q("[data-treatment-close]").addEventListener("click", () => q("[data-treatment-dialog]").close());
+    q("[data-treatment-dialog]").addEventListener("cancel", (event) => { if (state.treatmentBusy) event.preventDefault(); });
+    q("[data-treatment-dialog]").addEventListener("close", releaseTreatment);
+    window.setInterval(() => { if (!document.hidden && state.payload && !state.activeTreatment) loadTreatments(); }, 45000);
+    window.setInterval(renewTreatment, 60000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      if (state.activeTreatment) renewTreatment();
+      else if (state.payload) loadTreatments();
+    });
+  }
 
   state.timer = window.setInterval(() => {
     if (!state.snapshot || !state.snapshot.expires_at) return;

@@ -7,6 +7,11 @@
   <main id="operational-monitor" class="operational-monitor fade-in"
     data-data-url="{{ url_for('ofs_operational_monitor_data') }}"
     data-refresh-url="{{ url_for('ofs_operational_monitor_refresh') }}"
+    data-treatments-url="{{ url_for('ofs_operational_monitor_treatments') }}"
+    data-claim-url="{{ url_for('ofs_operational_monitor_claim') }}"
+    data-change-url="{{ url_for('ofs_operational_monitor_change') }}"
+    data-can-treat="{{ 'true' if monitor_can_treat else 'false' }}"
+    data-csrf="{{ monitor_csrf }}"
     data-scope="casa-cliente">
     <header class="om-header">
       <div>
@@ -42,8 +47,10 @@
 
       <div class="om-actions">
         <button type="button" class="om-primary" data-refresh>Atualizar snapshot local</button>
+        <button type="button" class="om-secondary" data-refresh-treatments>Atualizar tratativas</button>
         <button type="button" class="om-secondary" data-export disabled>Exportar CSV</button>
         <span class="om-update-chip" data-last-update>Sem snapshot</span>
+        {% if monitor_can_supervise %}<a class="om-supervision-link" href="{{ url_for('ofs_operational_monitor_supervision_page') }}">Supervisão das tratativas</a>{% endif %}
       </div>
       <div class="om-message" role="status" aria-live="polite" data-message>
         Carregando o último snapshot compartilhado. Nenhuma chamada ao OFS é feita ao abrir esta tela.
@@ -77,14 +84,24 @@
 
     <section class="om-table-card">
       <header>
-        <div><h2 data-table-title>OS em alerta</h2><p data-table-note>Aguardando snapshot.</p></div>
+        <h2 data-table-title>OS em alerta</h2>
         <div class="om-table-tools">
-          <input type="search" placeholder="Filtrar ID, técnico, tipo ou área" aria-label="Filtrar resultados" data-search>
+          <input type="search" placeholder="Buscar ID, técnico ou área" aria-label="Filtrar resultados" data-search>
           <details class="om-bucket-filter" data-bucket-filter>
             <summary data-bucket-summary>Todos os buckets</summary>
             <div class="om-bucket-menu" data-bucket-options></div>
           </details>
+          <select aria-label="Filtrar por tipo de atividade" data-activity-type>
+            <option value="">Todos os tipos</option>
+          </select>
           <select aria-label="Filtrar por status" data-status><option value="">Todos os status</option></select>
+          <select aria-label="Filtrar por tratativa" data-treatment-filter>
+            <option value="">Todas as tratativas</option>
+            <option value="open">Em aberto</option>
+            <option value="analysis">Em análise</option>
+            <option value="waiting">Aguardando</option>
+            <option value="resolved">Resolvidas</option>
+          </select>
         </div>
       </header>
       <div class="om-table-scroll">
@@ -100,6 +117,23 @@
       <summary>Diagnóstico do snapshot e das fontes</summary>
       <pre data-diagnostics>Nenhum snapshot carregado.</pre>
     </details>
+
+    <dialog class="om-treatment-dialog" data-treatment-dialog aria-labelledby="om-treatment-title">
+      <div class="om-treatment-head">
+        <div><span class="om-kicker">Tratativa local</span><h2 id="om-treatment-title">Analisar caso</h2></div>
+        <button type="button" class="om-treatment-close" data-treatment-close aria-label="Fechar">×</button>
+      </div>
+      <dl class="om-treatment-details" data-treatment-details></dl>
+      <label class="om-treatment-note">Observação <span>(opcional, até 500 caracteres)</span>
+        <textarea maxlength="500" rows="3" data-treatment-note></textarea>
+      </label>
+      <p class="om-treatment-feedback" data-treatment-feedback role="status" aria-live="polite"></p>
+      <div class="om-treatment-actions">
+        <button type="button" class="om-secondary" data-treatment-action="open">Manter em aberto</button>
+        <button type="button" class="om-secondary" data-treatment-action="waiting">Aguardar</button>
+        <button type="button" class="om-primary" data-treatment-action="resolved">Resolvido</button>
+      </div>
+    </dialog>
   </main>
 
   <script defer src="{{ url_for('static', filename='js/ofs_operational_monitor.js') }}"></script>
