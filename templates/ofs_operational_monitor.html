@@ -91,10 +91,14 @@
             <summary data-bucket-summary>Todos os buckets</summary>
             <div class="om-bucket-menu" data-bucket-options></div>
           </details>
-          <select aria-label="Filtrar por tipo de atividade" data-activity-type>
-            <option value="">Todos os tipos</option>
-          </select>
-          <select aria-label="Filtrar por status" data-status><option value="">Todos os status</option></select>
+          <details class="om-bucket-filter om-activity-type-filter" data-activity-type-filter>
+            <summary data-activity-type-summary aria-label="Filtrar por tipo de atividade">Todos os tipos</summary>
+            <div class="om-bucket-menu om-activity-type-menu" data-activity-type-options role="group" aria-label="Selecionar tipos de atividade"></div>
+          </details>
+          <details class="om-bucket-filter om-status-filter" data-status-filter>
+            <summary data-status-summary aria-label="Filtrar por status">Todos os status</summary>
+            <div class="om-bucket-menu om-status-menu" data-status-options role="group" aria-label="Selecionar status"></div>
+          </details>
           <select aria-label="Filtrar por tratativa" data-treatment-filter>
             <option value="">Todas as tratativas</option>
             <option value="open">Em aberto</option>

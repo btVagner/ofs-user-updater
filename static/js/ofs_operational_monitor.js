@@ -25,7 +25,10 @@
 
   const q = (selector) => root.querySelector(selector);
   const qa = (selector) => Array.from(root.querySelectorAll(selector));
-  const activityTypeSelect = q("[data-activity-type]");
+  const activityTypeFilter = q("[data-activity-type-filter]");
+  const legacyActivityTypeSelect = q("select[data-activity-type]");
+  const statusFilter = q("[data-status-filter]");
+  const legacyStatusSelect = q("select[data-status]");
   // Durante um restart gradual, HTML antigo pode receber este asset novo.
   // O monitor básico deve continuar carregando mesmo sem a UI de tratativas.
   const treatmentUiReady = Boolean(
@@ -36,6 +39,8 @@
   const state = {
     mode: "all", view: "late", snapshot: null, payload: null, rows: {},
     selectedBuckets: new Set(), selectedStates: new Set(), knownStates: new Set(),
+    excludedStatusesByView: new Map(), statusOptionsByView: new Map(),
+    excludedActivityTypesByView: new Map(), activityTypeOptionsByView: new Map(),
     busy: false, timer: null, treatments: new Map(), treatmentsLoaded: false,
     treatmentRequestSerial: 0, activeTreatment: null, treatmentBusy: false, treatmentError: false,
   };
@@ -115,14 +120,21 @@
 
   function currentRows() {
     const search = normalized(q("[data-search]").value);
-    const status = q("[data-status]").value;
-    const activityType = activityTypeSelect && ACTIVITY_TYPE_VIEWS.has(state.view) ? activityTypeSelect.value : "";
+    const status = legacyStatusSelect && !statusFilter ? legacyStatusSelect.value : "";
+    const excludedStatuses = state.excludedStatusesByView.get(state.view) || new Set();
+    const hasStatusOptions = (state.statusOptionsByView.get(state.view) || []).length > 0;
+    const activityType = legacyActivityTypeSelect && !activityTypeFilter && ACTIVITY_TYPE_VIEWS.has(state.view)
+      ? legacyActivityTypeSelect.value : "";
+    const excludedActivityTypes = state.excludedActivityTypesByView.get(state.view) || new Set();
+    const hasActivityTypeOptions = (state.activityTypeOptionsByView.get(state.view) || []).length > 0;
     const treatmentFilter = treatmentUiReady ? q("[data-treatment-filter]").value : "";
     const rows = (state.rows[state.view] || []).filter((row) => {
       if (!rowStates(row).some((value) => state.selectedStates.has(value))) return false;
       if (state.selectedBuckets.size && !state.selectedBuckets.has(row.area)) return false;
       if (activityType && String(row.type || "").trim() !== activityType) return false;
+      if (activityTypeFilter && hasActivityTypeOptions && excludedActivityTypes.has(normalized(row.type))) return false;
       if (status && normalized(row.status) !== status) return false;
+      if (statusFilter && hasStatusOptions && excludedStatuses.has(normalized(row.status))) return false;
       if (treatableView(state.view) && treatmentFilter && treatmentFor(row, state.view).status !== treatmentFilter) return false;
       if (!search) return true;
       return [row.id, row.appt, row.tech, row.resource_id, row.area, row.type, row.status, row.time_slot, row.customer, ...rowStates(row)]
@@ -191,20 +203,100 @@
     select.disabled = options.length === 0;
   }
 
-  function renderActivityTypeOptions(rows, view) {
-    if (!activityTypeSelect) return;
-    const eligible = ACTIVITY_TYPE_VIEWS.has(view);
-    activityTypeSelect.hidden = !eligible;
-    if (!eligible) {
-      activityTypeSelect.value = "";
+  function prepareMultiOptions(rows, view, field, emptyLabel, optionsByView, excludedByView) {
+    const values = new Map();
+    rows.forEach((row) => {
+      const label = String(row[field] || "").trim();
+      if (label && !values.has(normalized(label))) values.set(normalized(label), label);
+    });
+    const options = Array.from(values, ([key, label]) => ({ key, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+    if (options.length && rows.some((row) => !normalized(row[field]))) {
+      options.push({ key: "", label: emptyLabel });
+    }
+    const previousOptions = optionsByView.get(view) || [];
+    const excluded = excludedByView.get(view) || new Set();
+    if (previousOptions.some((item) => excluded.has(item.key))) {
+      const previousKeys = new Set(previousOptions.map((item) => item.key));
+      options.forEach((item) => { if (!previousKeys.has(item.key)) excluded.add(item.key); });
+    }
+    optionsByView.set(view, options);
+    excludedByView.set(view, excluded);
+    return { options, excluded };
+  }
+
+  function renderMultiCheckboxes(filter, container, summary, options, excluded, allLabel, noneLabel, countLabel) {
+    const wasOpen = filter.open;
+    const fragment = document.createDocumentFragment();
+    const selectedCount = options.filter((item) => !excluded.has(item.key)).length;
+
+    const createOption = (labelText, checked, allOption, key) => {
+      const label = document.createElement("label");
+      label.className = allOption ? "om-bucket-all" : "";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = checked;
+      if (allOption) input.indeterminate = selectedCount > 0 && selectedCount < options.length;
+      input.addEventListener("change", () => {
+        if (allOption) {
+          options.forEach((item) => input.checked ? excluded.delete(item.key) : excluded.add(item.key));
+        } else if (input.checked) excluded.delete(key);
+        else excluded.add(key);
+        renderTable();
+      });
+      const span = document.createElement("span");
+      span.textContent = labelText;
+      label.append(input, span);
+      return label;
+    };
+
+    fragment.appendChild(createOption(allLabel, selectedCount === options.length, true));
+    options.forEach((item) => fragment.appendChild(createOption(item.label, !excluded.has(item.key), false, item.key)));
+    container.replaceChildren(fragment);
+    filter.hidden = options.length === 0;
+    filter.open = wasOpen && options.length > 0;
+    summary.textContent = selectedCount === options.length ? allLabel
+      : selectedCount === 0 ? noneLabel
+        : selectedCount === 1 ? options.find((item) => !excluded.has(item.key)).label
+          : `${selectedCount} ${countLabel}`;
+  }
+
+  function renderStatusOptions(rows, view) {
+    const { options, excluded } = prepareMultiOptions(
+      rows, view, "status", "Sem status", state.statusOptionsByView, state.excludedStatusesByView
+    );
+    // Durante um deploy, o asset novo pode chegar antes do template atualizado.
+    if (!statusFilter) {
+      if (legacyStatusSelect) replaceStatusOptions(legacyStatusSelect, options.filter((item) => item.key).map((item) => item.label));
       return;
     }
-    const selected = activityTypeSelect.value;
-    const types = Array.from(new Set(rows.map((row) => String(row.type || "").trim()).filter(Boolean)))
-      .sort((a, b) => a.localeCompare(b, "pt-BR"));
-    activityTypeSelect.replaceChildren(new Option("Todos os tipos", ""), ...types.map((type) => new Option(type, type)));
-    if (types.includes(selected)) activityTypeSelect.value = selected;
-    activityTypeSelect.disabled = types.length === 0;
+    renderMultiCheckboxes(statusFilter, q("[data-status-options]"), q("[data-status-summary]"),
+      options, excluded, "Todos os status", "Nenhum status", "status selecionados");
+  }
+
+  function renderActivityTypeOptions(rows, view) {
+    const eligible = ACTIVITY_TYPE_VIEWS.has(view);
+    if (activityTypeFilter) activityTypeFilter.hidden = !eligible;
+    if (legacyActivityTypeSelect) legacyActivityTypeSelect.hidden = !eligible;
+    if (!eligible) {
+      if (legacyActivityTypeSelect) legacyActivityTypeSelect.value = "";
+      return;
+    }
+    const { options, excluded } = prepareMultiOptions(
+      rows, view, "type", "Sem tipo", state.activityTypeOptionsByView, state.excludedActivityTypesByView
+    );
+    if (!activityTypeFilter) {
+      if (legacyActivityTypeSelect) {
+        const selected = legacyActivityTypeSelect.value;
+        const types = options.filter((item) => item.key).map((item) => item.label);
+        legacyActivityTypeSelect.replaceChildren(new Option("Todos os tipos", ""), ...types.map((type) => new Option(type, type)));
+        if (types.includes(selected)) legacyActivityTypeSelect.value = selected;
+        legacyActivityTypeSelect.disabled = types.length === 0;
+      }
+      return;
+    }
+    renderMultiCheckboxes(activityTypeFilter, q("[data-activity-type-options]"), q("[data-activity-type-summary]"),
+      options, excluded, "Todos os tipos", "Nenhum tipo", "tipos selecionados");
   }
 
   function renderBucketOptions(options) {
@@ -255,10 +347,9 @@
 
     const sourceRows = state.rows[view] || [];
     const buckets = Array.from(new Set(sourceRows.map((row) => row.area).filter(Boolean))).sort((a, b) => a.localeCompare(b, "pt-BR"));
-    const statuses = Array.from(new Set(sourceRows.map((row) => row.status).filter(Boolean))).sort((a, b) => String(a).localeCompare(String(b), "pt-BR"));
     renderBucketOptions(buckets);
     renderActivityTypeOptions(sourceRows, view);
-    replaceStatusOptions(q("[data-status]"), statuses);
+    renderStatusOptions(sourceRows, view);
     if (treatmentUiReady) q("[data-treatment-filter]").hidden = !treatableView(view);
     const rows = currentRows();
 
@@ -635,8 +726,10 @@
     });
     q("[data-search]").value = "";
     state.selectedBuckets.clear();
-    q("[data-status]").value = "";
-    if (activityTypeSelect) activityTypeSelect.value = "";
+    state.excludedStatusesByView.clear();
+    state.excludedActivityTypesByView.clear();
+    if (legacyStatusSelect) legacyStatusSelect.value = "";
+    if (legacyActivityTypeSelect) legacyActivityTypeSelect.value = "";
     if (treatmentUiReady) q("[data-treatment-filter]").value = "";
     render();
   }
@@ -671,8 +764,8 @@
   q("[data-delay]").addEventListener("input", render);
   q("[data-exclude-withdrawals]").addEventListener("change", render);
   q("[data-search]").addEventListener("input", renderTable);
-  q("[data-status]").addEventListener("change", renderTable);
-  if (activityTypeSelect) activityTypeSelect.addEventListener("change", renderTable);
+  if (legacyStatusSelect) legacyStatusSelect.addEventListener("change", renderTable);
+  if (legacyActivityTypeSelect) legacyActivityTypeSelect.addEventListener("change", renderTable);
   if (treatmentUiReady) q("[data-treatment-filter]").addEventListener("change", renderTable);
   q("[data-refresh]").addEventListener("click", refreshSnapshot);
   if (treatmentUiReady) q("[data-refresh-treatments]").addEventListener("click", loadTreatments);

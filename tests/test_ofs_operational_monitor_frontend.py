@@ -29,27 +29,45 @@ def test_frontend_never_calls_oracle_and_has_all_plugin_views():
     assert "data-table-note" not in script
 
 
-def test_frontend_has_multi_bucket_checkboxes_and_status_filter():
+def test_frontend_has_multi_bucket_and_status_checkboxes():
     script = (ROOT / "static" / "js" / "ofs_operational_monitor.js").read_text(encoding="utf-8")
     template = (ROOT / "templates" / "ofs_operational_monitor.html").read_text(encoding="utf-8")
     assert "data-bucket-filter" in template
     assert "data-bucket-options" in template
-    assert "data-status" in template
+    assert "data-status-filter" in template
+    assert "data-status-options" in template
+    assert "data-status-summary" in template
     assert "selectedBuckets: new Set()" in script
     assert 'input.type = "checkbox"' in script
     assert "state.selectedBuckets.has(row.area)" in script
-    assert "normalized(row.status) !== status" in script
+    assert "excludedStatusesByView: new Map()" in script
+    assert "state.excludedStatusesByView.get(state.view)" in script
+    assert "excludedStatuses.has(normalized(row.status))" in script
+    assert 'renderMultiCheckboxes(statusFilter' in script
+    assert 'input.indeterminate = selectedCount > 0 && selectedCount < options.length' in script
+    assert 'selectedCount === 0 ? noneLabel' in script
+    assert 'filter.hidden = options.length === 0' in script
+    assert "previousOptions.some((item) => excluded.has(item.key))" in script
+    assert "state.excludedStatusesByView.clear()" in script
+    assert "const rows = currentRows();" in script
 
 
-def test_activity_type_filter_uses_snapshot_only_on_os_views():
+def test_activity_type_filter_supports_multiple_choices_from_snapshot():
     script = (ROOT / "static" / "js" / "ofs_operational_monitor.js").read_text(encoding="utf-8")
     template = (ROOT / "templates" / "ofs_operational_monitor.html").read_text(encoding="utf-8")
-    assert 'data-activity-type' in template
+    assert 'data-activity-type-filter' in template
+    assert 'data-activity-type-options' in template
+    assert 'data-activity-type-summary' in template
     assert 'new Set(["late", "slot", "black"])' in script
-    assert 'activityTypeSelect.hidden = !eligible' in script
-    assert 'String(row.type || "").trim() !== activityType' in script
+    assert 'excludedActivityTypesByView: new Map()' in script
+    assert 'state.excludedActivityTypesByView.get(state.view)' in script
+    assert 'excludedActivityTypes.has(normalized(row.type))' in script
+    assert 'if (activityTypeFilter) activityTypeFilter.hidden = !eligible' in script
     assert 'renderActivityTypeOptions(sourceRows, view)' in script
-    assert 'activityTypeSelect.addEventListener("change", renderTable)' in script
+    assert 'renderMultiCheckboxes(activityTypeFilter' in script
+    assert '"Todos os tipos", "Nenhum tipo", "tipos selecionados"' in script
+    assert 'state.excludedActivityTypesByView.clear()' in script
+    assert 'const rows = currentRows();' in script
 
 
 def test_frontend_has_shared_uf_toggle_filter_for_every_view():
