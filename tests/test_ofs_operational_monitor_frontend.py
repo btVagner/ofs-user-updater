@@ -74,12 +74,20 @@ def test_frontend_has_shared_uf_toggle_filter_for_every_view():
     script = (ROOT / "static" / "js" / "ofs_operational_monitor.js").read_text(encoding="utf-8")
     template = (ROOT / "templates" / "ofs_operational_monitor.html").read_text(encoding="utf-8")
     assert "Estado (UF)" in template
+    assert "Sem seleção: todas as UFs" in template
     assert "data-state-options" in template
+    assert 'data-clear-states' in template
+    assert 'Limpar filtros' in template
     assert "selectedStates: new Set()" in script
     assert "VIEW_KEYS.flatMap" in script
     assert 'if (!container) return;' in script
     assert 'button.setAttribute("aria-pressed", String(selected))' in script
-    assert "state.selectedStates.has(value)" in script
+    assert "state.selectedStates.size && !rowStates(row).some((value) => state.selectedStates.has(value))" in script
+    assert "hadAllSelected = state.knownStates.size > 0" in script
+    assert "if (hadAllSelected && !state.knownStates.has(value)) state.selectedStates.add(value)" in script
+    assert 'clearButton.disabled = state.selectedStates.size === 0' in script
+    assert 'state.selectedStates.clear()' in script
+    assert 'clearStatesButton.addEventListener("click", clearStateFilter)' in script
 
 
 def test_migration_creates_shared_cache_lock_support_and_permission():

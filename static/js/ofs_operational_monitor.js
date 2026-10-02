@@ -129,7 +129,7 @@
     const hasActivityTypeOptions = (state.activityTypeOptionsByView.get(state.view) || []).length > 0;
     const treatmentFilter = treatmentUiReady ? q("[data-treatment-filter]").value : "";
     const rows = (state.rows[state.view] || []).filter((row) => {
-      if (!rowStates(row).some((value) => state.selectedStates.has(value))) return false;
+      if (state.selectedStates.size && !rowStates(row).some((value) => state.selectedStates.has(value))) return false;
       if (state.selectedBuckets.size && !state.selectedBuckets.has(row.area)) return false;
       if (activityType && String(row.type || "").trim() !== activityType) return false;
       if (activityTypeFilter && hasActivityTypeOptions && excludedActivityTypes.has(normalized(row.type))) return false;
@@ -158,6 +158,8 @@
       VIEW_KEYS.flatMap((view) => (state.rows[view] || []).flatMap(rowStates))
     )).sort((a, b) => a.localeCompare(b, "pt-BR"));
     const available = new Set(options);
+    const hadAllSelected = state.knownStates.size > 0 &&
+      Array.from(state.knownStates).every((value) => state.selectedStates.has(value));
 
     state.selectedStates.forEach((value) => {
       if (!available.has(value)) state.selectedStates.delete(value);
@@ -166,7 +168,7 @@
       if (!available.has(value)) state.knownStates.delete(value);
     });
     options.forEach((value) => {
-      if (!state.knownStates.has(value)) state.selectedStates.add(value);
+      if (hadAllSelected && !state.knownStates.has(value)) state.selectedStates.add(value);
       state.knownStates.add(value);
     });
 
@@ -194,6 +196,14 @@
     });
     container.replaceChildren(fragment);
     container.closest(".om-state-filter").hidden = options.length === 0;
+    const clearButton = q("[data-clear-states]");
+    if (clearButton) clearButton.disabled = state.selectedStates.size === 0;
+  }
+
+  function clearStateFilter() {
+    state.selectedStates.clear();
+    renderStateOptions();
+    renderTable();
   }
 
   function replaceStatusOptions(select, options) {
@@ -760,6 +770,8 @@
 
   qa("[data-mode]").forEach((button) => button.addEventListener("click", () => selectMode(button.dataset.mode)));
   qa("[data-view]").forEach((button) => button.addEventListener("click", () => { state.view = button.dataset.view; renderTable(); }));
+  const clearStatesButton = q("[data-clear-states]");
+  if (clearStatesButton) clearStatesButton.addEventListener("click", clearStateFilter);
   q("[data-tolerance]").addEventListener("input", render);
   q("[data-delay]").addEventListener("input", render);
   q("[data-exclude-withdrawals]").addEventListener("change", render);
