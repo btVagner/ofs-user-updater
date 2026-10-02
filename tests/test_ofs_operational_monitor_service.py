@@ -56,6 +56,10 @@ def test_build_payload_matches_plugin_operational_views():
     payload = build_monitor_payload(source, resolve_scope("casa-cliente"), WORK_DATE, now=NOW)
 
     assert payload["technicians_count"] == 3
+    assert payload["technician_uf_groups"] == [
+        {"states": ["SP"], "count": 1},
+        {"states": ["Sem UF"], "count": 2},
+    ]
     assert [row["id"] for row in payload["late_candidates"]] == ["A1"]
     assert [row["resource_id"] for row in payload["idle"]] == ["T2"]
     assert [row["resource_id"] for row in payload["not_started_candidates"]] == ["T3"]
@@ -66,6 +70,26 @@ def test_build_payload_matches_plugin_operational_views():
     assert payload["late_candidates"][0]["states"] == ["SP"]
     assert payload["idle"][0]["states"] == ["Sem UF"]
     assert payload["not_started_candidates"][0]["states"] == ["Sem UF"]
+
+
+def test_technician_uf_groups_count_each_technician_once_with_multiple_states():
+    health = {
+        "events": {"status": "ok", "last_success_at": datetime(2026, 9, 25, 14, 59)},
+        "activities": {"status": "ok", "last_success_at": datetime(2026, 9, 25, 14, 59)},
+        "calendars": {"status": "ok", "last_success_at": datetime(2026, 9, 25, 14, 30)},
+        "routes": {"status": "ok", "last_success_at": datetime(2026, 9, 25, 12, 0)},
+    }
+    rows = activities() + [{**activities()[0], "activity_id": "A4", "customer_state": "RS"}]
+    payload = build_monitor_payload(
+        SourceSnapshot(hierarchy(), states(), rows, health), resolve_scope("casa-cliente"), WORK_DATE, now=NOW
+    )
+
+    assert payload["technicians_count"] == 3
+    assert payload["technician_uf_groups"] == [
+        {"states": ["RS", "SP"], "count": 1},
+        {"states": ["Sem UF"], "count": 2},
+    ]
+    assert sum(group["count"] for group in payload["technician_uf_groups"]) == payload["technicians_count"]
 
 
 def test_invalid_scope_is_rejected_before_database_access():

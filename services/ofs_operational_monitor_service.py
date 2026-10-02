@@ -246,12 +246,28 @@ def build_monitor_payload(
         if resource_id in technicians:
             activities_by_resource.setdefault(resource_id, []).append(dict(row))
 
+    technician_states_by_resource = {
+        resource_id: sorted(
+            {_customer_state(row.get("customer_state")) for row in activities_by_resource.get(resource_id, []) if _is_real_os(row)},
+            key=str.casefold,
+        ) or ["Sem UF"]
+        for resource_id in technicians
+    }
+    technician_uf_group_counts: Dict[tuple, int] = {}
+    for states_for_resource in technician_states_by_resource.values():
+        key = tuple(states_for_resource)
+        technician_uf_group_counts[key] = technician_uf_group_counts.get(key, 0) + 1
+
     result = {
         "schema_version": 2,
         "scope": dict(scope),
         "work_date": work_date.isoformat(),
         "generated_at": now_utc.isoformat(timespec="seconds"),
         "technicians_count": len(technicians),
+        "technician_uf_groups": [
+            {"states": list(states), "count": count}
+            for states, count in sorted(technician_uf_group_counts.items())
+        ],
         "late_candidates": [],
         "idle": [],
         "not_started_candidates": [],
@@ -295,10 +311,7 @@ def build_monitor_payload(
         area = _area_for(resource_id, hierarchy_by_id)
         resource_activities = activities_by_resource.get(resource_id, [])
         real_activities = [row for row in resource_activities if _is_real_os(row)]
-        technician_states = sorted(
-            {_customer_state(row.get("customer_state")) for row in real_activities},
-            key=str.casefold,
-        ) or ["Sem UF"]
+        technician_states = technician_states_by_resource[resource_id]
 
         for activity in real_activities:
             common = _common_activity(activity, technician, area)

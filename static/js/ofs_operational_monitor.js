@@ -129,7 +129,7 @@
     const hasActivityTypeOptions = (state.activityTypeOptionsByView.get(state.view) || []).length > 0;
     const treatmentFilter = treatmentUiReady ? q("[data-treatment-filter]").value : "";
     const rows = (state.rows[state.view] || []).filter((row) => {
-      if (state.selectedStates.size && !rowStates(row).some((value) => state.selectedStates.has(value))) return false;
+      if (!matchesSelectedStates(row)) return false;
       if (state.selectedBuckets.size && !state.selectedBuckets.has(row.area)) return false;
       if (activityType && String(row.type || "").trim() !== activityType) return false;
       if (activityTypeFilter && hasActivityTypeOptions && excludedActivityTypes.has(normalized(row.type))) return false;
@@ -153,9 +153,34 @@
     return normalizedStates.length ? normalizedStates : ["Sem UF"];
   }
 
+  function matchesSelectedStates(row) {
+    return state.selectedStates.size === 0 || rowStates(row).some((value) => state.selectedStates.has(value));
+  }
+
+  function renderKpis() {
+    const payload = state.payload;
+    const groups = payload && payload.technician_uf_groups;
+    const allStates = state.selectedStates.size === 0 || state.selectedStates.size === state.knownStates.size;
+    const techCount = !payload ? null : allStates ? Number(payload.technicians_count || 0)
+      : Array.isArray(groups) ? groups.reduce((total, group) =>
+        total + (group.states.some((value) => state.selectedStates.has(value)) ? Number(group.count || 0) : 0), 0) : null;
+    const techCard = q('[data-kpi="tech"]');
+    techCard.textContent = techCount === null ? "—" : techCount.toLocaleString("pt-BR");
+    techCard.title = payload && techCount === null ? "Atualize o snapshot local para consultar o total de técnicos por UF." : "";
+
+    VIEW_KEYS.forEach((key) => {
+      const count = (state.rows[key] || []).filter(matchesSelectedStates).length;
+      const label = payload ? count.toLocaleString("pt-BR") : "—";
+      q(`[data-kpi="${key}"]`).textContent = label;
+      q(`[data-count="${key}"]`).textContent = label;
+    });
+  }
+
   function renderStateOptions() {
     const options = Array.from(new Set(
-      VIEW_KEYS.flatMap((view) => (state.rows[view] || []).flatMap(rowStates))
+      VIEW_KEYS.flatMap((view) => (state.rows[view] || []).flatMap(rowStates)).concat(
+        (state.payload && state.payload.technician_uf_groups || []).flatMap((group) => group.states || [])
+      )
     )).sort((a, b) => a.localeCompare(b, "pt-BR"));
     const available = new Set(options);
     const hadAllSelected = state.knownStates.size > 0 &&
@@ -351,6 +376,7 @@
   }
 
   function renderTable() {
+    renderKpis();
     const view = state.view;
     q("[data-table-title]").textContent = TITLES[view];
     qa("[data-view]").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
@@ -428,18 +454,6 @@
   function render() {
     computeRows();
     renderStateOptions();
-    const counts = {
-      late: state.rows.late.length,
-      idle: state.rows.idle.length,
-      notStarted: state.rows.notStarted.length,
-      slot: state.rows.slot.length,
-      black: state.rows.black.length,
-    };
-    q('[data-kpi="tech"]').textContent = state.payload ? Number(state.payload.technicians_count || 0).toLocaleString("pt-BR") : "—";
-    VIEW_KEYS.forEach((key) => {
-      q(`[data-kpi="${key}"]`).textContent = state.payload ? counts[key].toLocaleString("pt-BR") : "—";
-      q(`[data-count="${key}"]`).textContent = state.payload ? counts[key].toLocaleString("pt-BR") : "—";
-    });
     q("[data-tabs]").hidden = state.mode !== "all";
     qa("[data-param]").forEach((field) => { field.hidden = state.mode !== "all" && field.dataset.param !== state.mode; });
     q("[data-withdrawal-param]").hidden = !["all", "slot"].includes(state.mode);

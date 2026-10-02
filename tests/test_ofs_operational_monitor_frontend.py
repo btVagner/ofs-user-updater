@@ -82,12 +82,26 @@ def test_frontend_has_shared_uf_toggle_filter_for_every_view():
     assert "VIEW_KEYS.flatMap" in script
     assert 'if (!container) return;' in script
     assert 'button.setAttribute("aria-pressed", String(selected))' in script
-    assert "state.selectedStates.size && !rowStates(row).some((value) => state.selectedStates.has(value))" in script
+    assert "if (!matchesSelectedStates(row)) return false" in script
+    assert "state.selectedStates.size === 0 || rowStates(row).some((value) => state.selectedStates.has(value))" in script
     assert "hadAllSelected = state.knownStates.size > 0" in script
     assert "if (hadAllSelected && !state.knownStates.has(value)) state.selectedStates.add(value)" in script
     assert 'clearButton.disabled = state.selectedStates.size === 0' in script
     assert 'state.selectedStates.clear()' in script
     assert 'clearStatesButton.addEventListener("click", clearStateFilter)' in script
+
+
+def test_uf_filter_updates_summary_cards_and_tabs_without_new_ofs_calls():
+    script = (ROOT / "static" / "js" / "ofs_operational_monitor.js").read_text(encoding="utf-8")
+    service = (ROOT / "services" / "ofs_operational_monitor_service.py").read_text(encoding="utf-8")
+    assert "function renderKpis()" in script
+    assert "const count = (state.rows[key] || []).filter(matchesSelectedStates).length" in script
+    assert 'q(`[data-kpi="${key}"]`).textContent = label' in script
+    assert 'q(`[data-count="${key}"]`).textContent = label' in script
+    assert "renderKpis();" in script.split("function renderTable()", 1)[1].split("function render()", 1)[0]
+    assert "payload.technician_uf_groups" in script
+    assert "group.states.some((value) => state.selectedStates.has(value))" in script
+    assert '"technician_uf_groups"' in service
 
 
 def test_migration_creates_shared_cache_lock_support_and_permission():
