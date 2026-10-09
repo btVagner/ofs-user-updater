@@ -32,6 +32,20 @@ def test_notdone_page_exposes_server_side_state_filter_in_both_views():
     assert "state=state_filter or none" in template
 
 
+def test_notdone_page_shows_source_status_in_both_views_and_detail_modal():
+    template = read("templates/atividades_notdone.html")
+    javascript = read("static/js/atividades_notdone.js")
+    source = read("routes/atividades_notdone_routes.py")
+
+    assert 'data-col="activitystatus">Status da OS' in template
+    assert 'a.activityStatus == \'cancelled\'' in template
+    assert "Cancelada" in template and "Improdutiva" in template
+    assert 'id="m_activityStatus"' in template
+    assert 'setVal("m_activityStatus"' in javascript
+    assert source.count("activity_status AS activityStatus") == 2
+    assert 'data-empty-colspan="{{ 10 if view_mode == \'tratadas\' else 8 }}"' in template
+
+
 def test_notdone_page_has_clear_hierarchy_and_accessible_filters():
     template = read("templates/atividades_notdone.html")
 

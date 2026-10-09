@@ -37,6 +37,7 @@ def test_import_requests_and_upserts_state_without_touching_treatment_fields():
 def test_api_activity_values_normalize_state_and_keep_expected_order():
     values = build_notdone_source_values({
         "activityId": 123,
+        "status": "notdone",
         "activityType": " sup_rep ",
         "city": "São Paulo",
         "stateProvince": " sp ",
@@ -44,13 +45,14 @@ def test_api_activity_values_normalize_state_and_keep_expected_order():
         "date": "2026-09-27",
     })
 
-    assert len(values) == 13
+    assert len(values) == 14
     assert values[0] == "123"
-    assert values[1] == "SUP_REP"
-    assert values[2] == "São Paulo"
-    assert values[3] == "SP"
-    assert values[6] == "Cliente"
-    assert values[12] == "2026-09-27"
+    assert values[1] == "notdone"
+    assert values[2] == "SUP_REP"
+    assert values[3] == "São Paulo"
+    assert values[4] == "SP"
+    assert values[7] == "Cliente"
+    assert values[13] == "2026-09-27"
 
 
 def test_state_schema_migration_is_idempotent_and_indexed():

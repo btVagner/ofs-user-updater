@@ -315,6 +315,7 @@ document.addEventListener("DOMContentLoaded", function () {
     setVal("m_stateProvince", a.stateProvince);
     setVal("m_bucket", a.XA_ORIGIN_BUCKET);
     setVal("m_date", a.date);
+    setVal("m_activityStatus", a.activityStatus === "cancelled" ? "Cancelada" : a.activityStatus === "notdone" ? "Improdutiva" : "-");
     setVal("m_tskNot", a.XA_TSK_NOT);
 
     setVal("m_tratativa_status", a.tratativa_status);

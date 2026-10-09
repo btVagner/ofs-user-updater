@@ -110,7 +110,7 @@
 
     <div class="tabela-card">
       <div class="tabela-container">
-        <table class="tabela-atividades" data-empty-colspan="{{ 9 if view_mode == 'tratadas' else 7 }}">
+        <table class="tabela-atividades" data-empty-colspan="{{ 10 if view_mode == 'tratadas' else 8 }}">
           <thead>
             <tr>
               <th data-col="cliente">
@@ -126,6 +126,7 @@
                 <button type="button" class="th-filter-btn" data-col="bucket">▾</button>
               </th>
               <th data-col="state">UF</th>
+              <th data-col="activitystatus">Status da OS</th>
               <th data-col="activitytype">
                 Tipo Atividade
                 <button type="button" class="th-filter-btn" data-col="activitytype">▾</button>
@@ -158,6 +159,9 @@
               <td data-col="cidade">{{ a.city or '-' }}</td>
               <td data-col="bucket">{{ a.XA_ORIGIN_BUCKET or '-' }}</td>
               <td data-col="state" class="td-state">{{ a.stateProvince or '-' }}</td>
+              <td data-col="activitystatus">
+                <span class="activity-status">{{ 'Cancelada' if a.activityStatus == 'cancelled' else 'Improdutiva' if a.activityStatus == 'notdone' else '-' }}</span>
+              </td>
               <td data-col="activitytype">{{ a.activityType or '-' }}</td>
               <td data-col="date">{{ a.date or '-' }}</td>
 
@@ -187,7 +191,7 @@
 
             {% if items|length == 0 %}
             <tr class="js-empty-row">
-              <td colspan="{{ 9 if view_mode == 'tratadas' else 7 }}" class="empty-row">
+              <td colspan="{{ 10 if view_mode == 'tratadas' else 8 }}" class="empty-row">
                 Nenhuma atividade encontrada.
               </td>
             </tr>
@@ -323,6 +327,11 @@
         <div>
           <label>Data do agendamento</label>
           <input id="m_date" readonly>
+        </div>
+
+        <div>
+          <label>Status da OS</label>
+          <input id="m_activityStatus" readonly>
         </div>
 
         <div class="modal-full">

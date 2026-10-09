@@ -544,6 +544,16 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.tabela-atividades th[data-col="activitystatus"],
+.tabela-atividades td[data-col="activitystatus"] {
+  min-width: 104px;
+  white-space: nowrap;
+}
+
+.activity-status {
+  font-weight: 700;
+}
+
 .tabela-atividades .col-actions,
 .tabela-atividades td:last-child {
   width: 128px;

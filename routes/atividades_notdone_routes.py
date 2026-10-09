@@ -33,6 +33,14 @@ TIPOS_DESCONSIDERADOS = {
     "EQP_DUP",
 }
 
+ADAPTER_CANCEL_REASON_CODES = frozenset({"998", "999", "99999", "52482"})
+NOTDONE_IMPORT_FIELDS = (
+    "activityId", "status", "activityType", "city", "stateProvince",
+    "customerNumber", "customerName", "customerPhone", "apptNumber",
+    "XA_ORIGIN_BUCKET", "XA_TSK_NOT", "XA_SER_CLO_IMP_ADA", "resourceId", "date",
+)
+ADAPTER_CANCEL_EXTRA_FIELDS = ("XA_ORG_SYS",)
+
 
 def normalize_state_value(value):
     normalized = str(value or "").strip().upper()
@@ -44,10 +52,59 @@ def normalize_state_filter(value):
     return normalized if normalized in BRAZIL_STATE_CODE_SET else ""
 
 
+def is_relevant_notdone_activity(activity):
+    status = str(activity.get("status") or "").strip().lower()
+    if status == "notdone":
+        return True
+    if status != "cancelled" or str(activity.get("XA_ORG_SYS") or "").strip().casefold() != "adapter":
+        return False
+    reason = str(activity.get("XA_SER_CLO_IMP_ADA") or "").strip()
+    return reason in ADAPTER_CANCEL_REASON_CODES
+
+
+def fetch_relevant_notdone_activities(client, date_from, date_to, resources, *, max_pages=20, page_limit=2000):
+    items = []
+    for status in ("notdone", "cancelled"):
+        requested_fields = NOTDONE_IMPORT_FIELDS if status == "notdone" else (
+            *NOTDONE_IMPORT_FIELDS, *ADAPTER_CANCEL_EXTRA_FIELDS,
+        )
+        base_params = {
+            "dateFrom": date_from,
+            "dateTo": date_to,
+            "resources": resources,
+            "q": f"status=='{status}'",
+            "fields": ",".join(requested_fields),
+            "limit": page_limit,
+            "offset": 0,
+        }
+        has_more = True
+        page = 0
+        while has_more and page < max_pages:
+            qs = urlencode(base_params, safe="=,'")
+            url = f"{client.base_url}/activities/?{qs}"
+            data = client.authenticated_get(url)
+            batch = data.get("items") or []
+            if not isinstance(batch, list):
+                raise ValueError(f"OFS retornou lista de atividades inválida para {status}.")
+            eligible = [activity for activity in batch if is_relevant_notdone_activity(activity)]
+            items.extend(eligible)
+
+            has_more = bool(data.get("hasMore"))
+            if has_more:
+                if not batch:
+                    raise ValueError(f"OFS indicou mais páginas de {status}, mas retornou página vazia.")
+                base_params["offset"] += len(batch)
+            page += 1
+        if has_more:
+            raise ValueError(f"Limite de {max_pages} páginas atingido para {status}; importação cancelada.")
+    return items
+
+
 NOTDONE_SOURCE_UPSERT_SQL = """
     INSERT INTO ofs_atividades_notdone
     (
         activity_id,
+        activity_status,
         activity_type,
         city,
         state_province,
@@ -61,8 +118,9 @@ NOTDONE_SOURCE_UPSERT_SQL = """
         resource_id,
         date
     )
-    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     ON DUPLICATE KEY UPDATE
+        activity_status = VALUES(activity_status),
         activity_type = COALESCE(VALUES(activity_type), activity_type),
         city = COALESCE(VALUES(city), city),
         state_province = COALESCE(VALUES(state_province), state_province),
@@ -81,6 +139,7 @@ NOTDONE_SOURCE_UPSERT_SQL = """
 def build_notdone_source_values(activity):
     return (
         str(activity.get("activityId") or "").strip(),
+        str(activity.get("status") or "").strip().lower(),
         str(activity.get("activityType") or "").strip().upper() or None,
         str(activity.get("city") or "") or None,
         normalize_state_value(activity.get("stateProvince") or activity.get("state")),
@@ -190,6 +249,7 @@ def init_app(app):
             cur.execute(f"""
                 SELECT
                     activity_id AS activityId,
+                    activity_status AS activityStatus,
                     activity_type AS activityType,
                     city,
                     state_province AS stateProvince,
@@ -456,50 +516,10 @@ def init_app(app):
 
         client = OFSClient()
 
-        fields = [
-            "activityId",
-            "activityType",
-            "city",
-            "stateProvince",
-            "customerNumber",
-            "customerName",
-            "customerPhone",
-            "apptNumber",
-            "XA_ORIGIN_BUCKET",
-            "XA_TSK_NOT",
-            "XA_SER_CLO_IMP_ADA",
-            "resourceId",
-            "date",
-        ]
-
-        base_params = {
-            "dateFrom": date_from,
-            "dateTo": date_to,
-            "resources": resources,
-            "q": "status=='notdone'",
-            "fields": ",".join(fields),
-            "limit": 2000,
-            "offset": 0,
-        }
-
-        items = []
-        has_more = True
-        max_pages = 20
-        page = 0
-
         try:
-            while has_more and page < max_pages:
-                qs = urlencode(base_params, safe="=,'")
-                url = f"{client.base_url}/activities/?{qs}"
-                data = client.authenticated_get(url)
-
-                batch = data.get("items") or []
-                items.extend(batch)
-
-                has_more = bool(data.get("hasMore"))
-                if has_more:
-                    base_params["offset"] = len(items)
-                page += 1
+            items = fetch_relevant_notdone_activities(
+                client, date_from, date_to, resources
+            )
         except Exception as e:
             flash(f"❌ Falha ao importar da API: {e}", "danger")
             return redirect(url_for(
@@ -517,6 +537,7 @@ def init_app(app):
         updated = 0
         unchanged = 0
         ignored_types = 0
+        cancelled_processed = 0
 
         for a in items:
             activity_id = str(a.get("activityId") or "").strip()
@@ -530,6 +551,8 @@ def init_app(app):
                 continue
 
             cur.execute(NOTDONE_SOURCE_UPSERT_SQL, build_notdone_source_values(a))
+            if str(a.get("status") or "").strip().lower() == "cancelled":
+                cancelled_processed += 1
             if cur.rowcount == 1:
                 inserted += 1
             elif cur.rowcount == 2:
@@ -543,7 +566,8 @@ def init_app(app):
 
         flash(
             f"✅ Importação concluída. Novos: {inserted} | Atualizados: {updated} | "
-            f"Sem alteração: {unchanged} | Desconsiderados por tipo: {ignored_types}",
+            f"Sem alteração: {unchanged} | Desconsiderados por tipo: {ignored_types} | "
+            f"Canceladas Adapter processadas: {cancelled_processed}",
             "success"
         )
         return redirect(url_for(
@@ -670,6 +694,7 @@ def init_app(app):
         cur.execute("""
             SELECT
                 activity_id AS activityId,
+                activity_status AS activityStatus,
                 activity_type AS activityType,
                 city,
                 state_province AS stateProvince,
