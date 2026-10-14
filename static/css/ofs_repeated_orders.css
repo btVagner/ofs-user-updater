@@ -1,0 +1,55 @@
+/* Monitor operacional supplies the shared component styles, including rounding.
+   Only repeated-orders layout, severity colors and progress need adaptations. */
+.repeated-orders .ro-header-actions {flex:none;margin-top:0}
+.repeated-orders button:disabled {opacity:.55;cursor:default}
+.ro-case summary:focus-visible {
+  outline:2px solid var(--om-blue);outline-offset:2px;
+}
+.repeated-orders .ro-purple {border-color:var(--om-violet)}
+.repeated-orders .ro-red {border-color:var(--om-danger)}
+.repeated-orders .ro-yellow {border-color:#d5aa35}
+.ro-filters {display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;padding:18px 20px;margin-bottom:10px}
+.ro-filters label,.ro-type-filter {display:grid;gap:6px;font-size:.77rem;font-weight:800;min-width:0}
+.ro-filters label {flex:0 1 230px}
+.ro-type-filter {flex:1 1 230px}
+.ro-filters input {width:100%;min-width:0}
+.ro-filter-buttons {min-width:0}
+.ro-state-filter .ro-filter-buttons {flex:1}
+.ro-results #ro-count {color:var(--om-muted);font-size:.7rem;text-align:right}
+#ro-list {padding:10px 12px 5px}
+#ro-list>p {padding:20px 10px;text-align:center;color:var(--om-muted);font-size:.78rem}
+.ro-case {margin-bottom:5px;padding:7px 12px}
+.ro-case summary {
+  cursor:pointer;display:flex;gap:12px;align-items:center;flex-wrap:wrap;min-height:20px;
+  font-size:.78rem;list-style:none;
+}
+.ro-case summary::-webkit-details-marker {display:none}
+.ro-case summary strong {margin-right:auto}
+.ro-badge {font-size:17px;font-weight:750;line-height:1}
+.ro-case.ro-purple .ro-badge {color:var(--om-violet)}
+.ro-case.ro-yellow .ro-badge {color:#856300}
+.ro-case summary::after {order:1;content:'⌄';font-size:18px;line-height:20px;color:var(--om-muted)}
+.ro-case[open] summary::after {content:'⌃'}
+.ro-table-wrap {overflow:auto;margin-top:12px;max-height:min(62vh,660px)}
+.ro-case table {background:var(--om-surface)}
+.ro-progress {padding:13px 15px;margin:12px 0 16px}
+.ro-progress-copy {display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:.77rem;margin-bottom:9px}
+.ro-progress-copy span {color:var(--om-muted)}
+.ro-progress-track {height:5px;border-radius:999px;background:var(--om-line);overflow:hidden}
+.ro-progress-fill {height:100%;width:35%;background:var(--om-blue);animation:ro-loading 1.4s ease-in-out infinite}
+@keyframes ro-loading {from{transform:translateX(-100%)}to{transform:translateX(390%)}}
+@media(prefers-reduced-motion:reduce) {.ro-progress-fill{animation:none;width:100%}}
+.repeated-orders .ro-pagination {align-items:center;justify-content:center;gap:12px;margin-top:0;border-top:1px solid var(--om-line)}
+.ro-notes p {color:var(--om-muted);font-size:.77rem;line-height:1.55;overflow-wrap:anywhere}
+@media(max-width:900px) {
+  .ro-header-actions {width:100%;justify-content:flex-start}
+  .ro-results #ro-count {text-align:left}
+  .ro-state-filter .ro-filter-buttons {width:100%;flex-basis:auto}
+}
+@media(max-width:620px) {
+  .ro-filters {padding:14px;gap:12px}
+  .ro-filters label,.ro-type-filter {flex-basis:100%}
+  #ro-list {padding:8px 8px 3px}
+  .ro-case {padding:7px 9px}
+  .repeated-orders .ro-pagination {flex-direction:row}
+}

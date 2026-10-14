@@ -68,6 +68,14 @@
       </a>
       {% endif %}
 
+      {% if has_perm('ofs.os_repetidas.visualizar') %}
+      <a href="{{ url_for('ofs_repeated_orders_page') }}"
+        class="sidebar-link {% if request.endpoint == 'ofs_repeated_orders_page' %}active{% endif %}">
+        <span class="sidebar-icon">OR</span>
+        <span class="sidebar-text">OS repetidas</span>
+      </a>
+      {% endif %}
+
       {% if has_perm('bi_activities.acessar') %}
       <a href="{{ url_for('bi_activities_page') }}"
         class="sidebar-link {% if request.endpoint in ['bi_activities_page', 'bi_activities_jobs', 'bi_activities_coletar'] %}active{% endif %}">

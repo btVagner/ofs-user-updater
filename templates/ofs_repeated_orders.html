@@ -1,0 +1,52 @@
+{% set page_css_files = ['css/ofs_operational_monitor.css', 'css/ofs_repeated_orders.css'] %}
+{% include 'includes/head.html' %}
+<body class="repeated-orders-page">
+{% include 'includes/navbar.html' %}
+<main class="operational-monitor repeated-orders" id="repeated-orders" data-data-url="{{ url_for('ofs_repeated_orders_data') }}"
+ data-refresh-url="{{ url_for('ofs_repeated_orders_refresh') }}" data-csrf="{{ csrf }}">
+ <header class="om-header"><div><span class="om-kicker">Análise por contrato · Oracle Field Service</span>
+ <h1>OS repetidas</h1><p>Hoje e os próximos seis dias, na hierarquia 02, sem Retirada. Somente pending, enroute e started. OS ligadas de origem NG contam uma vez.</p></div>
+ {% if can_refresh %}<div class="om-actions ro-header-actions"><button id="ro-refresh" class="om-primary" type="button">Atualizar análise</button></div>{% endif %}</header>
+ <p id="ro-state" class="om-message" role="status" aria-live="polite">Carregando análise compartilhada…</p>
+ <p id="ro-error" class="om-message error" role="alert" hidden></p>
+ <section id="ro-progress" class="om-card ro-progress" aria-label="Atualização da análise" aria-live="polite" hidden>
+ <div class="ro-progress-copy"><strong id="ro-progress-title">Atualizando análise</strong><span id="ro-progress-detail"></span></div>
+ <div class="ro-progress-track" role="progressbar" aria-label="Atualização da análise"><div class="ro-progress-fill"></div></div>
+ </section>
+ <section class="om-kpis ro-summary" aria-label="Resumo e filtros da malha" id="ro-summary">
+ <button id="ro-total" class="ro-stat" type="button" aria-pressed="true" title="Mostrar toda a malha e limpar filtros">
+ <span>Atividades na malha</span><strong id="ro-total-count">0</strong></button>
+ <button class="ro-stat ro-purple" type="button" data-severity="purple" aria-pressed="false"
+ aria-label="Filtrar contratos com 3 ou mais OS" title="3 ou mais OS distintas">
+ <span class="ro-symbol" aria-hidden="true">3+</span><strong data-severity-count="purple">0</strong></button>
+ <button class="ro-stat ro-red" type="button" data-severity="red" aria-pressed="false"
+ aria-label="Filtrar contratos com 2 OS do mesmo tipo" title="2 OS do mesmo tipo">
+ <span aria-hidden="true">&nbsp;</span><strong data-severity-count="red">0</strong></button>
+ <button class="ro-stat ro-yellow" type="button" data-severity="yellow" aria-pressed="false"
+ aria-label="Filtrar contratos com 2 OS de tipos diferentes" title="2 OS de tipos diferentes">
+ <span class="ro-symbol" aria-hidden="true">≠</span><strong data-severity-count="yellow">0</strong></button>
+ </section>
+ <section class="om-card ro-filters" aria-label="Filtros por contrato e tipo de OS">
+ <label class="om-table-tools"><span>Contrato</span><input id="ro-contract" type="search" placeholder="Buscar contrato" maxlength="100"></label>
+ <div class="ro-type-filter"><span id="ro-types-label">Tipos de OS</span>
+ <div id="ro-types" class="om-state-options ro-filter-buttons" role="group" aria-labelledby="ro-types-label"></div></div>
+ </section>
+ <section class="om-state-filter ro-state-filter" aria-label="Filtro por estado">
+ <div class="om-state-filter-label"><strong id="ro-regionals-label">Estado</strong></div>
+ <div id="ro-regionals" class="om-state-options ro-filter-buttons" role="group" aria-labelledby="ro-regionals-label"></div>
+ </section>
+ <section class="om-table-card ro-results" aria-label="Contratos na malha">
+ <header><h2>Contratos na malha</h2><span id="ro-count" aria-live="polite"></span></header>
+ <div id="ro-list"></div><footer class="om-actions ro-pagination"><button id="ro-prev" class="om-secondary" type="button">Anterior</button><span id="ro-page"></span><button id="ro-next" class="om-secondary" type="button">Próxima</button></footer>
+ </section>
+ <details class="om-card om-diagnostics ro-notes"><summary>Critérios e qualidade dos dados</summary>
+ <p>Somente atividades com status pending, enroute ou started são consideradas. Retirada, atividades fora da hierarquia do recurso 02, atividades que não representam OS e registros sem contrato, número de OS ou tipo são excluídos.
+ Para NG, o prefixo antes do primeiro hífen identifica a OS ligada. Fora de NG, o número completo identifica a OS na origem.
+ Duas OS só recebem vermelho quando todos os tipos envolvidos são iguais.</p>
+ <p>O filtro por estado mostra contratos com alguma OS na UF selecionada.
+ Os detalhes preservam todas as OS do contrato, inclusive as de outros estados.
+ OS sem estado informado aparecem em Sem estado.</p><p id="ro-diagnostics"></p>
+ </details>
+</main>
+<script src="{{ url_for('static', filename='js/ofs_repeated_orders.js') }}" defer></script>
+</body>

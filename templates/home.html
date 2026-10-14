@@ -34,6 +34,15 @@
       </a>
       {% endif %}
 
+      {% if has_perm('ofs.os_repetidas.visualizar') %}
+      <a href="{{ url_for('ofs_repeated_orders_page') }}" class="card">
+        <div class="card-top"><span class="card-badge">Análise</span></div>
+        <h3>OS repetidas por contrato</h3>
+        <div class="card-description"><p>Identifique contratos com mais de uma OS em hoje e nos próximos seis dias.</p></div>
+        <span class="card-arrow">Acessar &rarr;</span>
+      </a>
+      {% endif %}
+
       {% if has_perm('ofs.atualizar_tipo') %}
       <a href="{{ url_for('atualizar_user_type') }}" class="card">
         <div class="card-top">

@@ -1,0 +1,19 @@
+[Unit]
+Description=OFS Repeated Orders Snapshot Worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=__OFS_SERVICE_USER__
+WorkingDirectory=__OFS_PROJECT_DIR__
+ExecStart=__OFS_PROJECT_DIR__/venv/bin/python __OFS_PROJECT_DIR__/tools/ofs_repeated_orders_worker.py
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGINT
+TimeoutStopSec=300
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

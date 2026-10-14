@@ -18,6 +18,7 @@ from .relatorios_routes import init_app as init_relatorios_routes
 from .bi_activities_routes import init_app as init_bi_activities_routes
 from .ofs_technician_monitor_routes import init_app as init_ofs_technician_monitor_routes
 from .ofs_operational_monitor_routes import init_app as init_ofs_operational_monitor_routes
+from .ofs_repeated_orders_routes import init_app as init_ofs_repeated_orders_routes
 
 def register_routes(app):
     init_auth_routes(app)
@@ -42,3 +43,4 @@ def register_routes(app):
     init_bi_activities_routes(app)
     init_ofs_technician_monitor_routes(app)
     init_ofs_operational_monitor_routes(app)
+    init_ofs_repeated_orders_routes(app)
