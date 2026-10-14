@@ -37,16 +37,14 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertIn("session.usuario_logado", footer)
         self.assertIn("js/logs_table.js", footer)
 
-    def test_sidebar_uses_underlined_hover_and_has_no_oracle_docs_button(self):
+    def test_sidebar_preserves_navigation_and_has_no_oracle_docs_button(self):
         navbar = read("templates/includes/navbar.html")
         style = read("static/style.css")
 
         self.assertNotIn("Documentação Oracle", navbar)
         self.assertNotIn("docs.oracle.com", navbar)
-        self.assertIn(".sidebar-link:not(.active):hover::after", style)
-        self.assertIn("transform: scaleX(1);", style)
-        self.assertIn("linear-gradient(180deg, #141c25", style)
-        self.assertIn(".sidebar-link.active::before", style)
+        for label in ("Monitor operacional</span>", "OS repetidas</span>", "Relatórios</span>", "Sair</span>"):
+            self.assertIn(label, navbar)
         self.assertNotIn(".logo::before", style)
 
     def test_login_has_isolated_responsive_layout_and_accessible_fields(self):

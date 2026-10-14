@@ -414,9 +414,9 @@ body.login-page {
     gap: 8px;
     z-index: 150;
     overflow: hidden;
-    background: linear-gradient(180deg, #141c25 0%, #101720 58%, #0e151d 100%);
-    border-right: 1px solid #293542;
-    box-shadow: 8px 0 24px rgba(15, 23, 32, 0.2);
+    background: #121922;
+    border-right: 1px solid #25303b;
+    box-shadow: none;
 }
 
 .sidebar-top {
@@ -424,8 +424,8 @@ body.login-page {
 }
 
 .sidebar-logo {
-    padding: 4px 7px 12px;
-    border-bottom: 1px solid #2a3541;
+    padding: 6px 7px 16px;
+    border-bottom: 0;
 }
 
 .logo {
@@ -448,12 +448,24 @@ body.login-page {
 
 
 .sidebar-main {
+    position: relative;
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
     padding-right: 2px;
     scrollbar-width: thin;
     scrollbar-color: #36404b transparent;
+}
+
+.sidebar-main::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    bottom: 10px;
+    left: 35px;
+    width: 1px;
+    background: #344454;
+    pointer-events: none;
 }
 
 .sidebar-main::-webkit-scrollbar {
@@ -477,7 +489,7 @@ body.login-page {
     display: flex;
     flex-direction: column;
     gap: 3px;
-    margin-top: 10px;
+    margin-top: 16px;
 }
 
 .sidebar-section:first-child {
@@ -485,29 +497,29 @@ body.login-page {
 }
 
 .sidebar-section-title {
-    padding: 0 8px;
-    margin-bottom: 4px;
-    font-size: 0.62rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: #8797a8;
+    padding: 0 0 0 43px;
+    margin-bottom: 6px;
+    font-size: 0.68rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: #83909d;
 }
 
 .sidebar-link {
     position: relative;
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-height: 34px;
+    gap: 15px;
+    min-height: 36px;
     padding: 6px 8px;
     border-radius: var(--ofs-radius-md);
     border: 1px solid transparent;
     background: transparent;
-    color: #cbd5df;
+    color: #b5c0cc;
     text-decoration: none;
-    font-size: 0.82rem;
-    font-weight: 620;
+    font-size: 0.8rem;
+    font-weight: 450;
     cursor: pointer;
     transition:
         background-color 0.15s ease,
@@ -516,34 +528,28 @@ body.login-page {
 }
 
 .sidebar-link::after {
-    content: "";
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    bottom: 2px;
-    height: 1px;
-    display: block;
-    background: #5ca7df;
-    transform: scaleX(0);
-    transform-origin: center;
-    transition: transform 0.15s ease;
-    pointer-events: none;
+    content: none;
 }
 
 .sidebar-icon {
-    width: 23px;
-    height: 23px;
-    flex: 0 0 23px;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--ofs-radius-sm);
     background: transparent;
-    border: 1px solid #334252;
-    color: #91bfe2;
+    border: 0;
+    color: #8b9baa;
     font-size: 0.62rem;
     font-weight: 800;
     letter-spacing: -0.02em;
+}
+
+.sidebar-icon svg {
+    width: 18px;
+    height: 18px;
 }
 
 .sidebar-text {
@@ -556,57 +562,46 @@ body.login-page {
 .sidebar-link:hover,
 .sidebar-link:focus-visible {
     color: #ffffff;
-    background: transparent;
+    background: rgba(255, 255, 255, 0.035);
     border-color: transparent;
     outline: none;
 }
 
-.sidebar-link:not(.active):hover::after,
-.sidebar-link:not(.active):focus-visible::after {
-    transform: scaleX(1);
+.sidebar-link:focus-visible {
+    outline: 2px solid #69a9d6;
+    outline-offset: -2px;
 }
 
 .sidebar-link:hover .sidebar-icon,
 .sidebar-link:focus-visible .sidebar-icon {
     color: #d9ebff;
-    border-color: var(--ofs-border-soft);
+    border-color: transparent;
     background: transparent;
 }
 
 .sidebar-link.active {
     color: #ffffff;
-    background: transparent;
+    background: rgba(91, 157, 207, 0.08);
     border-color: transparent;
     box-shadow: none;
-    font-weight: 800;
-    text-decoration: underline;
-    text-decoration-color: #69b3e8;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 4px;
+    font-weight: 600;
+    text-decoration: none;
 }
 
 .sidebar-link.active::before {
-    content: "";
-    position: absolute;
-    left: -2px;
-    top: 8px;
-    bottom: 8px;
-    width: 2px;
-    border-radius: 999px;
-    background: #5ca7df;
-    box-shadow: 0 0 10px rgba(92, 167, 223, 0.32);
+    content: none;
 }
 
 .sidebar-link.active .sidebar-icon {
     color: #dceeff;
-    background: rgba(47, 128, 201, 0.12);
-    border-color: rgba(105, 179, 232, 0.34);
+    background: transparent;
+    border-color: transparent;
 }
 
 .sidebar-footer {
     flex: 0 0 auto;
     padding-top: 8px;
-    border-top: 1px solid #2a3541;
+    border-top: 1px solid #25303b;
 }
 
 .sidebar-account-card {
@@ -665,7 +660,7 @@ body.login-page {
 .sidebar-link-danger:focus-visible .sidebar-icon {
     color: #ffffff;
     background: transparent;
-    border-color: var(--ofs-border-soft);
+    border-color: transparent;
 }
 
 .sidebar-link-danger:not(.active):hover::after,
@@ -2795,7 +2790,7 @@ body.login-page {
     margin-top: 8px;
     padding: 6px 7px;
     background: transparent;
-    border: 1px solid #2c3946;
+    border: 0;
     border-radius: var(--ofs-radius-md);
 }
 
@@ -3454,6 +3449,10 @@ html.sidebar-collapsed .sidebar-main {
     overflow-x: hidden;
 }
 
+html.sidebar-collapsed .sidebar-main::before {
+    display: none;
+}
+
 html.sidebar-collapsed .sidebar-logo {
     min-height: 46px;
     padding: 4px 0 10px;
@@ -3510,18 +3509,20 @@ html.sidebar-collapsed .sidebar-link.active {
 }
 
 html.sidebar-collapsed .sidebar-link.active .sidebar-icon {
-    font-weight: 900;
     color: #ffffff;
-    border: 1px solid rgba(105, 179, 232, 0.4);
-    border-bottom-color: #69b3e8;
-    background: rgba(47, 128, 201, 0.14);
-    border-radius: 5px 5px 2px 2px;
+    border: 0;
+    background: transparent;
 }
 
 html.sidebar-collapsed .sidebar-icon {
     width: 28px;
     height: 28px;
     flex: 0 0 28px;
+}
+
+html.sidebar-collapsed .sidebar-icon svg {
+    width: 20px;
+    height: 20px;
 }
 
 html.sidebar-collapsed .sidebar-status-card {

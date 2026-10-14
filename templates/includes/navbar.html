@@ -1,10 +1,12 @@
-<nav class="sidebar" data-online-status-url="{{ url_for('status_online') }}"
+{% macro sidebar_icon(path) -%}
+<span class="sidebar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="{{ path }}"></path></svg></span>
+{%- endmacro %}
+<nav class="sidebar" aria-label="Navegação principal" data-online-status-url="{{ url_for('status_online') }}"
   data-online-users-url="{{ url_for('status_online_usuarios') }}">
   <div class="sidebar-top">
     <div class="sidebar-logo">
       <a href="{{ url_for('home') if has_perm('dashboard.operacional_acessar') else url_for('menu') }}" class="logo">OFS
         Painel</a>
-      <span class="sidebar-logo-subtitle">Operações e administração</span>
       <button type="button" class="sidebar-toggle" data-sidebar-toggle aria-label="Recolher menu lateral" aria-expanded="true">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M14.5 6.5 9 12l5.5 5.5"></path>
@@ -38,20 +40,20 @@
 
       {% if has_perm('dashboard.operacional_acessar') %}
       <a href="{{ url_for('home') }}" class="sidebar-link {% if request.endpoint == 'home' %}active{% endif %}">
-        <span class="sidebar-icon">D</span>
+        {{ sidebar_icon('M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z') }}
         <span class="sidebar-text">Dashboard</span>
       </a>
       {% endif %}
 
       <a href="{{ url_for('menu') }}" class="sidebar-link {% if request.endpoint == 'menu' %}active{% endif %}">
-        <span class="sidebar-icon">M</span>
+        {{ sidebar_icon('M4 6h16 M4 12h16 M4 18h16') }}
         <span class="sidebar-text">Menu</span>
       </a>
 
       {% if has_perm('relatorios.acessar') %}
       <a href="{{ url_for('relatorios') }}"
         class="sidebar-link {% if request.endpoint in ['relatorios', 'relatorios_ofs_os_page'] %}active{% endif %}">
-        <span class="sidebar-icon">R</span>
+        {{ sidebar_icon('M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h6') }}
         <span class="sidebar-text">Relatórios</span>
       </a>
       {% endif %}
@@ -63,7 +65,7 @@
       {% if has_perm('ofs.monitor_operacional') %}
       <a href="{{ url_for('ofs_operational_monitor_page') }}"
         class="sidebar-link {% if request.endpoint in ['ofs_operational_monitor_page', 'ofs_operational_monitor_data', 'ofs_operational_monitor_refresh'] %}active{% endif %}">
-        <span class="sidebar-icon">MO</span>
+        {{ sidebar_icon('M3 4h18v13H3z M8 21h8 M12 17v4 M5 11h3l2-4 4 7 2-3h3') }}
         <span class="sidebar-text">Monitor operacional</span>
       </a>
       {% endif %}
@@ -71,7 +73,7 @@
       {% if has_perm('ofs.os_repetidas.visualizar') %}
       <a href="{{ url_for('ofs_repeated_orders_page') }}"
         class="sidebar-link {% if request.endpoint == 'ofs_repeated_orders_page' %}active{% endif %}">
-        <span class="sidebar-icon">OR</span>
+        {{ sidebar_icon('M8 3h11v15H8z M5 6H3v15h11v-2 M11 8h5 M11 12h5') }}
         <span class="sidebar-text">OS repetidas</span>
       </a>
       {% endif %}
@@ -79,7 +81,7 @@
       {% if has_perm('bi_activities.acessar') %}
       <a href="{{ url_for('bi_activities_page') }}"
         class="sidebar-link {% if request.endpoint in ['bi_activities_page', 'bi_activities_jobs', 'bi_activities_coletar'] %}active{% endif %}">
-        <span class="sidebar-icon">BI</span>
+        {{ sidebar_icon('M4 3v17h17 M8 16v-5 M13 16V7 M18 16V4') }}
         <span class="sidebar-text">BI Atividades OFS</span>
       </a>
       {% endif %}
@@ -87,7 +89,7 @@
       {% if has_perm('adapter.fechar_os') %}
       <a href="{{ url_for('fechar_os_adapter') }}"
         class="sidebar-link {% if request.endpoint == 'fechar_os_adapter' %}active{% endif %}">
-        <span class="sidebar-icon">OS</span>
+        {{ sidebar_icon('M13 3H5v18h14V11 M9 7h2 M9 12l3 3 8-9') }}
         <span class="sidebar-text">Fechar OS Adapter</span>
       </a>
       {% endif %}
@@ -99,7 +101,7 @@
       {% if has_perm('perfis.gerenciar') %}
       <a href="{{ url_for('perfis_view') }}"
         class="sidebar-link {% if request.endpoint == 'perfis_view' %}active{% endif %}">
-        <span class="sidebar-icon">P</span>
+        {{ sidebar_icon('M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M9 12l2 2 4-4') }}
         <span class="sidebar-text">Gerenciar Perfis</span>
       </a>
       {% endif %}
@@ -107,13 +109,13 @@
       {% if has_perm('usuarios.criar') %}
       <a href="{{ url_for('usuarios_painel') }}"
         class="sidebar-link {% if request.endpoint == 'usuarios_painel' %}active{% endif %}">
-        <span class="sidebar-icon">U</span>
+        {{ sidebar_icon('M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M18 4a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-3.9') }}
         <span class="sidebar-text">Usuários do painel</span>
       </a>
 
       <a href="{{ url_for('criar_usuario') }}"
         class="sidebar-link {% if request.endpoint == 'criar_usuario' %}active{% endif %}">
-        <span class="sidebar-icon">+</span>
+        {{ sidebar_icon('M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M20 7v6 M17 10h6') }}
         <span class="sidebar-text">Criar novo usuário</span>
       </a>
       {% endif %}
@@ -121,7 +123,7 @@
       {% if has_perm('logs.visualizar') %}
       <a href="{{ url_for('logs_view') }}"
         class="sidebar-link {% if request.endpoint in ['logs_view', 'logs_dashboard'] %}active{% endif %}">
-        <span class="sidebar-icon">L</span>
+        {{ sidebar_icon('M6 3h12v18H6z M9 7h6 M9 11h6 M9 15h4') }}
         <span class="sidebar-text">Log do sistema</span>
       </a>
       {% endif %}
@@ -131,17 +133,16 @@
 
   <div class="sidebar-footer">
     <div class="sidebar-account-card">
-      <span class="sidebar-account-label">Conta</span>
       <strong class="sidebar-account-name">{{ session.nome_usuario }}</strong>
 
       <a href="{{ url_for('trocar_senha') }}"
         class="sidebar-link sidebar-link-account {% if request.endpoint == 'trocar_senha' %}active{% endif %}">
-        <span class="sidebar-icon">S</span>
+        {{ sidebar_icon('M15 7a5 5 0 1 1-10 0 5 5 0 0 1 10 0 M6 11l-3 9h4l1-3h3l2-6') }}
         <span class="sidebar-text">Trocar senha</span>
       </a>
 
       <a href="{{ url_for('logout') }}" class="sidebar-link sidebar-link-danger">
-        <span class="sidebar-icon">X</span>
+        {{ sidebar_icon('M9 4H4v16h5 M14 8l4 4-4 4 M8 12h12') }}
         <span class="sidebar-text">Sair</span>
       </a>
     </div>

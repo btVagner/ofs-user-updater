@@ -20,6 +20,16 @@ from ofs.client import OFSClient
 REQUEST_TIMEOUT = 60
 API_LIMIT = 2000
 
+# Additional choices scoped to the OS report; do not recategorize the shared BI map.
+OFS_OS_B2B_HELIX_ACTIVITY_TYPES = {
+    "B2B_HLX": "Ativação B2B Helix",
+    "MIG_PLA_B2B_HELIX": "Migração de Plano B2B Helix",
+    "MUD_END_B2B_HLX": "Mudança de Endereço B2B Helix",
+    "RET_B2B_HLX": "Retirada B2B Helix",
+    "SOL_SER_HLX": "Solicitação de Serviço Helix",
+    "SUP_HLX": "Suporte Helix",
+}
+
 RESOURCE_TYPES = {
     "BK": "Bucket",
     "ESTADO": "Estado",
@@ -819,10 +829,11 @@ def _load_resource_status_map() -> Dict[str, str]:
         cur.close()
         conn.close()
 
-def _load_activity_type_label_map() -> Dict[str, str]:
+def _load_activity_type_label_map(report_type=None) -> Dict[str, str]:
     mapping = {}
 
-    for item in list_activity_types():
+    activity_types = list_ofs_os_activity_types() if report_type == "ofs_os" else list_activity_types()
+    for item in activity_types:
         code = str(item.get("code") or "").strip()
         label = str(item.get("label") or "").strip()
 
@@ -1255,10 +1266,14 @@ def list_ofs_os_activity_types() -> List[dict]:
     Importante:
     Tipos de Redes ficam fora da extração geral para não misturar visões.
     """
-    return [
+    activity_types = [
         item for item in list_activity_types()
         if item.get("category") in {"customer_home", "internal"}
+        and item.get("code") not in OFS_OS_B2B_HELIX_ACTIVITY_TYPES
     ]
+    activity_types.extend({"code": code, "label": label, "category": "b2b_helix", "is_internal": False}
+                          for code, label in OFS_OS_B2B_HELIX_ACTIVITY_TYPES.items())
+    return activity_types
 
 
 def list_redes_activity_types() -> List[dict]:
@@ -1298,6 +1313,7 @@ def validate_ofs_os_report_payload(payload: dict, can_view_extra_fields: bool = 
     config["report_type"] = "ofs_os"
 
     allowed_codes = _valid_activity_type_codes_by_category({"customer_home", "internal"})
+    allowed_codes.update(OFS_OS_B2B_HELIX_ACTIVITY_TYPES)
     invalid = [
         code for code in config["activity_types"]
         if code not in allowed_codes
@@ -1486,8 +1502,11 @@ def _validate_dates(date_from: str, date_to: str):
 
     if dt_to < dt_from:
         raise ValueError("A data final não pode ser menor que a data inicial.")
-def _valid_activity_type_codes() -> set:
-    return {item["code"] for item in list_activity_types()}
+def _valid_activity_type_codes(report_type=None) -> set:
+    codes = {item["code"] for item in list_activity_types()}
+    if report_type == "ofs_os":
+        codes.update(OFS_OS_B2B_HELIX_ACTIVITY_TYPES)
+    return codes
 
 def _iter_date_strings(date_from: str, date_to: str) -> List[str]:
     start = datetime.strptime(date_from, "%Y-%m-%d").date()
@@ -1498,9 +1517,9 @@ def _iter_date_strings(date_from: str, date_to: str) -> List[str]:
     while current <= end:
         yield current.strftime("%Y-%m-%d")
         current += timedelta(days=1)
-def _validate_activity_types(activity_types: list) -> List[str]:
+def _validate_activity_types(activity_types: list, report_type=None) -> List[str]:
     cleaned = []
-    valid_codes = _valid_activity_type_codes()
+    valid_codes = _valid_activity_type_codes(report_type=report_type)
 
     for activity_type in activity_types:
         value = str(activity_type or "").strip()
@@ -1614,7 +1633,7 @@ def validate_report_payload(
     _validate_dates(date_from, date_to)
 
     statuses = _validate_statuses(payload.get("statuses") or [])
-    activity_types = _validate_activity_types(payload.get("activityTypes") or [])
+    activity_types = _validate_activity_types(payload.get("activityTypes") or [], report_type=report_type)
     selected_fields = _validate_fields(
         payload.get("fields") or [],
         can_view_extra_fields=can_view_extra_fields,
@@ -1819,7 +1838,7 @@ def _fetch_activities(
         else {}
     )
     activity_type_label_map = (
-        _load_activity_type_label_map()
+        _load_activity_type_label_map(report_type=report_type)
         if "activityType" in selected_fields or report_type == "redes"
         else {}
     )

@@ -29,6 +29,7 @@
     document.querySelectorAll('.sidebar-link').forEach((link) => {
       const text = link.querySelector('.sidebar-text')?.textContent?.trim();
       if (!text) return;
+      link.setAttribute('aria-label', text);
 
       if (collapsed) {
         link.setAttribute('title', text);
